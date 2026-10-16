@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.example.interview.mapper.EvidenceMapper">
+
+    <select id="findByCandidateId" resultType="com.example.interview.domain.Evidence">
+        SELECT * FROM evidence WHERE candidate_id = #{candidateId}
+        ORDER BY criterion_id,
+                 CASE evidence_type WHEN 'DIRECT' THEN 1 WHEN 'INDIRECT' THEN 2 ELSE 3 END, id
+    </select>
+
+    <insert id="insert" useGeneratedKeys="true" keyProperty="id" keyColumn="id">
+        INSERT INTO evidence
+            (candidate_id, criterion_id, evidence_type, quote, interpretation, verified_yn, interview_point)
+        VALUES
+            (#{candidateId}, #{criterionId}, #{evidenceType}, #{quote}, #{interpretation}, #{verifiedYn}, #{interviewPoint})
+    </insert>
+
+    <delete id="deleteByCandidateId">
+        DELETE FROM evidence WHERE candidate_id = #{candidateId}
+    </delete>
+</mapper>

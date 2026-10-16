@@ -1,0 +1,12 @@
+<%@ page pageEncoding="UTF-8" %>
+</main>
+<div id="busy-overlay" class="busy-overlay" hidden>
+  <div class="busy-box">
+    <div class="spinner"></div>
+    <p id="busy-text" class="busy-title">분석 중</p>
+    <p id="busy-sub" class="muted small"></p>
+  </div>
+</div>
+<script src="<c:url value='/js/app.js'/>"></script>
+</body>
+</html>

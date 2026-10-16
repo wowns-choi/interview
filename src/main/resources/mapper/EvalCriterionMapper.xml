@@ -1,0 +1,37 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.example.interview.mapper.EvalCriterionMapper">
+
+    <select id="findByPositionId" resultType="com.example.interview.domain.EvalCriterion">
+        SELECT * FROM eval_criterion WHERE position_id = #{positionId}
+        ORDER BY CASE requirement WHEN 'MUST' THEN 1 ELSE 2 END, sort_order, id
+    </select>
+
+    <select id="findById" resultType="com.example.interview.domain.EvalCriterion">
+        SELECT * FROM eval_criterion WHERE id = #{id}
+    </select>
+
+    <select id="maxSortOrder" resultType="int">
+        SELECT COALESCE(MAX(sort_order), 0) FROM eval_criterion WHERE position_id = #{positionId}
+    </select>
+
+    <insert id="insert" useGeneratedKeys="true" keyProperty="id" keyColumn="id">
+        INSERT INTO eval_criterion
+            (position_id, name, description, requirement, category, resume_assessable_yn, source, sort_order)
+        VALUES
+            (#{positionId}, #{name}, #{description}, #{requirement}, #{category}, #{resumeAssessableYn}, #{source}, #{sortOrder})
+    </insert>
+
+    <update id="update">
+        UPDATE eval_criterion SET name = #{name}, description = #{description}, requirement = #{requirement}
+        WHERE id = #{id}
+    </update>
+
+    <delete id="delete">
+        DELETE FROM eval_criterion WHERE id = #{id}
+    </delete>
+
+    <delete id="deleteByPositionId">
+        DELETE FROM eval_criterion WHERE position_id = #{positionId}
+    </delete>
+</mapper>

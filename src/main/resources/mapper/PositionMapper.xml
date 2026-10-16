@@ -1,0 +1,37 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.example.interview.mapper.PositionMapper">
+
+    <select id="findById" resultType="com.example.interview.domain.Position">
+        SELECT * FROM position WHERE id = #{id}
+    </select>
+
+    <select id="findRecent" resultType="com.example.interview.web.dto.PositionSummary">
+        SELECT p.id, p.title, p.status, p.created_at,
+               (SELECT COUNT(*) FROM eval_criterion c WHERE c.position_id = p.id) AS criteria_count,
+               (SELECT COUNT(*) FROM candidate d WHERE d.position_id = p.id) AS candidate_count
+        FROM position p
+        ORDER BY p.created_at DESC, p.id DESC
+        LIMIT #{limit}
+    </select>
+
+    <insert id="insert" useGeneratedKeys="true" keyProperty="id" keyColumn="id">
+        INSERT INTO position (title, jd_text, status) VALUES (#{title}, #{jdText}, #{status})
+    </insert>
+
+    <update id="updateTitle">
+        UPDATE position SET title = #{title} WHERE id = #{id}
+    </update>
+
+    <update id="updateImageText">
+        UPDATE position SET image_text = #{imageText} WHERE id = #{id}
+    </update>
+
+    <update id="updateStatus">
+        UPDATE position SET status = #{status} WHERE id = #{id}
+    </update>
+
+    <delete id="delete">
+        DELETE FROM position WHERE id = #{id}
+    </delete>
+</mapper>

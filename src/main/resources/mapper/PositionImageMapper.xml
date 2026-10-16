@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.example.interview.mapper.PositionImageMapper">
+
+    <insert id="insert" useGeneratedKeys="true" keyProperty="id" keyColumn="id">
+        INSERT INTO position_image (position_id, content_type, image_data, sort_order)
+        VALUES (#{positionId}, #{contentType}, #{imageData}, #{sortOrder})
+    </insert>
+
+    <select id="findByPositionId" resultType="com.example.interview.domain.PositionImage">
+        SELECT * FROM position_image WHERE position_id = #{positionId} ORDER BY sort_order, id
+    </select>
+
+    <select id="findIdsByPositionId" resultType="long">
+        SELECT id FROM position_image WHERE position_id = #{positionId} ORDER BY sort_order, id
+    </select>
+
+    <select id="findById" resultType="com.example.interview.domain.PositionImage">
+        SELECT * FROM position_image WHERE id = #{id}
+    </select>
+</mapper>

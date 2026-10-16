@@ -1,0 +1,46 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.example.interview.mapper.QuestionTemplateMapper">
+
+    <sql id="columns">t.id, t.section_id, t.content, t.sort_order, t.active_yn</sql>
+
+    <select id="findAll" resultType="com.example.interview.domain.QuestionTemplate">
+        SELECT <include refid="columns"/>
+        FROM question_template t
+        JOIN question_section s ON s.id = t.section_id
+        ORDER BY s.sort_order, s.id, t.sort_order, t.id
+    </select>
+
+    <select id="findActive" resultType="com.example.interview.domain.QuestionTemplate">
+        SELECT <include refid="columns"/>
+        FROM question_template t
+        JOIN question_section s ON s.id = t.section_id
+        WHERE t.active_yn = 'Y'
+        ORDER BY s.sort_order, s.id, t.sort_order, t.id
+    </select>
+
+    <select id="findById" resultType="com.example.interview.domain.QuestionTemplate">
+        SELECT <include refid="columns"/> FROM question_template t WHERE t.id = #{id}
+    </select>
+
+    <select id="nextSortOrder" resultType="int">
+        SELECT COALESCE(MAX(sort_order), 0) + 1 FROM question_template WHERE section_id = #{sectionId}
+    </select>
+
+    <insert id="insert" useGeneratedKeys="true" keyProperty="id" keyColumn="id">
+        INSERT INTO question_template (section_id, content, sort_order, active_yn)
+        VALUES (#{sectionId}, #{content}, #{sortOrder}, #{activeYn})
+    </insert>
+
+    <update id="updateContent">
+        UPDATE question_template SET content = #{content} WHERE id = #{id}
+    </update>
+
+    <update id="updatePlacement">
+        UPDATE question_template SET section_id = #{sectionId}, sort_order = #{sortOrder} WHERE id = #{id}
+    </update>
+
+    <delete id="delete">
+        DELETE FROM question_template WHERE id = #{id}
+    </delete>
+</mapper>

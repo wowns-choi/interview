@@ -1,0 +1,28 @@
+package com.example.interview.mapper;
+
+import java.util.List;
+
+import org.apache.ibatis.annotations.Mapper;
+import org.apache.ibatis.annotations.Param;
+
+import com.example.interview.domain.Position;
+import com.example.interview.domain.PositionStatus;
+import com.example.interview.web.dto.PositionSummary;
+
+@Mapper
+public interface PositionMapper {
+    Position findById(Long id);
+
+    List<PositionSummary> findRecent(int limit);
+
+    void insert(Position position);
+
+    void updateTitle(@Param("id") Long id, @Param("title") String title);
+
+    void updateImageText(@Param("id") Long id, @Param("imageText") String imageText);
+
+    void updateStatus(@Param("id") Long id, @Param("status") PositionStatus status);
+
+    /** 지원자·평가항목·근거·질문까지 함께 지워진다 (ON DELETE CASCADE) */
+    void delete(Long id);
+}

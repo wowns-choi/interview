@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.example.interview.mapper.QuestionSectionMapper">
+
+    <select id="findAll" resultType="com.example.interview.domain.QuestionSection">
+        SELECT id, name, sort_order FROM question_section ORDER BY sort_order, id
+    </select>
+
+    <select id="findById" resultType="com.example.interview.domain.QuestionSection">
+        SELECT id, name, sort_order FROM question_section WHERE id = #{id}
+    </select>
+
+    <select id="nextSortOrder" resultType="int">
+        SELECT COALESCE(MAX(sort_order), 0) + 1 FROM question_section
+    </select>
+
+    <insert id="insert" useGeneratedKeys="true" keyProperty="id" keyColumn="id">
+        INSERT INTO question_section (name, sort_order) VALUES (#{name}, #{sortOrder})
+    </insert>
+
+    <update id="rename">
+        UPDATE question_section SET name = #{name} WHERE id = #{id}
+    </update>
+
+    <update id="updateSortOrder">
+        UPDATE question_section SET sort_order = #{sortOrder} WHERE id = #{id}
+    </update>
+
+    <delete id="delete">
+        DELETE FROM question_section WHERE id = #{id}
+    </delete>
+</mapper>
