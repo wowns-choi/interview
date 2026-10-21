@@ -147,6 +147,13 @@ public class ExtractController {
         return ResponseEntity.noContent().build();
     }
 
+    @PatchMapping("/positions/{id}/exclusions")
+    @ResponseBody
+    public ResponseEntity<Void> updateExclusions(@PathVariable Long id, @RequestBody Map<String, Boolean> body) {
+        positionService.updateExclusions(id, Boolean.TRUE.equals(body.get("career")), Boolean.TRUE.equals(body.get("education")));
+        return ResponseEntity.noContent().build();
+    }
+
     @DeleteMapping("/positions/{id}/criteria/{criterionId}")
     @ResponseBody
     public ResponseEntity<Void> deleteCriterion(@PathVariable Long id, @PathVariable Long criterionId) {
@@ -297,7 +304,9 @@ public class ExtractController {
         if (id != null) {
             model.addAttribute("position", positionService.get(id));
             model.addAttribute("criteria", positionService.criteria(id));
-            model.addAttribute("rows", rankingService.rank(id));
+            List<RankingRow> rows = rankingService.rank(id);
+            model.addAttribute("rows", rows);
+            model.addAttribute("excludedCount", rows.stream().filter(r -> "EXCLUDED".equals(r.getState())).count());
         }
         return "ranking";
     }

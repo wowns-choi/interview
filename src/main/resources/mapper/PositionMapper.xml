@@ -41,6 +41,10 @@
         WHERE id = #{id}
     </update>
 
+    <update id="updateExclusions">
+        UPDATE position SET exclude_career = #{excludeCareer}, exclude_education = #{excludeEducation} WHERE id = #{id}
+    </update>
+
     <update id="updateImageText">
         UPDATE position SET image_text = #{imageText} WHERE id = #{id}
     </update>

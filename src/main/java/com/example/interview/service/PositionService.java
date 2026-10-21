@@ -194,6 +194,11 @@ public class PositionService {
         criterionMapper.update(c);
     }
 
+    public void updateExclusions(Long positionId, boolean excludeCareer, boolean excludeEducation) {
+        get(positionId);
+        positionMapper.updateExclusions(positionId, excludeCareer, excludeEducation);
+    }
+
     public void deleteCriterion(Long positionId, Long criterionId) {
         criterionMapper.delete(criterion(positionId, criterionId).getId());
     }

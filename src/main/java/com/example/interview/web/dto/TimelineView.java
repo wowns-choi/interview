@@ -2,6 +2,7 @@ package com.example.interview.web.dto;
 
 import java.time.YearMonth;
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -38,6 +39,29 @@ public class TimelineView {
         String tone;
         /** 겹치는 항목은 아래 줄로 내린다 */
         List<List<Bar>> rows;
+    }
+
+    /** PDF 목록의 한 줄 */
+    @Value
+    public static class Entry {
+        String kind;
+        String tone;
+        String label;
+        String detail;
+        String periodText;
+        double left;
+    }
+
+    /** PDF 목록용: 구분과 상관없이 시작 순서로 (같으면 경력·학력·교육·활동·기록 없음 순) */
+    public List<Entry> getEntries() {
+        List<Entry> entries = new ArrayList<>();
+        for (Lane lane : lanes) {
+            lane.getRows().stream().flatMap(List::stream).forEach(b -> entries.add(
+                    new Entry(lane.getName(), lane.getTone(), b.getLabel(), b.getDetail(), b.getPeriodText(), b.getLeft())));
+        }
+        gaps.forEach(g -> entries.add(new Entry("기록 없음", "gap", g.getLengthText(), "", g.getPeriodText(), g.getLeft())));
+        entries.sort(Comparator.comparingDouble(Entry::getLeft));
+        return entries;
     }
 
     @Value
@@ -138,9 +162,6 @@ public class TimelineView {
         for (LaneSpec spec : LANES) {
             List<Item> inLane = items.stream().filter(i -> i.lane().equals(spec.name()))
                     .sorted((a, b) -> Integer.compare(a.start(), b.start())).toList();
-            if (inLane.isEmpty()) {
-                continue;
-            }
             List<List<Bar>> rows = new ArrayList<>();
             List<Double> rowEnds = new ArrayList<>();
             for (Item i : inLane) {

@@ -31,6 +31,9 @@ public interface PositionMapper {
 
     void updateStatus(@Param("id") Long id, @Param("status") PositionStatus status);
 
+    void updateExclusions(@Param("id") Long id, @Param("excludeCareer") boolean excludeCareer,
+            @Param("excludeEducation") boolean excludeEducation);
+
     /** 지원자·평가항목·근거·질문까지 함께 지워진다 (ON DELETE CASCADE) */
     void delete(Long id);
 }

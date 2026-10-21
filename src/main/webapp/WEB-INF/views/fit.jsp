@@ -36,7 +36,7 @@
             <strong><c:out value="${row.displayName}"/></strong>
             <c:choose>
               <c:when test="${row.inProgress}"><span class="side-state is-progress">${row.statusLabel}</span></c:when>
-              <c:when test="${row.state == 'RANKED'}"><span class="side-score">${row.score.totalText}<small> / ${row.score.max}</small></span></c:when>
+              <c:when test="${row.state == 'RANKED' or row.state == 'EXCLUDED'}"><span class="side-score">${row.score.totalText}<small> / ${row.score.max}</small></span></c:when>
               <c:when test="${row.state == 'STALE'}"><span class="side-state is-stale">재검사 필요</span></c:when>
               <c:when test="${row.status == 'FAILED'}"><span class="side-state is-failed">실패</span></c:when>
               <c:otherwise><span class="side-state">${row.statusLabel}</span></c:otherwise>
@@ -292,6 +292,7 @@
                     <div class="tl-lane is-${lane.tone}">
                       <span class="tl-name"><c:out value="${lane.name}"/></span>
                       <div class="tl-rows">
+                        <c:if test="${empty lane.rows}"><div class="tl-row"></div></c:if>
                         <c:forEach var="row" items="${lane.rows}">
                           <div class="tl-row">
                             <c:forEach var="bar" items="${row}">
@@ -305,26 +306,30 @@
                       </div>
                     </div>
                   </c:forEach>
-                  <c:if test="${not empty tl.gaps}">
-                    <div class="tl-lane is-gap">
-                      <span class="tl-name">기록 없음</span>
-                      <div class="tl-rows">
-                        <div class="tl-row">
-                          <c:forEach var="gap" items="${tl.gaps}">
-                            <span class="tl-bar" style="left: ${gap.left}%; width: ${gap.width}%" title="이력서상 기록 없음 · <c:out value='${gap.periodText}'/> (<c:out value='${gap.lengthText}'/>)">
-                              <strong><c:out value="${gap.lengthText}"/></strong><small><c:out value="${gap.periodText}"/></small>
-                            </span>
-                          </c:forEach>
-                        </div>
+                  <div class="tl-lane is-gap">
+                    <span class="tl-name">기록 없음</span>
+                    <div class="tl-rows">
+                      <div class="tl-row">
+                        <c:forEach var="gap" items="${tl.gaps}">
+                          <span class="tl-bar" style="left: ${gap.left}%; width: ${gap.width}%" title="이력서상 기록 없음 · <c:out value='${gap.periodText}'/> (<c:out value='${gap.lengthText}'/>)">
+                            <strong><c:out value="${gap.lengthText}"/></strong><small><c:out value="${gap.periodText}"/></small>
+                          </span>
+                        </c:forEach>
                       </div>
                     </div>
-                  </c:if>
+                  </div>
                   <div class="tl-axis">
                     <span class="tl-name"></span>
                     <div class="tl-rows"><c:forEach var="tick" items="${tl.ticks}"><span style="left: ${tick.left}%">${tick.year}</span></c:forEach></div>
                   </div>
                 </div>
                 </div>
+                <%-- PDF에서는 그래프 대신 이 목록만 보인다 --%>
+                <table class="tl-list">
+                  <c:forEach var="e" items="${tl.entries}">
+                    <tr class="is-${e.tone}"><th><c:out value="${e.kind}"/></th><td><c:out value="${e.label}"/><c:if test="${not empty e.detail}"><small> · <c:out value="${e.detail}"/></small></c:if></td><td><c:out value="${e.periodText}"/></td></tr>
+                  </c:forEach>
+                </table>
               </div>
             </c:if>
           </section>

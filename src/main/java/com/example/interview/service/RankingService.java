@@ -23,6 +23,7 @@ import lombok.RequiredArgsConstructor;
 
 /**
  * 포지션 하나의 지원자를 점수 순으로 줄 세운다.
+ * 포지션에서 켜 둔 경우 경력·학력 미충족 지원자는 순위 없이 "제외됨"으로 뺀다.
  * 동점이면 직접 근거가 많은 쪽, 그다음 포지션 관련 경력이 긴 쪽이 앞선다.
  * 검사 뒤에 평가항목이 바뀐 지원자(재검사 필요)와 검사 전 지원자는 순위 없이 뒤에 둔다.
  */
@@ -46,6 +47,7 @@ public class RankingService {
         Position position = positionService.get(positionId);
         List<EvalCriterion> criteria = positionService.criteria(positionId);
         List<RankingRow> ranked = new ArrayList<>();
+        List<RankingRow> excluded = new ArrayList<>();
         List<RankingRow> stale = new ArrayList<>();
         List<RankingRow> unchecked = new ArrayList<>();
         for (ExtractionSummary s : candidateMapper.findByPositionId(positionId)) {
@@ -62,19 +64,38 @@ public class RankingService {
                 relevant = eval == null ? null : eval.getRelevantMonths();
             }
             RankingRow row = new RankingRow(s.getCandidateId(), s.getDisplayName(), s.getStatus(), s.getCreatedAt(),
-                    score, null, relevant);
-            (score == null ? unchecked : score.isComplete() ? ranked : stale).add(row);
+                    score, null, exclusion(position, score), relevant);
+            switch (row.getState()) {
+                case "RANKED" -> ranked.add(row);
+                case "EXCLUDED" -> excluded.add(row);
+                case "STALE" -> stale.add(row);
+                default -> unchecked.add(row);
+            }
         }
         ranked.sort(BY_SCORE);
+        excluded.sort(BY_SCORE);
         stale.sort(BY_SCORE);
         List<RankingRow> out = new ArrayList<>();
         for (int i = 0; i < ranked.size(); i++) {
             RankingRow r = ranked.get(i);
             out.add(new RankingRow(r.getCandidateId(), r.getDisplayName(), r.getStatus(), r.getCreatedAt(),
-                    r.getScore(), i + 1, r.getRelevantMonths()));
+                    r.getScore(), i + 1, null, r.getRelevantMonths()));
         }
+        out.addAll(excluded);
         out.addAll(stale);
         out.addAll(unchecked);
         return out;
+    }
+
+    static String exclusion(Position position, FitScore score) {
+        if (score == null) {
+            return null;
+        }
+        boolean career = position.isExcludeCareer() && score.getCareer() == 0;
+        boolean education = position.isExcludeEducation() && score.getEducation() == 0;
+        if (career && education) {
+            return "경력·학력 미충족";
+        }
+        return career ? "경력 미충족" : education ? "학력 미충족" : null;
     }
 }

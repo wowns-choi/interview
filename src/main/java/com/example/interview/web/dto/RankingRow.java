@@ -17,6 +17,8 @@ public class RankingRow {
     FitScore score;
     /** 비교할 수 없으면(검사 전, 재검사 필요) null */
     Integer rank;
+    /** 순위에서 뺀 이유 ("경력 미충족", "학력 미충족", "경력·학력 미충족"), 빼지 않았으면 null */
+    String exclusion;
     /** 동점일 때 쓰는 포지션 관련 경력(개월) */
     Integer relevantMonths;
 
@@ -36,11 +38,14 @@ public class RankingRow {
         };
     }
 
-    /** RANKED, STALE(평가항목이 바뀌어 다시 검사해야 함), UNCHECKED */
+    /** RANKED, EXCLUDED(경력·학력 미충족으로 뺌), STALE(평가항목이 바뀌어 다시 검사해야 함), UNCHECKED */
     public String getState() {
         if (score == null) {
             return "UNCHECKED";
         }
-        return score.isComplete() ? "RANKED" : "STALE";
+        if (!score.isComplete()) {
+            return "STALE";
+        }
+        return exclusion == null ? "RANKED" : "EXCLUDED";
     }
 }

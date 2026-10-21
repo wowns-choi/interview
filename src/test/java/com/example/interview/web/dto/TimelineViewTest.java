@@ -38,11 +38,15 @@ class TimelineViewTest {
 
         TimelineView t = TimelineView.of(aliased(p), eval, YearMonth.of(2026, 10));
 
-        assertThat(t.getLanes()).extracting("name").containsExactly("경력", "학력", "활동");
+        assertThat(t.getLanes()).extracting("name").containsExactly("경력", "학력", "교육", "활동");
+        assertThat(t.getLanes().get(2).getRows()).as("빈 줄도 남긴다").isEmpty();
         assertThat(t.getLanes().get(0).getRows()).hasSize(1);
         assertThat(t.getLanes().get(0).getRows().get(0)).extracting("label", "detail", "periodText")
                 .containsExactly(tuple("누리페이", "", "2024.08 ~ 2026.05"), tuple("다온테크", "연구개발팀", "2026.06 ~ 2026.10"));
-        assertThat(t.getLanes().get(2).getRows().get(0).get(0).getLabel()).isEqualTo("육군 만기전역");
+        assertThat(t.getLanes().get(3).getRows().get(0).get(0).getLabel()).isEqualTo("육군 만기전역");
+        assertThat(t.getEntries()).as("PDF 목록은 구분과 상관없이 시작 순서").extracting("kind", "label").containsExactly(
+                tuple("학력", "한결대학교"), tuple("활동", "육군 만기전역"), tuple("기록 없음", "5개월"),
+                tuple("경력", "누리페이"), tuple("경력", "다온테크"));
         // 2020.03 ~ 2026.10 = 80개월. 2024.03 ~ 2024.07(5개월)만 빈다
         assertThat(t.getGaps()).extracting("periodText", "lengthText").containsExactly(tuple("2024.03 ~ 2024.07", "5개월"));
         assertThat(t.getGaps().get(0).getLeft()).isEqualTo(60.0);

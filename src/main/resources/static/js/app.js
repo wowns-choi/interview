@@ -21,6 +21,18 @@
   // ── 포지션 고르기: 고르면 그 주소로 ──
   document.querySelectorAll('select[data-nav]').forEach(function (sel) {
     sel.addEventListener('change', function () { location.href = sel.value; });
+    // 고른 이름 길이에 맞춘다 (select 폭은 보통 가장 긴 option 기준이라 제목 크기 글자가 잘린다)
+    var fit = function () {
+      var probe = document.createElement('span');
+      var cs = getComputedStyle(sel);
+      probe.style.cssText = 'position:absolute;visibility:hidden;white-space:pre;font:' + cs.font + ';letter-spacing:' + cs.letterSpacing;
+      probe.textContent = sel.options[sel.selectedIndex] ? sel.options[sel.selectedIndex].text : '';
+      document.body.appendChild(probe);
+      sel.style.width = Math.ceil(probe.getBoundingClientRect().width + parseFloat(cs.paddingLeft) + parseFloat(cs.paddingRight) + 12) + 'px';
+      probe.remove();
+    };
+    fit();
+    if (document.fonts) document.fonts.ready.then(fit);
   });
 
   // ── 표의 행 전체 클릭 ──
@@ -30,6 +42,36 @@
       location.href = tr.getAttribute('data-href');
     });
   });
+
+  // ── 지원자 비교: 경력·학력 미충족 제외, 제외됨 접기 ──
+  var rk = document.getElementById('rk');
+  if (rk) {
+    var rkBase = rk.getAttribute('data-base');
+    var rkSave = function (path, body) {
+      return fetch(rkBase + path, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'fetch' },
+        body: JSON.stringify(body)
+      }).then(function (res) {
+        if (!res.ok) return res.text().then(function (t) { throw new Error(t || '저장하지 못했습니다.'); });
+        location.reload();
+      }).catch(function (err) { alert(err.message); });
+    };
+    rk.querySelectorAll('[data-rk-exclude]').forEach(function (box) {
+      box.addEventListener('change', function () {
+        rkSave('/exclusions', {
+          career: rk.querySelector('[data-rk-exclude=career]').checked,
+          education: rk.querySelector('[data-rk-exclude=education]').checked
+        });
+      });
+    });
+    document.querySelectorAll('[data-rk-fold]').forEach(function (fold) {
+      fold.addEventListener('click', function () {
+        var open = fold.classList.toggle('is-open');
+        document.querySelectorAll('.rk-row.is-EXCLUDED').forEach(function (tr) { tr.hidden = !open; });
+      });
+    });
+  }
 
   // ── 이력서 드롭존 (1인은 하나, 다수는 지원자마다 하나) ──
   var DZ_TEXT = '이력서·포트폴리오를 끌어다 놓거나 클릭';
@@ -140,7 +182,7 @@
         name.textContent = row.name;
         a.appendChild(name);
         var tail = document.createElement('span');
-        if (!row.inProgress && row.state === 'RANKED') {
+        if (!row.inProgress && (row.state === 'RANKED' || row.state === 'EXCLUDED')) {
           tail.className = 'side-score';
           tail.textContent = row.score;
           var small = document.createElement('small');

@@ -39,7 +39,8 @@ public class ArrangeResult {
     }
 
     /**
-     * 없는 id와 중복만 오류로 본다. 빠진 질문은 QuestionSheetAssembler가 원래 자리 근처에 채운다.
+     * 없는 id, 중복, 잘못된 항목은 버린다 (gpt-4o-mini가 없는 question_id를 같은 자리에 되풀이해 재시도도 실패하곤 했다).
+     * 버린 질문과 빠진 질문은 QuestionSheetAssembler가 원래 자리 근처에 채운다. 남는 섹션이 없을 때만 실패.
      *
      * @param templateIds 보낸 공통 질문 id
      * @param questionCount 보낸 추출 질문 수 (question_id는 1부터)
@@ -48,33 +49,33 @@ public class ArrangeResult {
         if (sections == null || sections.isEmpty()) {
             throw new AiResponseInvalidException("sections 배열이 비어 있습니다.");
         }
-        List<String> errors = new ArrayList<>();
         Set<Long> templates = new HashSet<>();
         Set<Long> questions = new HashSet<>();
-        for (int s = 0; s < sections.size(); s++) {
-            Section section = sections.get(s);
-            if (section == null || section.name == null || section.name.isBlank()) {
-                errors.add("sections[" + s + "].name 누락");
+        List<Section> kept = new ArrayList<>();
+        for (Section section : sections) {
+            if (section == null || section.name == null || section.name.isBlank() || section.items == null) {
                 continue;
             }
-            if (section.items == null || section.items.isEmpty()) {
-                errors.add("sections[" + s + "].items가 비어 있음");
-                continue;
-            }
+            List<Item> items = new ArrayList<>();
             for (Item item : section.items) {
                 if (item == null || (item.templateId == null) == (item.questionId == null)) {
-                    errors.add("sections[" + s + "]의 항목은 template_id와 question_id 중 하나만 가져야 함");
-                } else if (item.templateId != null) {
-                    if (!templateIds.contains(item.templateId) || !templates.add(item.templateId)) {
-                        errors.add("template_id " + item.templateId + "가 없거나 두 번 이상 나옴");
-                    }
-                } else if (item.questionId < 1 || item.questionId > questionCount || !questions.add(item.questionId)) {
-                    errors.add("question_id " + item.questionId + "가 없거나 두 번 이상 나옴");
+                    continue;
+                }
+                boolean ok = item.templateId != null
+                        ? templateIds.contains(item.templateId) && templates.add(item.templateId)
+                        : item.questionId >= 1 && item.questionId <= questionCount && questions.add(item.questionId);
+                if (ok) {
+                    items.add(item);
                 }
             }
+            if (!items.isEmpty()) {
+                section.setItems(items);
+                kept.add(section);
+            }
         }
-        if (!errors.isEmpty()) {
-            throw new AiResponseInvalidException(String.join("; ", errors));
+        if (kept.isEmpty()) {
+            throw new AiResponseInvalidException("sections에 쓸 수 있는 항목이 없습니다.");
         }
+        sections = kept;
     }
 }

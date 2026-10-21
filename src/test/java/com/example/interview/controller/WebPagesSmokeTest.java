@@ -65,7 +65,7 @@ class WebPagesSmokeTest {
         assertThat(get("/extract").statusCode()).isEqualTo(302);
         HttpResponse<String> positions = get("/positions");
         assertThat(positions.statusCode()).isEqualTo(200);
-        assertThat(positions.body()).contains("공통 질문 설정", "평가 항목 추출", "포지션 적합도 검사", "지원자 비교", "새 포지션", "포지션 설명", "파일 추가")
+        assertThat(positions.body()).contains("공통 질문 설정", "평가 항목 추출", "포지션 적합도 검사", "지원자 비교", "새 포지션", "평가항목 추출<svg", "파일 추가")
                 .doesNotContain("jsessionid", "type=\"file\" id=\"resume\"");
         // 포지션이 없으면 적합도 검사·비교는 빈 화면
         assertThat(get("/fit").body()).contains("평가항목을 추출한 포지션이 없습니다");
@@ -174,8 +174,14 @@ class WebPagesSmokeTest {
         // 점수: 경력 0(관련 30개월 < 36개월) + 학력 1(공고 조건 없음) + 근거 직접 1·없음 0·없음 0 = 2 / 5
         assertThat(checked).contains("class=\"score-pill\"", "2<small> / 5점</small>", "side-score\">2<small> / 5</small>");
         String ranking = get("/ranking?position=" + positionId).body();
-        assertThat(ranking).contains("class=\"rk-no\">1<", "href=\"/results/" + id + "\"", "<strong>2</strong>", "rk-cell ev-NONE\">0<", "rk-cell ev-DIRECT\">1<")
-                .doesNotContain("검사 전", ">연봉</th>");
+        assertThat(ranking).contains("class=\"rk-no\">1<", "href=\"/results/" + id + "\"", "rk-score\">2<small> / 5</small>", "hb ev-NONE\"", "hb ev-DIRECT\"",
+                        "rk-cond is-unmet\">미충족<", "rk-cond is-met\">충족<")
+                .doesNotContain("검사 전", ">연봉</th>", "제외됨");
+        // 경력 미충족 제외를 켜면 순위 없이 제외됨으로
+        assertThat(json("PATCH", "/positions/" + positionId + "/exclusions", "{\"career\":true,\"education\":false}").statusCode()).isEqualTo(204);
+        assertThat(get("/ranking?position=" + positionId).body()).contains("제외됨 1명", "rk-why\">경력 미충족<", "checked><span class=\"switch-track\"></span>경력 미충족 제외")
+                .doesNotContain("class=\"rk-no\">1<");
+        assertThat(json("PATCH", "/positions/" + positionId + "/exclusions", "{\"career\":false,\"education\":false}").statusCode()).isEqualTo(204);
         extractionService.generateQuestions(id);
 
         HttpResponse<String> result = get("/results/" + id);

@@ -97,13 +97,15 @@ class QuestionSheetAssemblerTest {
     }
 
     @Test
-    void validationRejectsUnknownAndDuplicateIdsButAllowsMissing() {
-        arrangement(section("A", common(1L, false, null, null), extracted(1L))).validate(List.of(1L, 2L), 2);
+    void validationDropsUnknownAndDuplicateIds() {
+        ArrangeResult r = arrangement(section("A", common(9L, false, null, null), extracted(1L), extracted(1L), extracted(10L)),
+                section("B", extracted(3L)));
+        r.validate(List.of(1L, 2L), 2);
+        assertThat(r.getSections()).hasSize(1);
+        assertThat(r.getSections().get(0).getItems()).extracting(ArrangeResult.Item::getQuestionId).containsExactly(1L);
 
-        ArrangeResult bad = arrangement(section("A", common(9L, false, null, null), extracted(1L), extracted(1L)));
-        assertThatThrownBy(() -> bad.validate(List.of(1L, 2L), 2))
-                .isInstanceOf(AiResponseInvalidException.class)
-                .hasMessageContaining("template_id 9").hasMessageContaining("question_id 1");
+        assertThatThrownBy(() -> arrangement(section("A", extracted(10L))).validate(List.of(), 2))
+                .isInstanceOf(AiResponseInvalidException.class);
     }
 
     private static ArrangeResult arrangement(ArrangeResult.Section... sections) {

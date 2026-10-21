@@ -50,27 +50,27 @@
       </c:if>
     </header>
 
-    <div class="crit-flow">
-      <c:choose>
-        <c:when test="${empty position}">
-          <form class="panel crit-in" id="crit-form" method="post" enctype="multipart/form-data" action="<c:url value='/positions'/>"
-                data-busy="평가항목을 추출하는 중">
-            <h3 class="panel-label">포지션 설명</h3>
-            <textarea id="jdText" name="jdText" class="crit-text" placeholder="채용공고나 포지션 설명을 붙여 넣으세요"><c:out value="${jdText}"/></textarea>
-            <div class="img-zone">
-              <input type="file" id="files" name="files" accept="image/png,image/jpeg,image/webp,image/gif,application/pdf,.pdf,text/plain,.txt,.md" multiple hidden>
-              <ul class="img-list" id="img-list"></ul>
-              <button type="button" class="img-add" id="img-add"><svg class="i"><use href="#i-file"/></svg>파일 추가<span class="img-hint">PDF · TXT · MD · 이미지(PNG · JPG · WEBP · GIF)</span></button>
-              <p class="img-note" id="img-note"></p>
-            </div>
-            <button type="submit" class="btn btn-primary btn-lg">평가항목 추출</button>
-          </form>
-        </c:when>
-        <c:otherwise>
-          <section class="panel crit-in">
-            <h3 class="panel-label">포지션 설명</h3>
+    <c:choose>
+      <c:when test="${empty position}">
+        <form class="composer crit-in" id="crit-form" method="post" enctype="multipart/form-data" action="<c:url value='/positions'/>"
+              data-busy="평가항목을 추출하는 중">
+          <textarea id="jdText" name="jdText" class="composer-text" placeholder="채용공고나 포지션 설명을 붙여 넣으세요"><c:out value="${jdText}"/></textarea>
+          <input type="file" id="files" name="files" accept="image/png,image/jpeg,image/webp,image/gif,application/pdf,.pdf,text/plain,.txt,.md" multiple hidden>
+          <ul class="img-list" id="img-list"></ul>
+          <div class="composer-bar">
+            <button type="button" class="btn btn-ghost btn-sm" id="img-add"><svg class="i"><use href="#i-file"/></svg>파일 추가</button>
+            <span class="img-hint">PDF · TXT · MD · 이미지</span>
+            <p class="img-note" id="img-note"></p>
+            <button type="submit" class="btn btn-primary composer-go">평가항목 추출<svg class="i"><use href="#i-arrow-right"/></svg></button>
+          </div>
+        </form>
+      </c:when>
+      <c:otherwise>
+        <div class="pos-grid">
+          <section class="pos-col">
+            <h3 class="col-label">공고</h3>
             <c:if test="${not empty position.jdText}">
-              <div class="crit-text crit-text-read"><c:out value="${position.jdText}"/></div>
+              <div class="posting"><c:out value="${position.jdText}"/></div>
             </c:if>
             <c:if test="${not empty imageIds}">
               <ul class="img-list">
@@ -81,18 +81,8 @@
               </ul>
             </c:if>
           </section>
-        </c:otherwise>
-      </c:choose>
-
-      <div class="flow-arrow" aria-hidden="true"><svg class="i"><use href="#i-arrow-right"/></svg></div>
-
-      <section class="panel crit-out">
-        <h3 class="panel-label">평가항목<span class="count" id="crit-count">${fn:length(criteria)}</span></h3>
-        <c:choose>
-          <c:when test="${empty position}">
-            <div class="empty-box">추출한 평가항목이 여기에 표시됩니다</div>
-          </c:when>
-          <c:otherwise>
+          <section class="pos-col">
+            <h3 class="col-label">평가항목<span class="count" id="crit-count">${fn:length(criteria)}</span></h3>
             <dl class="terms conds" id="conds" data-exp-kind="${conds.expKind}" data-exp-years="${conds.expYears}"
                 data-edu="${conds.eduLevel}">
               <div><dt>요구 경력</dt><dd data-key="requiredExperience"><c:out value="${position.requiredExperience}"/></dd></div>
@@ -114,10 +104,10 @@
               </c:forEach>
             </ul>
             <button type="button" class="add-row" id="crit-add"><svg class="i"><use href="#i-plus"/></svg>평가항목 추가</button>
-          </c:otherwise>
-        </c:choose>
-      </section>
-    </div>
+          </section>
+        </div>
+      </c:otherwise>
+    </c:choose>
   </section>
 </div>
 

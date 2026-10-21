@@ -9,7 +9,12 @@
       </c:forEach>
     </select>
   </label>
-  <ul class="pick-crit">
-    <c:forEach var="c" items="${criteria}"><li title="<c:out value='${c.description}'/>"><c:out value="${c.name}"/></li></c:forEach>
-  </ul>
+  <c:if test="${pickBase != '/ranking' and not empty criteria}">
+  <div class="pick-crit">
+    <span class="pick-label">평가항목</span>
+    <ul>
+      <c:forEach var="c" items="${criteria}"><li title="<c:out value='${c.description}'/>"><c:out value="${c.name}"/></li></c:forEach>
+    </ul>
+  </div>
+  </c:if>
 </div>
