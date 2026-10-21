@@ -242,6 +242,12 @@
       if (!res.ok) return res.text().then(function (t) { throw new Error(t || res.status); });
       state.textContent = '저장됨';
       row.classList.toggle('is-answered', ta.value.trim() !== '');
+      // 답변을 적으면 서버도 체크해 둔다
+      if (ta.value.trim() !== '') {
+        row.classList.add('is-checked');
+        var no = row.querySelector('.js-q-check');
+        if (no) no.setAttribute('aria-pressed', 'true');
+      }
       if (answered) answered.textContent = document.querySelectorAll('.q-row.is-answered').length;
     }).catch(function (err) {
       state.textContent = '저장 실패';

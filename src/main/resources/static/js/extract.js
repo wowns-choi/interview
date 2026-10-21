@@ -564,8 +564,23 @@
         api('DELETE', resultBase + '/questions/' + row.dataset.id).then(function () { row.remove(); toast('삭제했습니다'); });
       } else if (btn.classList.contains('js-q-add')) {
         addQuestion(btn.closest('.iq-sec'));
+      } else if (btn.classList.contains('js-q-check') && row.dataset.id) {
+        var checked = !row.classList.contains('is-checked');
+        setChecked(row, checked);
+        fetch(resultBase + '/questions/' + row.dataset.id + '/checked', {
+          method: 'POST',
+          headers: { 'X-Requested-With': 'fetch' },
+          body: new URLSearchParams({ checked: checked })
+        }).then(function (res) {
+          if (!res.ok) throw new Error();
+        }).catch(function () { setChecked(row, !checked); toast('저장하지 못했습니다'); });
       }
     });
+
+    function setChecked(row, checked) {
+      row.classList.toggle('is-checked', checked);
+      row.querySelector('.js-q-check').setAttribute('aria-pressed', checked);
+    }
 
     function addQuestion(sec) {
       var row = clone('tpl-q');

@@ -113,6 +113,7 @@ CREATE TABLE IF NOT EXISTS interview_question (
     answer              TEXT
 );
 ALTER TABLE interview_question ADD COLUMN IF NOT EXISTS answer TEXT;
+ALTER TABLE interview_question ADD COLUMN IF NOT EXISTS checked BOOLEAN NOT NULL DEFAULT FALSE;
 ALTER TABLE interview_question ALTER COLUMN section SET DATA TYPE VARCHAR(100);
 
 CREATE TABLE IF NOT EXISTS ai_call_log (

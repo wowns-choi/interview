@@ -24,4 +24,6 @@ public class InterviewQuestion {
     private int sortOrder;
     /** 면접 중 기록한 실제 답변 */
     private String answer;
+    /** 면접에서 물어본 질문 (번호를 눌러 체크, 답변을 적으면 자동으로 체크) */
+    private boolean checked;
 }

@@ -22,7 +22,11 @@
     </insert>
 
     <update id="updateAnswer">
-        UPDATE interview_question SET answer = #{answer} WHERE id = #{id} AND candidate_id = #{candidateId}
+        UPDATE interview_question SET answer = #{answer}<if test="answer != null">, checked = TRUE</if> WHERE id = #{id} AND candidate_id = #{candidateId}
+    </update>
+
+    <update id="updateChecked">
+        UPDATE interview_question SET checked = #{checked} WHERE id = #{id} AND candidate_id = #{candidateId}
     </update>
 
     <update id="updateContent">

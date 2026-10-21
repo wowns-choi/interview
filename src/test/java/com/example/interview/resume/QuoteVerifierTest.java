@@ -20,6 +20,14 @@ class QuoteVerifierTest {
     }
 
     @Test
+    void leadingBulletAndLookalikeDotsAreIgnored() {
+        String text = "∙ Flutter 기반 앱 프론트엔드 구현 및 Spring Boot + MyBatis + MySQL 기반 백엔드\nAPI/DB 설계∙구현 (3인 개발)";
+        assertThat(verifier.verify("· Spring Boot + MyBatis + MySQL 기반 백엔드 API/DB 설계·구현 (3인 개발)", text)).isTrue();
+        assertThat(verifier.verify("• Redis 캐시 도입", resume)).isTrue();
+        assertThat(verifier.verify("· Kafka 도입", text)).isFalse();
+    }
+
+    @Test
     void paraphrasedQuoteFails() {
         assertThat(verifier.verify("하루 100만 건 주문 배치 처리 개선", resume)).isFalse();
         assertThat(verifier.verify("Redis 캐시를 도입", resume)).isFalse();

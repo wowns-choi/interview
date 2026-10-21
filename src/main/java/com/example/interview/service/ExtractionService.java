@@ -177,6 +177,11 @@ public class ExtractionService {
         found(questionMapper.updateAnswer(candidateId, questionId, value), questionId);
     }
 
+    /** 면접에서 물어본 질문으로 체크하거나 푼다. */
+    public void checkQuestion(Long candidateId, Long questionId, boolean checked) {
+        found(questionMapper.updateChecked(candidateId, questionId, checked), questionId);
+    }
+
     public Long addQuestion(Long candidateId, String section, String content) {
         candidateService.get(candidateId);
         if (section == null || section.isBlank()) {

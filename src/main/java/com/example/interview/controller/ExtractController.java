@@ -287,6 +287,14 @@ public class ExtractController {
         return ResponseEntity.noContent().build();
     }
 
+    @PostMapping("/results/{id}/questions/{questionId}/checked")
+    @ResponseBody
+    public ResponseEntity<Void> checkQuestion(@PathVariable Long id, @PathVariable Long questionId,
+            @RequestParam boolean checked) {
+        extractionService.checkQuestion(id, questionId, checked);
+        return ResponseEntity.noContent().build();
+    }
+
     @GetMapping("/fit")
     public String fit(@RequestParam(required = false) Long position, @RequestParam(required = false) String mode,
             Model model) {

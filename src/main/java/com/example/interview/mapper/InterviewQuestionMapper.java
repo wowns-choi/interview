@@ -20,6 +20,8 @@ public interface InterviewQuestionMapper {
     /** @return 갱신된 행 수 (다른 지원자의 질문이면 0) */
     int updateAnswer(@Param("candidateId") Long candidateId, @Param("id") Long id, @Param("answer") String answer);
 
+    int updateChecked(@Param("candidateId") Long candidateId, @Param("id") Long id, @Param("checked") boolean checked);
+
     int updateContent(@Param("candidateId") Long candidateId, @Param("id") Long id, @Param("content") String content);
 
     int updatePlace(@Param("candidateId") Long candidateId, @Param("id") Long id, @Param("section") String section,

@@ -336,38 +336,33 @@
         </c:if>
 
         <c:if test="${r.fitChecked}">
-          <div class="ev-legend">
-            <span><i class="ev-DIRECT"></i>직접 근거</span>
-            <span><i class="ev-INDIRECT"></i>간접 근거</span>
-            <span><i class="ev-NONE"></i>근거 없음</span>
-            <c:if test="${r.hasUncheckedCriteria}"><span><i class="ev-UNCHECKED"></i>검사 전</span></c:if>
-          </div>
-          <div class="ev-table">
-            <c:forEach var="cv" items="${r.criteria}">
+          <div class="ev-list">
+            <c:forEach var="cv" items="${r.criteria}" varStatus="cs">
               <c:set var="evKind" value="${cv.checked ? cv.match : 'UNCHECKED'}"/>
-              <article class="ev-row ev-${evKind}">
-                <div class="ev-crit" title="${evKind == 'DIRECT' ? '직접 근거' : evKind == 'INDIRECT' ? '간접 근거' : evKind == 'NONE' ? '근거 없음' : '검사 전'}">
-                  <div class="ev-title">
-                    <h4><c:out value="${cv.criterion.name}"/></h4>
+              <article class="ev ev-${evKind}">
+                <header class="ev-head">
+                  <span class="ev-no">${cs.count < 10 ? '0' : ''}${cs.count}</span>
+                  <h4><c:out value="${cv.criterion.name}"/></h4>
+                  <span class="ev-tag"><i class="hb ev-${evKind}"></i>${evKind == 'DIRECT' ? '직접 근거' : evKind == 'INDIRECT' ? '간접 근거' : evKind == 'NONE' ? '근거 없음' : '검사 전'}</span>
+                </header>
+                <c:if test="${cv.checked}">
+                  <div class="ev-body">
+                    <c:choose>
+                      <c:when test="${empty cv.quotedEvidences}">
+                        <p class="ev-none"><c:out value="${empty cv.noneNote ? '이력서에서 관련 내용을 찾지 못했습니다.' : cv.noneNote}"/></p>
+                      </c:when>
+                      <c:otherwise>
+                        <c:forEach var="ev" items="${cv.quotedEvidences}">
+                          <div class="ev-item">
+                            <blockquote class="quote ${ev.verifiedYn == 'Y' ? '' : 'quote-unverified'}"><c:out value="${ev.quote}"/></blockquote>
+                            <c:if test="${ev.verifiedYn != 'Y'}"><p class="warn-text">이력서 원문에서 찾지 못한 문장입니다</p></c:if>
+                            <p class="interp"><c:out value="${ev.interpretation}"/></p>
+                          </div>
+                        </c:forEach>
+                      </c:otherwise>
+                    </c:choose>
                   </div>
-                </div>
-                <div class="ev-proof">
-                  <c:choose>
-                    <c:when test="${not cv.checked}"></c:when>
-                    <c:when test="${empty cv.quotedEvidences}">
-                      <p class="ev-none"><c:out value="${empty cv.noneNote ? '이력서에서 관련 내용을 찾지 못했습니다.' : cv.noneNote}"/></p>
-                    </c:when>
-                    <c:otherwise>
-                      <c:forEach var="ev" items="${cv.quotedEvidences}">
-                        <div class="ev-item">
-                          <blockquote class="quote ${ev.verifiedYn == 'Y' ? '' : 'quote-unverified'}"><c:out value="${ev.quote}"/></blockquote>
-                          <c:if test="${ev.verifiedYn != 'Y'}"><p class="warn-text">이력서 원문에서 찾지 못한 문장입니다</p></c:if>
-                          <p class="interp"><c:out value="${ev.interpretation}"/></p>
-                        </div>
-                      </c:forEach>
-                    </c:otherwise>
-                  </c:choose>
-                </div>
+                </c:if>
               </article>
             </c:forEach>
           </div>
@@ -417,7 +412,8 @@
                     <c:when test="${q.questionType == 'VERIFY'}"><c:set var="kind" value="verify"/><c:set var="kindLabel" value="경력 검증"/></c:when>
                     <c:otherwise><c:set var="kind" value="skill"/><c:set var="kindLabel" value="역량 검증"/></c:otherwise>
                   </c:choose>
-                  <li class="q-row iq ${empty q.answer ? '' : 'is-answered'}" data-id="${q.id}">
+                  <li class="q-row iq${empty q.answer ? '' : ' is-answered'}${q.checked ? ' is-checked' : ''}" data-id="${q.id}">
+                    <button type="button" class="iq-no js-q-check" title="물어본 질문 체크" aria-pressed="${q.checked}"></button>
                     <span class="handle iq-handle" title="끌어서 옮기기"><svg class="i"><use href="#i-grip"/></svg></span>
                     <div class="iq-main">
                       <div class="iq-top">
@@ -461,6 +457,7 @@
 
 <template id="tpl-q">
   <li class="q-row iq" data-id="">
+    <button type="button" class="iq-no js-q-check" title="물어본 질문 체크" aria-pressed="false"></button>
     <span class="handle iq-handle" title="끌어서 옮기기"><svg class="i"><use href="#i-grip"/></svg></span>
     <div class="iq-main">
       <div class="iq-top">

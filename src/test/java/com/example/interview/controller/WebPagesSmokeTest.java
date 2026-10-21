@@ -207,6 +207,16 @@ class WebPagesSmokeTest {
         assertThat(get("/results/" + id).body()).contains("측정은 nGrinder로 했다고 답함");
         assertThat(post("/results/" + id + "/questions/999999/answer", "answer=x", true).statusCode()).isEqualTo(404);
 
+        // 답변을 적으면 체크되고, 번호를 눌러 풀거나 다시 체크한다
+        String answeredId = m.group(2);
+        String checkedRow = "is-checked\" data-id=\"" + answeredId + "\"";
+        assertThat(get("/results/" + id).body()).as("답변을 적으면 체크").contains(checkedRow);
+        assertThat(post("/results/" + id + "/questions/" + answeredId + "/checked", "checked=false", true).statusCode()).isEqualTo(204);
+        assertThat(get("/results/" + id).body()).doesNotContain(checkedRow);
+        assertThat(post("/results/" + id + "/questions/" + answeredId + "/checked", "checked=true", true).statusCode()).isEqualTo(204);
+        assertThat(get("/results/" + id).body()).contains(checkedRow, "aria-pressed=\"true\"");
+        assertThat(post("/results/" + id + "/questions/999999/checked", "checked=true", true).statusCode()).isEqualTo(404);
+
         assertThat(get("/results/999999").statusCode()).isEqualTo(404);
     }
 
