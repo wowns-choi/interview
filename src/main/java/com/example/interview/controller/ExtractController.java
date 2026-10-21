@@ -1,5 +1,8 @@
 package com.example.interview.controller;
 
+import java.util.ArrayList;
+import java.util.Comparator;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -18,49 +21,60 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.ResponseBody;
 import org.springframework.web.multipart.MultipartFile;
+import org.springframework.web.multipart.MultipartHttpServletRequest;
 import org.springframework.web.servlet.mvc.support.RedirectAttributes;
 
 import com.example.interview.ai.AiCallException;
 import com.example.interview.domain.EvalCriterion;
+import com.example.interview.domain.Position;
 import com.example.interview.domain.PositionImage;
 import com.example.interview.resume.ResumeProcessingException;
+import com.example.interview.service.BatchCheckService;
 import com.example.interview.service.BusinessException;
+import com.example.interview.service.CandidateService;
 import com.example.interview.service.ExtractionService;
 import com.example.interview.service.PositionService;
+import com.example.interview.service.RankingService;
 import com.example.interview.service.ReportService;
+import com.example.interview.web.dto.ConditionForm;
+import com.example.interview.web.dto.PositionSummary;
 import com.example.interview.web.dto.QuestionOrder;
+import com.example.interview.web.dto.RankingRow;
 import com.example.interview.web.dto.ResultReport;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 
 /**
- * "면접 질문 추출하기" 탭: 평가항목 추출 → 포지션 적합도 검사 → 면접 질문 추출을 한 화면에서 이어 간다.
- * 포지션 화면은 /positions/{id}, 지원자(이력서) 화면은 /results/{id}. 편집은 fetch(JSON)로 저장한다.
+ * 평가 항목 추출(/positions) → 포지션 적합도 검사(/fit, 지원자는 /results/{id}) → 지원자 비교(/ranking) 탭.
+ * 편집은 fetch(JSON)로 저장한다.
  */
 @Slf4j
 @Controller
 @RequiredArgsConstructor
 public class ExtractController {
 
-    private static final int RECENT_SIZE = 20;
+    private static final int LIST_SIZE = 1000;
 
     private final PositionService positionService;
     private final ExtractionService extractionService;
     private final ReportService reportService;
+    private final RankingService rankingService;
+    private final BatchCheckService batchCheckService;
+    private final CandidateService candidateService;
 
-    @GetMapping("/")
+    @GetMapping({"/", "/extract"})
     public String home() {
-        return "redirect:/extract";
+        return "redirect:/positions";
     }
 
-    @GetMapping("/extract")
-    public String start(Model model) {
-        model.addAttribute("recent", positionService.recent(RECENT_SIZE));
-        return "extract";
+    @GetMapping("/positions")
+    public String newPosition(Model model) {
+        model.addAttribute("positions", positionService.recent(LIST_SIZE));
+        return "positions";
     }
 
-    @PostMapping("/extract")
+    @PostMapping("/positions")
     public String createPosition(@RequestParam(required = false) String jdText,
             @RequestParam(name = "files", required = false) List<MultipartFile> files, RedirectAttributes ra) {
         Long id;
@@ -69,7 +83,7 @@ public class ExtractController {
         } catch (BusinessException e) {
             ra.addFlashAttribute("error", e.getMessage());
             ra.addFlashAttribute("jdText", jdText);
-            return "redirect:/extract";
+            return "redirect:/positions";
         }
         extractCriteria(id, ra);
         return "redirect:/positions/" + id;
@@ -77,8 +91,9 @@ public class ExtractController {
 
     @GetMapping("/positions/{id}")
     public String position(@PathVariable Long id, Model model) {
+        model.addAttribute("positions", positionService.recent(LIST_SIZE));
         addPosition(model, id);
-        return "extract";
+        return "positions";
     }
 
     @PostMapping("/positions/{id}/criteria/extract")
@@ -92,7 +107,7 @@ public class ExtractController {
     public String deletePosition(@PathVariable Long id, RedirectAttributes ra) {
         positionService.delete(id);
         ra.addFlashAttribute("message", "삭제했습니다.");
-        return "redirect:/extract";
+        return "redirect:/positions";
     }
 
     @GetMapping("/positions/{id}/images/{imageId}")
@@ -105,18 +120,30 @@ public class ExtractController {
                 .body(image.getImageData());
     }
 
+    @PatchMapping("/positions/{id}")
+    @ResponseBody
+    public Map<String, String> renamePosition(@PathVariable Long id, @RequestBody Map<String, String> body) {
+        return Map.of("title", positionService.rename(id, body.get("title")));
+    }
+
+    @PatchMapping("/positions/{id}/conditions")
+    @ResponseBody
+    public ResponseEntity<Void> updateConditions(@PathVariable Long id, @RequestBody Map<String, String> body) {
+        positionService.updateConditions(id, body.get("requiredExperience"), body.get("requiredEducation"));
+        return ResponseEntity.noContent().build();
+    }
+
     @PostMapping("/positions/{id}/criteria")
     @ResponseBody
     public EvalCriterion addCriterion(@PathVariable Long id, @RequestBody Map<String, String> body) {
-        return positionService.addCriterion(id, body.get("name"), body.get("description"), body.get("requirement"));
+        return positionService.addCriterion(id, body.get("name"), body.get("description"));
     }
 
     @PatchMapping("/positions/{id}/criteria/{criterionId}")
     @ResponseBody
     public ResponseEntity<Void> updateCriterion(@PathVariable Long id, @PathVariable Long criterionId,
             @RequestBody Map<String, String> body) {
-        positionService.updateCriterion(id, criterionId, body.get("name"), body.get("description"),
-                body.get("requirement"));
+        positionService.updateCriterion(id, criterionId, body.get("name"), body.get("description"));
         return ResponseEntity.noContent().build();
     }
 
@@ -128,28 +155,73 @@ public class ExtractController {
     }
 
     @PostMapping("/positions/{id}/resume")
-    public String uploadResume(@PathVariable Long id, @RequestParam(required = false) MultipartFile resume,
+    public String uploadResume(@PathVariable Long id, @RequestParam(required = false) List<MultipartFile> resume,
             RedirectAttributes ra) {
         try {
-            return "redirect:/results/" + extractionService.uploadResume(id, resume) + "#fit";
+            return "redirect:/results/" + extractionService.uploadResume(id, resume);
         } catch (BusinessException | ResumeProcessingException e) {
             ra.addFlashAttribute("error", e.getMessage());
-            return "redirect:/positions/" + id + "#fit";
+            return "redirect:/fit?position=" + id;
         }
+    }
+
+    /** 포지션 적합도 검사(다수): applicant-1, applicant-2 … 칸마다 한 명. 빈 칸은 건너뛴다 */
+    @PostMapping("/positions/{id}/batch")
+    public String batch(@PathVariable Long id, MultipartHttpServletRequest request, RedirectAttributes ra) {
+        List<List<MultipartFile>> applicants = new ArrayList<>();
+        request.getMultiFileMap().entrySet().stream()
+                .filter(e -> e.getKey().matches("applicant-\\d+"))
+                .sorted(Comparator.comparingInt(e -> Integer.parseInt(e.getKey().substring("applicant-".length()))))
+                .forEach(e -> applicants.add(e.getValue()));
+        try {
+            int n = batchCheckService.start(id, applicants);
+            ra.addFlashAttribute("message", n + "명의 검사를 시작했습니다.");
+        } catch (BusinessException | ResumeProcessingException e) {
+            ra.addFlashAttribute("error", e.getMessage());
+        }
+        return "redirect:/fit?position=" + id + "&mode=batch";
+    }
+
+    /** 적합도 검사 화면의 지원자 목록 (다수 검사 진행 상황을 새로 그릴 때) */
+    @GetMapping("/positions/{id}/candidates")
+    @ResponseBody
+    public List<Map<String, Object>> candidateList(@PathVariable Long id) {
+        positionService.get(id);
+        return rankingService.rank(id).stream()
+                .sorted(Comparator.comparing(RankingRow::getCandidateId).reversed())
+                .map(row -> {
+                    Map<String, Object> m = new LinkedHashMap<>();
+                    m.put("id", row.getCandidateId());
+                    m.put("name", row.getDisplayName());
+                    m.put("state", row.getState());
+                    m.put("status", row.getStatus().name());
+                    m.put("inProgress", row.isInProgress());
+                    m.put("label", row.getStatusLabel());
+                    m.put("score", row.getScore() == null ? null : row.getScore().getTotalText());
+                    m.put("max", row.getScore() == null ? null : row.getScore().getMax());
+                    return m;
+                }).toList();
     }
 
     @GetMapping("/results/{id}")
     public String result(@PathVariable Long id, Model model) {
         ResultReport r = reportService.report(id);
         model.addAttribute("r", r);
-        addPosition(model, r.getPosition().getId());
-        return "extract";
+        addFit(model, r.getPosition().getId());
+        return "fit";
     }
 
     @PostMapping("/results/{id}/check")
-    public String checkFit(@PathVariable Long id) {
-        extractionService.checkFit(id);
-        return "redirect:/results/" + id + "#fit";
+    public String checkFit(@PathVariable Long id, @RequestParam(required = false) String maskedText,
+            RedirectAttributes ra) {
+        try {
+            extractionService.checkFit(id, maskedText);
+            // 검사 직후 한 번만 도장 찍는 애니메이션
+            ra.addFlashAttribute("justChecked", true);
+        } catch (BusinessException e) {
+            ra.addFlashAttribute("error", e.getMessage());
+        }
+        return "redirect:/results/" + id;
     }
 
     @PostMapping("/results/{id}/questions/generate")
@@ -158,12 +230,18 @@ public class ExtractController {
         return "redirect:/results/" + id + "#questions";
     }
 
+    @PatchMapping("/results/{id}")
+    @ResponseBody
+    public Map<String, String> renameCandidate(@PathVariable Long id, @RequestBody Map<String, String> body) {
+        return Map.of("name", candidateService.rename(id, body.get("name")));
+    }
+
     @PostMapping("/results/{id}/delete")
     public String deleteCandidate(@PathVariable Long id, RedirectAttributes ra) {
         Long positionId = reportService.report(id).getPosition().getId();
         extractionService.deleteCandidate(id);
         ra.addFlashAttribute("message", "삭제했습니다.");
-        return "redirect:/positions/" + positionId + "#fit";
+        return "redirect:/fit?position=" + positionId;
     }
 
     @PostMapping("/results/{id}/questions")
@@ -202,11 +280,58 @@ public class ExtractController {
         return ResponseEntity.noContent().build();
     }
 
-    private void addPosition(Model model, Long positionId) {
+    @GetMapping("/fit")
+    public String fit(@RequestParam(required = false) Long position, @RequestParam(required = false) String mode,
+            Model model) {
+        model.addAttribute("batch", "batch".equals(mode));
+        Long id = choose(model, position);
+        if (id != null) {
+            addFit(model, id);
+        }
+        return "fit";
+    }
+
+    @GetMapping("/ranking")
+    public String ranking(@RequestParam(required = false) Long position, Model model) {
+        Long id = choose(model, position);
+        if (id != null) {
+            model.addAttribute("position", positionService.get(id));
+            model.addAttribute("criteria", positionService.criteria(id));
+            model.addAttribute("rows", rankingService.rank(id));
+        }
+        return "ranking";
+    }
+
+    /** 평가항목이 있는 포지션 목록을 넣고, 고른 포지션(없으면 가장 최근 것)의 id를 돌려준다 */
+    private Long choose(Model model, Long requested) {
+        List<PositionSummary> positions = positionService.recent(LIST_SIZE).stream()
+                .filter(p -> p.getCriteriaCount() > 0).toList();
+        model.addAttribute("positions", positions);
+        if (requested != null) {
+            positionService.get(requested);
+            return requested;
+        }
+        return positions.isEmpty() ? null : positions.get(0).getId();
+    }
+
+    /** 적합도 검사 화면: 포지션, 평가항목, 지원자 목록(최근 순, 점수 포함) */
+    private void addFit(Model model, Long positionId) {
+        if (!model.containsAttribute("positions")) {
+            model.addAttribute("positions", positionService.recent(LIST_SIZE).stream()
+                    .filter(p -> p.getCriteriaCount() > 0 || p.getId().equals(positionId)).toList());
+        }
         model.addAttribute("position", positionService.get(positionId));
         model.addAttribute("criteria", positionService.criteria(positionId));
+        model.addAttribute("candidates", rankingService.rank(positionId).stream()
+                .sorted(Comparator.comparing(RankingRow::getCandidateId).reversed()).toList());
+    }
+
+    private void addPosition(Model model, Long positionId) {
+        Position position = positionService.get(positionId);
+        model.addAttribute("position", position);
+        model.addAttribute("conds", ConditionForm.of(position));
+        model.addAttribute("criteria", positionService.criteria(positionId));
         model.addAttribute("imageIds", positionService.imageIds(positionId));
-        model.addAttribute("candidates", extractionService.candidates(positionId));
     }
 
     private void extractCriteria(Long positionId, RedirectAttributes ra) {

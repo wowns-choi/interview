@@ -44,9 +44,9 @@ class CriteriaFlowIntegrationTest {
         CriteriaResult result = new CriteriaResult();
         result.setPositionTitle("데이터 엔지니어");
         result.setImageText("주요 업무: 데이터 파이프라인 구축");
+        result.setRequiredExperience(" ");
         CriteriaResult.Item item = new CriteriaResult.Item();
         item.setName("Spark 사용 경험");
-        item.setRequirement("MUST");
         item.setCategory("TECH");
         item.setResumeAssessable(true);
         result.setCriteria(List.of(item));
@@ -65,12 +65,48 @@ class CriteriaFlowIntegrationTest {
         Position p = positionService.get(id);
         assertThat(p.getStatus()).isEqualTo(PositionStatus.CONFIRMED);
         assertThat(p.getTitle()).isEqualTo("데이터 엔지니어");
+        assertThat(p.getRequiredExperience()).isNull();
         assertThat(p.getPostingText()).isEqualTo("주요 업무: 데이터 파이프라인 구축");
         assertThat(positionService.criteria(id)).extracting("name").containsExactly("Spark 사용 경험");
         List<Long> imageIds = positionService.imageIds(id);
         assertThat(imageIds).hasSize(1);
         assertThat(positionService.image(id, imageIds.get(0)).getImageData()).isEqualTo(PNG);
         assertThatThrownBy(() -> positionService.image(id + 1000, imageIds.get(0))).isInstanceOf(NotFoundException.class);
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    void renamedTitleSurvivesReextraction() {
+        CriteriaResult result = new CriteriaResult();
+        result.setPositionTitle("백엔드 개발자 (JAVA)");
+        CriteriaResult.Item item = new CriteriaResult.Item();
+        item.setName("Kafka 운영 경험");
+        item.setCategory("TECH");
+        item.setResumeAssessable(true);
+        result.setCriteria(List.of(item));
+        when(aiClient.call(eq(AiPurpose.CRITERIA_EXTRACT), anyLong(), anyString(), anyString(), any(List.class),
+                eq(CriteriaResult.class), any())).thenReturn(result);
+
+        Long id = positionService.create("공고 본문", List.of());
+        positionService.extractCriteria(id);
+        assertThat(positionService.get(id).getTitle()).isEqualTo("백엔드 개발자 (JAVA)");
+
+        assertThat(positionService.rename(id, "  인라이플 백엔드 10월  ")).isEqualTo("인라이플 백엔드 10월");
+        positionService.extractCriteria(id);
+        assertThat(positionService.get(id).getTitle()).isEqualTo("인라이플 백엔드 10월");
+        assertThatThrownBy(() -> positionService.rename(id, " ")).isInstanceOf(BusinessException.class);
+
+        // 경력·학력 조건: AI ①이 채우고, 사용자가 고치면 다시 추출해도 그대로
+        result.setRequiredExperience("경력 5년 이상");
+        result.setRequiredEducation("");
+        positionService.extractCriteria(id);
+        assertThat(positionService.get(id)).extracting("requiredExperience", "requiredEducation")
+                .containsExactly("경력 5년 이상", null);
+        positionService.updateConditions(id, " 경력 3년 이상 ", "대졸(4년) 이상");
+        positionService.extractCriteria(id);
+        assertThat(positionService.get(id)).extracting("requiredExperience", "requiredEducation")
+                .containsExactly("경력 3년 이상", "대졸(4년) 이상");
+        assertThatThrownBy(() -> positionService.rename(id + 1000, "x")).isInstanceOf(NotFoundException.class);
     }
 
     @Test
@@ -103,7 +139,7 @@ class CriteriaFlowIntegrationTest {
                 .hasMessageContaining("포지션 설명이나 파일");
         MultipartFile fake = new MockMultipartFile("files", "a.png", "image/png", "not an image".getBytes());
         assertThatThrownBy(() -> positionService.create("공고", List.of(fake))).isInstanceOf(BusinessException.class)
-                .hasMessageContaining("이미지, PDF, TXT");
+                .hasMessageContaining("PDF, TXT, MD, 이미지");
         List<MultipartFile> six = List.of(png("1"), png("2"), png("3"), png("4"), png("5"), png("6"));
         assertThatThrownBy(() -> positionService.create("공고", six)).isInstanceOf(BusinessException.class)
                 .hasMessageContaining("5개");

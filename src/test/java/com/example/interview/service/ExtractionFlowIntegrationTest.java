@@ -2,12 +2,15 @@ package com.example.interview.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.assertj.core.api.Assertions.tuple;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.reset;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import java.util.List;
@@ -21,11 +24,17 @@ import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import com.example.interview.ai.AiCallException;
 import com.example.interview.ai.AiClient;
 import com.example.interview.ai.dto.ArrangeResult;
+import com.example.interview.ai.dto.CareerEvalResult;
 import com.example.interview.ai.dto.CriteriaResult;
 import com.example.interview.ai.dto.EvidenceResult;
+import com.example.interview.ai.dto.PiiExtract;
+import com.example.interview.ai.dto.PiiExtracts;
+import com.example.interview.ai.dto.PiiResult;
 import com.example.interview.ai.dto.QuestionResult;
+import com.example.interview.ai.dto.TimelineResult;
 import com.example.interview.domain.AiPurpose;
 import com.example.interview.domain.Candidate;
+import com.example.interview.domain.CandidateProfile;
 import com.example.interview.domain.CandidateStatus;
 import com.example.interview.domain.EvidenceType;
 import com.example.interview.domain.InterviewQuestion;
@@ -49,6 +58,9 @@ public class ExtractionFlowIntegrationTest {
             연락처 010-1111-2222
             - 일 100만 건 주문 데이터 배치 처리 개선
             - Redis 캐시 도입으로 응답속도 40% 개선
+            가나커머스 백엔드팀 2021.03 ~ 2024.02 (2년 11개월)
+            희망 연봉 5,000만원
+            2024.01 ~ 2024.06 가나정보교육원 국비 과정 수료
             """;
 
     @MockitoBean
@@ -60,6 +72,10 @@ public class ExtractionFlowIntegrationTest {
     ExtractionService extractionService;
     @Autowired
     ReportService reportService;
+    @Autowired
+    RankingService rankingService;
+    @Autowired
+    BatchCheckService batchCheckService;
     @Autowired
     CandidateService candidateService;
     @Autowired
@@ -75,13 +91,36 @@ public class ExtractionFlowIntegrationTest {
         when(pdfTextExtractor.extract(any())).thenReturn(RESUME);
 
         Long positionId = startPosition(positionService, "백엔드 개발자 채용\n자격요건: Java");
-        Long id = extractionService.uploadResume(positionId, pdf());
+        Long id = extractionService.uploadResume(positionId, List.of(pdf()));
+        assertThat(candidateService.get(id).getStatus()).as("업로드는 가리기까지만").isEqualTo(CandidateStatus.UPLOADED);
+        assertThat(reportService.report(id).isFitChecked()).isFalse();
+        // 학력·경력: 원문에 있는 값만 화면용으로 남기고, 이력서 글에서는 회사·연봉을 가린다. 연봉은 가리기만 하고 저장하지 않는다
+        CandidateProfile profile = reportService.report(id).getProfile();
+        assertThat(profile.getCareers()).extracting("company", "period").containsExactly(tuple("가나커머스", "2021.03 ~ 2024.02"));
+        assertThat(profile.getEducation()).as("원문에 없는 학교는 버린다").isEmpty();
+        assertThat(profile.getDesiredSalary()).isEmpty();
+        assertThat(candidateService.get(id).getMaskedText()).contains("[A사] 백엔드팀", "희망 연봉 [연봉]")
+                .doesNotContain("가나커머스", "5,000만원");
+        // 회사 이름표는 업로드 때 정해 프로필에 적고, 외부 AI는 검사 때까지 부르지 않는다
+        assertThat(profile.getCareers()).extracting("alias").containsExactly("A사");
+        assertThat(reportService.report(id).getCareerEval()).isNull();
+        verify(aiClient, never()).call(eq(AiPurpose.TIMELINE), anyLong(), anyString(), anyString(),
+                eq(TimelineResult.class), any());
+
+        // 검토: 놓친 단어를 직접 가린 글로 검사
+        String reviewed = candidateService.get(id).getMaskedText().replace("Redis", "[개인정보]");
+        extractionService.checkFit(id, reviewed);
 
         Candidate candidate = candidateService.get(id);
         assertThat(candidate.getStatus()).isEqualTo(CandidateStatus.ANALYZED);
+        assertThat(candidate.getMaskedText()).contains("[개인정보] 캐시 도입").doesNotContain("Redis");
         ResultReport checked = reportService.report(id);
         assertThat(checked.isFitChecked()).isTrue();
         assertThat(checked.getSections()).as("질문은 버튼을 눌러야 만든다").isEmpty();
+        // 총·관련 경력은 근거 분석 호출에서, 타임라인은 학력 호출에서
+        assertThat(checked.getCareerEval()).extracting("totalMonths", "relevantMonths", "educationMeets")
+                .containsExactly(35, 30, "UNKNOWN");
+        assertThat(checked.getTimeline()).isNotNull();
 
         extractionService.generateQuestions(id);
         candidate = candidateService.get(id);
@@ -92,7 +131,6 @@ public class ExtractionFlowIntegrationTest {
 
         ResultReport r = reportService.report(id);
         assertThat(r.getCriteria()).hasSize(3);
-        // MUST 항목이 먼저
         assertThat(r.getCriteria().get(0).getCriterion().getName()).isEqualTo("대용량 트래픽 처리 경험");
         assertThat(r.getCriteria().get(0).getMatch()).isEqualTo(EvidenceType.DIRECT);
         assertThat(r.getNoneCount()).isEqualTo(2);
@@ -145,8 +183,11 @@ public class ExtractionFlowIntegrationTest {
                 .isInstanceOf(BusinessException.class);
 
         // 평가항목 편집: 검사 뒤 추가한 항목은 "검사 전"
-        positionService.addCriterion(positionId, "Kotlin 경험", null, "PREFERRED");
+        assertThat(rankingService.rank(positionId)).extracting("rank", "state").containsExactly(org.assertj.core.groups.Tuple.tuple(1, "RANKED"));
+        positionService.addCriterion(positionId, "Kotlin 경험", null);
         assertThat(reportService.report(id).isHasUncheckedCriteria()).isTrue();
+        // 검사 뒤 평가항목이 바뀌면 순위에서 빠진다 (재검사 필요)
+        assertThat(rankingService.rank(positionId)).extracting("rank", "state").containsExactly(org.assertj.core.groups.Tuple.tuple(null, "STALE"));
 
         // 이력서 삭제: 포지션은 남는다
         extractionService.deleteCandidate(id);
@@ -161,10 +202,13 @@ public class ExtractionFlowIntegrationTest {
                 .thenThrow(new AiCallException("일시적 오류"));
         when(pdfTextExtractor.extract(any())).thenReturn(RESUME);
 
-        Long id = extractionService.uploadResume(startPosition(positionService, "백엔드 개발자"), pdf());
+        Long id = extractionService.uploadResume(startPosition(positionService, "백엔드 개발자"), List.of(pdf()));
+        extractionService.checkFit(id, null);
         Candidate failed = candidateService.get(id);
         assertThat(failed.getStatus()).isEqualTo(CandidateStatus.FAILED);
         assertThat(failed.getErrorMessage()).contains("일시적 오류");
+        assertThat(reportService.report(id).getCareerEval()).as("학력 호출은 근거 분석이 실패해도 저장")
+                .extracting("totalMonths", "educationMeets").containsExactly(null, "UNKNOWN");
         assertThat(reportService.report(id).isFitChecked()).isFalse();
 
         reset(aiClient);
@@ -188,12 +232,147 @@ public class ExtractionFlowIntegrationTest {
         stubAi(aiClient, templateMapper, sectionMapper);
         Long positionId = startPosition(positionService, "포지션");
         MockMultipartFile notPdf = new MockMultipartFile("resume", "resume.docx", "application/octet-stream", new byte[] { 1 });
-        assertThatThrownBy(() -> extractionService.uploadResume(positionId, notPdf)).isInstanceOf(ResumeProcessingException.class);
+        assertThatThrownBy(() -> extractionService.uploadResume(positionId, List.of(notPdf))).isInstanceOf(ResumeProcessingException.class);
         assertThatThrownBy(() -> extractionService.uploadResume(positionId, null)).isInstanceOf(ResumeProcessingException.class);
         assertThat(extractionService.candidates(positionId)).isEmpty();
 
         Long empty = positionService.create("기준 없는 포지션");
-        assertThatThrownBy(() -> extractionService.uploadResume(empty, pdf())).isInstanceOf(BusinessException.class);
+        assertThatThrownBy(() -> extractionService.uploadResume(empty, List.of(pdf()))).isInstanceOf(BusinessException.class);
+    }
+
+    @Test
+    void combinesSeveralFilesWithoutFileNames() throws Exception {
+        stubAi(aiClient, templateMapper, sectionMapper);
+        when(pdfTextExtractor.extract(any())).thenReturn(RESUME);
+        byte[] docx;
+        try (var doc = new org.apache.poi.xwpf.usermodel.XWPFDocument(); var out = new java.io.ByteArrayOutputStream()) {
+            doc.createParagraph().createRun().setText("포트폴리오: 홍길동의 정산 배치 개선 프로젝트");
+            doc.write(out);
+            docx = out.toByteArray();
+        }
+        MockMultipartFile portfolio = new MockMultipartFile("resume", "홍길동_포트폴리오.docx",
+                "application/octet-stream", docx);
+
+        Long id = extractionService.uploadResume(startPosition(positionService, "백엔드 개발자"), List.of(pdf(), portfolio));
+
+        assertThat(candidateService.get(id).getMaskedText())
+                .containsSubsequence("[첨부 1 (PDF)]", "[첨부 2 (DOCX)]", "포트폴리오: [이름]의 정산 배치 개선 프로젝트")
+                .doesNotContain("홍길동", "포트폴리오.docx");
+    }
+
+    @Test
+    void reviewedTextWithPhoneNumberIsRejectedBeforeAi() {
+        stubAi(aiClient, templateMapper, sectionMapper);
+        when(pdfTextExtractor.extract(any())).thenReturn(RESUME);
+        Long id = extractionService.uploadResume(startPosition(positionService, "백엔드 개발자"), List.of(pdf()));
+        String saved = candidateService.get(id).getMaskedText();
+        reset(aiClient);
+
+        assertThatThrownBy(() -> extractionService.checkFit(id, saved + "\n연락처 010-9999-8888"))
+                .isInstanceOf(BusinessException.class).hasMessageContaining("휴대전화");
+        assertThatThrownBy(() -> extractionService.checkFit(id, "  "))
+                .isInstanceOf(BusinessException.class);
+
+        assertThat(candidateService.get(id).getMaskedText()).isEqualTo(saved);
+        assertThat(candidateService.get(id).getStatus()).isEqualTo(CandidateStatus.UPLOADED);
+        org.mockito.Mockito.verifyNoInteractions(aiClient);
+    }
+
+    @Test
+    void editingTheMaskedTextAfterACheckRechecksAndDropsTheSheet() {
+        stubAi(aiClient, templateMapper, sectionMapper);
+        when(pdfTextExtractor.extract(any())).thenReturn(RESUME);
+        Long id = extractionService.uploadResume(startPosition(positionService, "백엔드 개발자"), List.of(pdf()));
+        extractionService.checkFit(id, null);
+        extractionService.generateQuestions(id);
+        assertThat(reportService.report(id).getSections()).isNotEmpty();
+
+        String edited = candidateService.get(id).getMaskedText().replace("Redis", "[개인정보]");
+        extractionService.checkFit(id, edited);
+
+        ResultReport r = reportService.report(id);
+        assertThat(r.isFitChecked()).isTrue();
+        assertThat(r.getSections()).as("본문이 바뀌면 질문지는 다시 만든다").isEmpty();
+        assertThat(r.getCandidate().getMaskedText()).contains("[개인정보] 캐시 도입");
+    }
+
+    @Test
+    void batchMasksAndChecksEachApplicantInTurnWithoutReview() throws Exception {
+        stubAi(aiClient, templateMapper, sectionMapper);
+        when(pdfTextExtractor.extract(any())).thenReturn(RESUME);
+        Long positionId = startPosition(positionService, "백엔드 개발자 채용");
+
+        // 빈 칸은 건너뛰고, 한 칸에 여러 파일이면 한 사람
+        int started = batchCheckService.start(positionId, List.of(List.of(pdf()), List.of(), List.of(pdf(), pdf())));
+        assertThat(started).isEqualTo(2);
+        batchCheckService.awaitIdle();
+
+        List<com.example.interview.web.dto.RankingRow> rows = rankingService.rank(positionId);
+        assertThat(rows).extracting("displayName", "state", "rank")
+                .containsExactlyInAnyOrder(tuple("홍길동", "RANKED", 1), tuple("홍길동", "RANKED", 2));
+        for (var row : rows) {
+            Candidate c = candidateService.get(row.getCandidateId());
+            assertThat(c.getStatus()).isEqualTo(CandidateStatus.ANALYZED);
+            assertThat(c.getMaskedText()).contains("[전화번호]").doesNotContain("010-1111-2222", "홍길동");
+            assertThat(reportService.report(c.getId()).getSections()).as("질문은 면접관이 직접 뽑는다").isEmpty();
+        }
+        verify(aiClient, never()).call(eq(AiPurpose.QUESTION), anyLong(), anyString(), anyString(), any(), any());
+    }
+
+    @Test
+    void batchApplicantWhoseMaskingFailsStopsWithoutReachingGpt() throws Exception {
+        stubAi(aiClient, templateMapper, sectionMapper);
+        when(aiClient.callLocal(eq(AiPurpose.PII_DETECT), anyLong(), anyString(), anyString(), any(),
+                eq(PiiExtract.class), any())).thenThrow(new AiCallException("Connection refused"));
+        when(pdfTextExtractor.extract(any())).thenReturn(RESUME);
+        Long positionId = startPosition(positionService, "포지션");
+
+        batchCheckService.start(positionId, List.of(List.of(pdf())));
+        batchCheckService.awaitIdle();
+
+        Candidate c = candidateService.get(rankingService.rank(positionId).get(0).getCandidateId());
+        assertThat(c.getStatus()).isEqualTo(CandidateStatus.FAILED);
+        assertThat(c.getMaskedText()).isNull();
+        assertThat(c.getErrorMessage()).contains("1인");
+        verify(aiClient, never()).call(eq(AiPurpose.EVIDENCE), anyLong(), anyString(), anyString(), any(), any());
+    }
+
+    @Test
+    void unfinishedBatchWorkIsMarkedFailedOnRestart() {
+        stubAi(aiClient, templateMapper, sectionMapper);
+        Long positionId = startPosition(positionService, "포지션");
+        Long id = candidateService.createQueued(positionId, "지원자");
+        // 진행 중에는 이름을 바꿀 수 없다 (가리기가 끝나면 이름을 덮어쓴다)
+        assertThatThrownBy(() -> candidateService.rename(id, "새 이름")).isInstanceOf(BusinessException.class);
+        batchCheckService.failUnfinished();
+        assertThat(candidateService.get(id).getStatus()).isEqualTo(CandidateStatus.FAILED);
+        assertThat(candidateService.get(id).getErrorMessage()).isEqualTo(BatchCheckService.INTERRUPTED);
+        assertThat(candidateService.rename(id, "새 이름")).isEqualTo("새 이름");
+    }
+
+    @Test
+    void localAiFailureSavesNothing() {
+        stubAi(aiClient, templateMapper, sectionMapper);
+        when(aiClient.callLocal(eq(AiPurpose.PII_DETECT), anyLong(), anyString(), anyString(), any(),
+                eq(PiiExtract.class), any())).thenThrow(new AiCallException("Connection refused"));
+        when(pdfTextExtractor.extract(any())).thenReturn(RESUME);
+        Long positionId = startPosition(positionService, "포지션");
+
+        assertThatThrownBy(() -> extractionService.uploadResume(positionId, List.of(pdf())))
+                .isInstanceOf(ResumeProcessingException.class).hasMessageContaining("Ollama");
+        assertThat(extractionService.candidates(positionId)).isEmpty();
+    }
+
+    @Test
+    void phoneNumberTheLocalAiMissedIsStillMasked() {
+        stubAi(aiClient, templateMapper, sectionMapper);
+        stubPii(aiClient, pii(PiiResult.Type.APPLICANT_NAME, "홍길동"));
+        when(pdfTextExtractor.extract(any())).thenReturn(RESUME);
+        Long positionId = startPosition(positionService, "포지션");
+
+        Long id = extractionService.uploadResume(positionId, List.of(pdf()));
+
+        assertThat(candidateService.get(id).getMaskedText()).contains("[전화번호]").doesNotContain("010-1111-2222");
     }
 
     public static Long startPosition(PositionService positionService, String jdText) {
@@ -202,25 +381,76 @@ public class ExtractionFlowIntegrationTest {
         return id;
     }
 
+    static void stubPii(AiClient aiClient, PiiResult.Item... items) {
+        stubPii(aiClient, null, items);
+    }
+
+    static void stubPii(AiClient aiClient, CandidateProfile profile, PiiResult.Item... items) {
+        when(aiClient.callLocal(eq(AiPurpose.PII_DETECT), anyLong(), anyString(), anyString(), any(),
+                eq(PiiExtract.class), any())).thenAnswer(inv -> PiiExtracts.of(profile, items));
+    }
+
+    static PiiResult.Item pii(PiiResult.Type type, String text) {
+        PiiResult.Item item = new PiiResult.Item();
+        item.setType(type);
+        item.setText(text);
+        return item;
+    }
+
     public static MockMultipartFile pdf() {
         return new MockMultipartFile("resume", "resume.pdf", "application/pdf", new byte[] { 1, 2, 3 });
     }
 
-    /** 평가항목 3개(MUST 2, PREFERRED 1), 근거(직접 1·지어낸 간접 1·없음 2), 맞춤 질문 1개 */
+    /** 평가항목 3개, 근거(직접 1·지어낸 간접 1·없음 2), 맞춤 질문 1개 */
     public static void stubAi(AiClient aiClient, QuestionTemplateMapper templateMapper,
             QuestionSectionMapper sectionMapper) {
+        CandidateProfile profile = new CandidateProfile();
+        CandidateProfile.Career career = new CandidateProfile.Career();
+        career.setCompany("가나커머스");
+        career.setDepartment("백엔드팀");
+        career.setPeriod("2021.03 ~ 2024.02");
+        career.setDuration("2년 11개월");
+        CandidateProfile.Education invented = new CandidateProfile.Education();
+        invented.setSchool("지어낸대학교");
+        profile.setCareers(List.of(career));
+        profile.setEducation(List.of(invented));
+        profile.setDesiredSalary("5,000만원");
+        CandidateProfile.Training training = new CandidateProfile.Training();
+        training.setInstitution("가나정보교육원");
+        training.setName("국비 과정 수료");
+        profile.setTrainings(List.of(training));
+        stubPii(aiClient, profile, pii(PiiResult.Type.APPLICANT_NAME, "홍길동"), pii(PiiResult.Type.PHONE, "010-1111-2222"));
+
         CriteriaResult criteria = new CriteriaResult();
         criteria.setPositionTitle("백엔드 개발자 (Java)");
+        criteria.setRequiredExperience("경력 3년 이상");
         criteria.setCriteria(List.of(
-                criterion("Kafka 사용 경험", "PREFERRED", "TECH", true),
-                criterion("대용량 트래픽 처리 경험", "MUST", "TECH", true),
-                criterion("책임감", "MUST", "ETC", false)));
+                criterion("대용량 트래픽 처리 경험", "TECH", true),
+                criterion("Kafka 사용 경험", "TECH", true),
+                criterion("책임감", "ETC", false)));
         when(aiClient.call(eq(AiPurpose.CRITERIA_EXTRACT), anyLong(), anyString(), anyString(), anyList(),
                 eq(CriteriaResult.class), any())).thenReturn(criteria);
+
+        when(aiClient.call(eq(AiPurpose.TIMELINE), anyLong(), anyString(), anyString(),
+                eq(TimelineResult.class), any())).thenAnswer(inv -> {
+                    String content = inv.getArgument(3);
+                    if (content.contains("가나커머스") || content.contains("<resume>") || !content.contains("A사 | 2021.03 ~ 2024.02")) {
+                        throw new IllegalStateException("타임라인 호출에는 이름표와 기간만 보낸다: " + content);
+                    }
+                    TimelineResult tr = new TimelineResult();
+                    tr.setTimeline(List.of(period("A사", "2021-03", "2024-02"), period("교육1", "2020-01", "2020-06"),
+                            period("없는항목", "2019-01", "2019-02")));
+                    return tr;
+                });
 
         when(aiClient.call(eq(AiPurpose.EVIDENCE), anyLong(), anyString(), anyString(),
                 eq(EvidenceResult.class), any())).thenAnswer(inv -> {
                     String content = inv.getArgument(3);
+                    // 회사 이름은 가리고 재직 기간은 이력서에 그대로 둔다. 회사 목록은 따로 보내지 않는다
+                    if (content.contains("가나커머스") || content.contains("<careers>")
+                            || !content.contains("[A사] 백엔드팀 2021.03 ~ 2024.02")) {
+                        throw new IllegalStateException("근거 분석 입력이 다름: " + content);
+                    }
                     // 실제 평가항목 id는 저장 후에 정해지므로 요청 본문에서 읽는다
                     List<Long> ids = java.util.regex.Pattern.compile("\"criterion_id\"\\s*:\\s*(\\d+)").matcher(content)
                             .results().map(m -> Long.valueOf(m.group(1))).toList();
@@ -229,6 +459,13 @@ public class ExtractionFlowIntegrationTest {
                             result(ids.get(0), item("DIRECT", "일 100만 건 주문 데이터 배치 처리 개선"), item("INDIRECT", "지어낸 문장")),
                             result(ids.get(1), item("NONE", null)),
                             result(ids.get(2), item("NONE", null))));
+                    EvidenceResult.Career calc = new EvidenceResult.Career();
+                    calc.setPerCompany(List.of());
+                    calc.setTotalMonths(35);
+                    calc.setTotalReason("A사 35개월");
+                    calc.setRelevantMonths(30);
+                    calc.setRelevantReason("백엔드 업무 기간");
+                    er.setCareer(calc);
                     return er;
                 });
 
@@ -281,11 +518,10 @@ public class ExtractionFlowIntegrationTest {
                 });
     }
 
-    private static CriteriaResult.Item criterion(String name, String req, String cat, boolean assessable) {
+    private static CriteriaResult.Item criterion(String name, String cat, boolean assessable) {
         CriteriaResult.Item i = new CriteriaResult.Item();
         i.setName(name);
         i.setDescription(name + " 설명");
-        i.setRequirement(req);
         i.setCategory(cat);
         i.setResumeAssessable(assessable);
         return i;
@@ -297,6 +533,14 @@ public class ExtractionFlowIntegrationTest {
         r.setEvidences(List.of(items));
         r.setInterviewPoint("확인 포인트");
         return r;
+    }
+
+    static CareerEvalResult.Period period(String ref, String start, String end) {
+        CareerEvalResult.Period p = new CareerEvalResult.Period();
+        p.setRef(ref);
+        p.setStart(start);
+        p.setEnd(end);
+        return p;
     }
 
     private static EvidenceResult.Item item(String type, String quote) {

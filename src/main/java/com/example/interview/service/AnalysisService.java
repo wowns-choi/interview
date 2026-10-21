@@ -9,6 +9,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.support.TransactionTemplate;
 
 import com.example.interview.ai.dto.ArrangeResult;
+import com.example.interview.ai.dto.EvidenceResult;
 import com.example.interview.ai.dto.QuestionResult;
 import com.example.interview.domain.Candidate;
 import com.example.interview.domain.CandidateStatus;
@@ -48,20 +49,27 @@ public class AnalysisService {
     private final QuestionTemplateMapper templateMapper;
     private final TransactionTemplate transactionTemplate;
 
-    /** 근거를 새로 찾는다. 이전 근거에 기대던 질문지도 함께 지운다. */
-    public void analyzeEvidence(Long candidateId) {
+    /**
+     * 근거를 새로 찾는다. 이전 근거에 기대던 질문지도 함께 지운다.
+     *
+     * @return 같은 호출에서 계산한 총 경력·관련 경력 (저장은 CareerEvalService가 한다)
+     */
+    public EvidenceResult.Career analyzeEvidence(Long candidateId) {
         Candidate candidate = candidateService.get(candidateId);
+        Position position = positionService.get(candidate.getPositionId());
         List<EvalCriterion> criteria = criteria(candidate);
 
         candidateMapper.updateStatus(candidateId, CandidateStatus.ANALYZING, null);
         try {
-            List<Evidence> evidences = evidenceService.analyze(candidate, criteria);
+            EvidenceService.Analysis analysis = evidenceService.analyze(candidate, position, criteria);
+            List<Evidence> evidences = analysis.evidences();
             transactionTemplate.executeWithoutResult(status -> {
                 evidenceMapper.deleteByCandidateId(candidateId);
                 questionMapper.deleteByCandidateId(candidateId);
                 evidences.forEach(evidenceMapper::insert);
                 candidateMapper.updateStatus(candidateId, CandidateStatus.ANALYZED, null);
             });
+            return analysis.career();
         } catch (RuntimeException e) {
             log.error("근거 분석 실패 candidateId={}", candidateId, e);
             candidateMapper.updateStatus(candidateId, CandidateStatus.FAILED, e.getMessage());

@@ -24,7 +24,6 @@ import com.example.interview.domain.EvalCriterion;
 import com.example.interview.domain.Position;
 import com.example.interview.domain.PositionImage;
 import com.example.interview.domain.PositionStatus;
-import com.example.interview.domain.Requirement;
 import com.example.interview.mapper.EvalCriterionMapper;
 import com.example.interview.mapper.PositionImageMapper;
 import com.example.interview.mapper.PositionMapper;
@@ -133,7 +132,6 @@ public class PositionService {
                 c.setPositionId(positionId);
                 c.setName(truncate(item.getName().strip(), 200));
                 c.setDescription(item.getDescription());
-                c.setRequirement(Requirement.valueOf(item.getRequirement()));
                 c.setCategory(CriterionCategory.valueOf(item.getCategory()));
                 c.setResumeAssessableYn(Boolean.TRUE.equals(item.getResumeAssessable()) ? "Y" : "N");
                 c.setSource(CriterionSource.AI);
@@ -149,18 +147,27 @@ public class PositionService {
                 positionMapper.updateImageText(positionId,
                         imageText == null || imageText.isBlank() ? null : imageText.strip());
             }
+            positionMapper.updateHiring(positionId,
+                    truncate(blankToNull(result.getRequiredExperience()), 300),
+                    truncate(blankToNull(result.getRequiredEducation()), 300));
             positionMapper.updateStatus(positionId, PositionStatus.CONFIRMED);
             return result.getCriteria().size();
         });
     }
 
-    public EvalCriterion addCriterion(Long positionId, String name, String description, String requirement) {
+    /** 경력·학력 조건을 사용자가 직접 고친다. 비우면 조건 없음 */
+    public void updateConditions(Long positionId, String requiredExperience, String requiredEducation) {
+        get(positionId);
+        positionMapper.updateConditions(positionId,
+                truncate(blankToNull(requiredExperience), 300), truncate(blankToNull(requiredEducation), 300));
+    }
+
+    public EvalCriterion addCriterion(Long positionId, String name, String description) {
         get(positionId);
         EvalCriterion c = new EvalCriterion();
         c.setPositionId(positionId);
         c.setName(requireName(name));
         c.setDescription(blankToNull(description));
-        c.setRequirement(parseRequirement(requirement));
         c.setCategory(CriterionCategory.ETC);
         c.setResumeAssessableYn("Y");
         c.setSource(CriterionSource.MANUAL);
@@ -170,12 +177,20 @@ public class PositionService {
         return c;
     }
 
-    public void updateCriterion(Long positionId, Long criterionId, String name, String description,
-            String requirement) {
+    public String rename(Long positionId, String title) {
+        get(positionId);
+        if (title == null || title.isBlank()) {
+            throw new BusinessException("포지션 이름을 입력하세요.");
+        }
+        String t = truncate(title.strip(), TITLE_MAX);
+        positionMapper.rename(positionId, t);
+        return t;
+    }
+
+    public void updateCriterion(Long positionId, Long criterionId, String name, String description) {
         EvalCriterion c = criterion(positionId, criterionId);
         c.setName(requireName(name));
         c.setDescription(blankToNull(description));
-        c.setRequirement(parseRequirement(requirement));
         criterionMapper.update(c);
     }
 
@@ -196,10 +211,6 @@ public class PositionService {
             throw new BusinessException("평가항목 이름을 입력하세요.");
         }
         return truncate(name.strip(), 200);
-    }
-
-    private static Requirement parseRequirement(String value) {
-        return "PREFERRED".equals(value) ? Requirement.PREFERRED : Requirement.MUST;
     }
 
     private static String blankToNull(String s) {
@@ -251,7 +262,7 @@ public class PositionService {
             } else if (isTextFile(name)) {
                 appendFile(text, name, decodeText(data));
             } else {
-                throw new BusinessException("이미지, PDF, TXT 파일만 넣을 수 있습니다: " + name);
+                throw new BusinessException("PDF, TXT, MD, 이미지 파일만 넣을 수 있습니다: " + name);
             }
         }
         return images;
@@ -336,6 +347,6 @@ public class PositionService {
     }
 
     private static String truncate(String s, int max) {
-        return s.length() > max ? s.substring(0, max) : s;
+        return s == null || s.length() <= max ? s : s.substring(0, max);
     }
 }

@@ -7,6 +7,7 @@ import java.io.File;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.List;
 
 import org.apache.pdfbox.pdmodel.PDDocument;
 import org.apache.pdfbox.pdmodel.PDPage;
@@ -15,6 +16,8 @@ import org.apache.pdfbox.pdmodel.common.PDRectangle;
 import org.apache.pdfbox.pdmodel.font.PDType0Font;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
+
+import com.example.interview.ai.dto.PiiResult.Type;
 
 /**
  * 가상 이력서(src/test/resources/samples/*.txt)를 한글 PDF로 만들어 build/sample-resumes/ 에 저장하고,
@@ -26,7 +29,8 @@ class SampleResumePdfTest {
     private static final File KOREAN_FONT = new File("C:/Windows/Fonts/malgun.ttf");
 
     @ParameterizedTest
-    @CsvSource({ "resume-rich, 김민준", "resume-sparse, 박서연", "resume-injection, 이도현" })
+    @CsvSource({ "resume-rich, 김민준", "resume-sparse, 박서연", "resume-injection, 이도현", "resume-salary-table, 정하늘",
+            "resume-salary-prose, 오세린", "resume-salary-monthly, 한도윤" })
     void generateAndRoundTrip(String sample, String name) throws IOException {
         assumeTrue(KOREAN_FONT.exists(), "한글 글꼴이 없어 건너뜀");
         String text = PiiMaskerTest.read("samples/" + sample + ".txt");
@@ -38,8 +42,8 @@ class SampleResumePdfTest {
 
         String extracted = new PdfTextExtractor().extract(pdf);
         assertThat(extracted).contains(name);
-        String masked = new PiiMasker().mask(extracted, name);
-        assertThat(masked).doesNotContain(name).contains("[이름]", "[이메일]", "[전화번호]");
+        String masked = new PiiMasker().mask(extracted, List.of(PiiMaskerTest.item(Type.APPLICANT_NAME, name))).text();
+        assertThat(masked).doesNotContain(name).contains("[이름]");
     }
 
     private static byte[] toPdf(String text) throws IOException {

@@ -42,7 +42,7 @@ public class QuestionService {
         StringBuilder sb = new StringBuilder();
         sb.append("<job_posting>\n").append(position.getPostingText()).append("\n</job_posting>\n\n");
         sb.append("<criteria>\n").append(toJson(map(criteria, c -> new CriterionInput(c.getId(), c.getName(),
-                c.getDescription(), c.getRequirement().name(), c.getCategory().name())))).append("\n</criteria>\n\n");
+                c.getDescription(), c.getCategory().name())))).append("\n</criteria>\n\n");
         sb.append("<resume>\n").append(candidate.getMaskedText()).append("\n</resume>\n\n");
         sb.append("<evidence>\n").append(toJson(evidenceInput(evidences))).append("\n</evidence>\n\n");
         sb.append("<career_level>")
@@ -103,7 +103,7 @@ public class QuestionService {
         return JSON.writerWithDefaultPrettyPrinter().writeValueAsString(value);
     }
 
-    record CriterionInput(Long criterion_id, String name, String description, String requirement, String category) {
+    record CriterionInput(Long criterion_id, String name, String description, String category) {
     }
 
     record EvidenceInput(Long evidence_id, Long criterion_id, String type, String quote, String interpretation,

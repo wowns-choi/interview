@@ -11,11 +11,13 @@ import com.fasterxml.jackson.annotation.JsonProperty;
 
 import lombok.Data;
 
-/** 호출 ② 근거 분석 응답 */
+/** 호출 ② 근거 분석 응답. 평가항목별 근거와, 같은 이력서 글로 계산한 총 경력·관련 경력 */
 @Data
 public class EvidenceResult {
 
     private List<CriterionResult> results;
+
+    private Career career;
 
     @Data
     public static class CriterionResult {
@@ -33,7 +35,22 @@ public class EvidenceResult {
         private String interpretation;
     }
 
-    /** 입력한 모든 criterion_id에 결과가 있어야 한다. */
+    /** 회사 이름은 "A사"처럼 바꿔 보낸다 */
+    @Data
+    public static class Career {
+        @JsonProperty("per_company")
+        private List<CareerEvalResult.Company> perCompany;
+        @JsonProperty("total_months")
+        private Integer totalMonths;
+        @JsonProperty("total_reason")
+        private String totalReason;
+        @JsonProperty("relevant_months")
+        private Integer relevantMonths;
+        @JsonProperty("relevant_reason")
+        private String relevantReason;
+    }
+
+    /** 입력한 모든 criterion_id에 결과가 있어야 하고, 경력 계산이 있어야 한다. */
     public void validate(Collection<Long> expectedCriterionIds) {
         if (results == null) {
             throw new AiResponseInvalidException("results 배열이 없습니다.");
@@ -68,8 +85,29 @@ public class EvidenceResult {
                 errors.add("criterion_id " + id + "에 대한 결과 누락");
             }
         }
+        validateCareer(errors);
         if (!errors.isEmpty()) {
             throw new AiResponseInvalidException(String.join("; ", errors));
+        }
+        career.totalReason = career.totalReason == null ? "" : career.totalReason;
+        career.relevantReason = career.relevantReason == null ? "" : career.relevantReason;
+    }
+
+    private void validateCareer(List<String> errors) {
+        if (career == null) {
+            errors.add("career 누락");
+            return;
+        }
+        if (career.perCompany == null) {
+            errors.add("career.per_company 누락 (경력이 없으면 빈 배열)");
+        }
+        if (career.totalMonths == null || career.totalMonths < 0) {
+            errors.add("career.total_months는 0 이상의 정수여야 함");
+        }
+        if (career.relevantMonths == null || career.relevantMonths < 0) {
+            errors.add("career.relevant_months는 0 이상의 정수여야 함");
+        } else if (career.totalMonths != null && career.relevantMonths > career.totalMonths) {
+            errors.add("career.relevant_months가 total_months보다 큼");
         }
     }
 }

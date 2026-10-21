@@ -12,7 +12,8 @@ import org.springframework.stereotype.Component;
 public class PromptLoader {
 
     public String load(String name) {
-        ClassPathResource resource = new ClassPathResource("prompts/" + name + ".txt");
+        // 스레드의 컨텍스트 클래스로더가 아니라 앱 클래스로더로 찾는다 (실행 war에서 공용 스레드 풀은 앱 클래스를 못 본다)
+        ClassPathResource resource = new ClassPathResource("prompts/" + name + ".txt", PromptLoader.class.getClassLoader());
         try (InputStream in = resource.getInputStream()) {
             return new String(in.readAllBytes(), StandardCharsets.UTF_8);
         } catch (IOException e) {

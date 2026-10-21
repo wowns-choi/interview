@@ -11,6 +11,10 @@ public class Position {
     private String jdText;
     /** 첨부 이미지에서 AI가 읽어 낸 공고 내용 (이미지가 없으면 null) */
     private String imageText;
+    /** 공고의 요구 경력 (표기 그대로, 없으면 null) */
+    private String requiredExperience;
+    /** 공고의 학력 조건 (표기 그대로 또는 사용자가 입력, 없으면 null) */
+    private String requiredEducation;
     private PositionStatus status = PositionStatus.DRAFT;
     private LocalDateTime createdAt;
 

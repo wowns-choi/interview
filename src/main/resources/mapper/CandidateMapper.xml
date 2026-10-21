@@ -15,15 +15,38 @@
     </select>
 
     <insert id="insert" useGeneratedKeys="true" keyProperty="id" keyColumn="id">
-        INSERT INTO candidate (position_id, display_name, region, career_level, masked_text, status)
-        VALUES (#{positionId}, #{displayName}, #{region}, #{careerLevel}, #{maskedText}, #{status})
+        INSERT INTO candidate (position_id, display_name, region, career_level, masked_text, profile_json, status)
+        VALUES (#{positionId}, #{displayName}, #{region}, #{careerLevel}, #{maskedText}, #{profileJson}, #{status})
     </insert>
 
     <delete id="delete">
         DELETE FROM candidate WHERE id = #{id}
     </delete>
 
+    <update id="updateMaskedText">
+        UPDATE candidate SET masked_text = #{maskedText} WHERE id = #{id}
+    </update>
+
+    <update id="updateCareerEval">
+        UPDATE candidate SET career_eval_json = #{careerEvalJson} WHERE id = #{id}
+    </update>
+
     <update id="updateStatus">
         UPDATE candidate SET status = #{status}, error_message = #{errorMessage} WHERE id = #{id}
+    </update>
+
+    <update id="rename">
+        UPDATE candidate SET display_name = #{displayName} WHERE id = #{id}
+    </update>
+
+    <update id="updateMasked">
+        UPDATE candidate SET display_name = #{displayName}, masked_text = #{maskedText}, profile_json = #{profileJson},
+            status = 'UPLOADED', error_message = NULL
+        WHERE id = #{id}
+    </update>
+
+    <update id="failUnfinished">
+        UPDATE candidate SET status = 'FAILED', error_message = #{errorMessage}
+        WHERE status IN ('QUEUED', 'MASKING', 'ANALYZING')
     </update>
 </mapper>

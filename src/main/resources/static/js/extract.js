@@ -91,8 +91,148 @@
   }
 
   initImages();
+  initTitle();
+  initConditions();
   initCriteria();
   initQuestions();
+  initReview();
+  // 타임라인이 넓으면 최근 기록이 보이도록 오른쪽 끝에서 시작
+  document.querySelectorAll('.tl-scroll').forEach(function (el) { el.scrollLeft = el.scrollWidth; });
+
+  // ── 가린 이력서 검토: 드래그해서 가리기(같은 글자 모두), 되돌리기 ──
+  function initReview() {
+    var src = document.getElementById('masked-text');
+    var view = document.getElementById('mask-view');
+    if (!src || !view) return;
+    var undoBtn = document.getElementById('mask-undo');
+    var LABEL = /\[(?:이름|전화번호|이메일|주민번호|링크|생년월일|주소|개인정보|학교|회사\d*|[A-Z]사|연봉|경력|학력|교육|자격증)\]/g;
+    var NEW_LABEL = '[개인정보]';
+    var history = [];
+    var maskBtn = document.createElement('button');
+    maskBtn.type = 'button';
+    maskBtn.className = 'mask-float';
+    maskBtn.textContent = '가리기';
+    maskBtn.hidden = true;
+    document.body.appendChild(maskBtn);
+
+    src.hidden = true;
+    view.hidden = false;
+    render();
+
+    function segments(text) {
+      var out = [], last = 0, m;
+      LABEL.lastIndex = 0;
+      while ((m = LABEL.exec(text))) {
+        if (m.index > last) out.push({ mask: false, v: text.slice(last, m.index) });
+        out.push({ mask: true, v: m[0] });
+        last = m.index + m[0].length;
+      }
+      if (last < text.length) out.push({ mask: false, v: text.slice(last) });
+      return out;
+    }
+
+    function join(segs) {
+      return segs.map(function (s) { return s.v; }).join('');
+    }
+
+    function render() {
+      view.textContent = '';
+      segments(src.value).forEach(function (s) {
+        if (!s.mask) {
+          view.appendChild(document.createTextNode(s.v));
+          return;
+        }
+        var chip = document.createElement('span');
+        chip.className = 'pii';
+        chip.textContent = s.v.slice(1, -1);
+        view.appendChild(chip);
+      });
+      if (undoBtn) undoBtn.hidden = !history.length;
+    }
+
+    function set(text) {
+      if (text === src.value) return;
+      history.push(src.value);
+      src.value = text;
+      render();
+    }
+
+    // 가린 칸 밖의 같은 글자를 모두 가린다
+    function maskAll(word) {
+      set(join(segments(src.value).map(function (s) {
+        return s.mask ? s : { mask: false, v: s.v.split(word).join(NEW_LABEL) };
+      })));
+    }
+
+    function selection() {
+      var sel = window.getSelection();
+      if (!sel.rangeCount || sel.isCollapsed) return null;
+      var range = sel.getRangeAt(0);
+      if (!view.contains(range.commonAncestorContainer)) return null;
+      var word = sel.toString().trim();
+      return word ? { word: word, rect: range.getBoundingClientRect() } : null;
+    }
+
+    function placeButton() {
+      var s = selection();
+      maskBtn.hidden = !s;
+      if (!s) return;
+      maskBtn.style.top = (window.scrollY + s.rect.top - 40) + 'px';
+      maskBtn.style.left = (window.scrollX + s.rect.left + s.rect.width / 2) + 'px';
+    }
+
+    view.addEventListener('mouseup', function () { setTimeout(placeButton, 0); });
+    view.addEventListener('keyup', placeButton);
+    view.addEventListener('scroll', function () { maskBtn.hidden = true; });
+    document.addEventListener('mousedown', function (e) {
+      if (e.target !== maskBtn) maskBtn.hidden = true;
+    });
+    // 누르는 순간 선택이 풀리지 않게
+    maskBtn.addEventListener('mousedown', function (e) { e.preventDefault(); });
+    maskBtn.addEventListener('click', function () {
+      var s = selection();
+      maskBtn.hidden = true;
+      if (!s) return;
+      window.getSelection().removeAllRanges();
+      maskAll(s.word);
+    });
+
+    if (undoBtn) {
+      undoBtn.addEventListener('click', function () {
+        if (!history.length) return;
+        src.value = history.pop();
+        render();
+      });
+    }
+
+    // 직접 고치기: 본문을 입력칸으로 바꿔 아무 글자나 고친다. 끝내면 다시 가린 칩으로 보여 준다
+    var editBtn = document.getElementById('mask-edit');
+    var before = null;
+    if (editBtn) {
+      editBtn.addEventListener('click', function () {
+        if (before === null) {
+          before = src.value;
+          var top = view.scrollTop;
+          view.hidden = true;
+          src.hidden = false;
+          src.classList.add('is-editing');
+          src.focus({ preventScroll: true });
+          src.setSelectionRange(0, 0);
+          src.scrollTop = top;
+          editBtn.textContent = '고치기 끝';
+          if (undoBtn) undoBtn.hidden = true;
+        } else {
+          if (src.value !== before) history.push(before);
+          before = null;
+          src.hidden = true;
+          src.classList.remove('is-editing');
+          view.hidden = false;
+          editBtn.textContent = '직접 고치기';
+          render();
+        }
+      });
+    }
+  }
 
   // ── 포지션 이미지 (클릭 · 끌어다 놓기 · 붙여넣기) ──
   function initImages() {
@@ -210,6 +350,145 @@
     });
   }
 
+  // ── 이름 바꾸기: 포지션(제목·왼쪽 목록)과 지원자(왼쪽 목록)를 그 자리에서 고친다 ──
+  function initTitle() {
+    var title = document.getElementById('pos-title');
+    var titleBtn = document.getElementById('pos-rename');
+
+    // 바뀐 이름을 목록·제목·탭 제목에 모두 반영
+    function applied(url, name) {
+      document.querySelectorAll('.side-pos > a').forEach(function (a) {
+        if (a.getAttribute('href') === url) a.querySelector('strong').textContent = name;
+      });
+      if (title && url === positionBase) {
+        title.textContent = name;
+        document.title = name;
+      }
+      if (resultBase && url === resultBase) {
+        document.querySelectorAll('[data-cand-name]').forEach(function (el) { el.textContent = name; });
+        var avatar = document.querySelector('.pf-avatar');
+        if (avatar) avatar.textContent = name.charAt(0);
+        var pdf = document.getElementById('pdf-btn');
+        if (pdf) pdf.setAttribute('data-filename', '면접질문지_' + name);
+        document.title = name;
+      }
+    }
+
+    function rename(target, btn, url, current, className) {
+      if (target.hidden) return;
+      var isCandidate = url.indexOf('/results/') >= 0;
+      btn.hidden = true;
+      editInline(target, [{ value: current, placeholder: isCandidate ? '지원자 이름' : '포지션 이름', className: className }], {
+        onSave: function (v) {
+          return api('PATCH', url, isCandidate ? { name: v[0] } : { title: v[0] }).then(function (saved) {
+            applied(url, isCandidate ? saved.name : saved.title);
+            btn.hidden = false;
+          });
+        },
+        onCancel: function () { btn.hidden = false; }
+      });
+    }
+
+    if (title) {
+      var editTitle = function () { rename(title, titleBtn, positionBase, title.textContent, 'title-input'); };
+      titleBtn.addEventListener('click', editTitle);
+      title.addEventListener('click', editTitle);
+    }
+    // 진행 상황을 새로 그린 목록에서도 동작하도록 위임
+    document.addEventListener('click', function (e) {
+      var btn = e.target.closest('.side-rename');
+      if (!btn) return;
+      var a = btn.closest('.side-pos').querySelector('a');
+      rename(a, btn, a.getAttribute('href'), a.querySelector('strong').textContent, '');
+    });
+  }
+
+  // ── 경력·학력 조건 고치기: 드롭다운으로 고르고, 정해진 문장으로 저장한다 ──
+  function initConditions() {
+    var dl = document.getElementById('conds');
+    if (!dl) return;
+    var btn = document.getElementById('conds-edit');
+    var dd = {};
+    dl.querySelectorAll('dd[data-key]').forEach(function (el) { dd[el.getAttribute('data-key')] = el; });
+    var EDU = [['', '공고에 없음'], ['ANY', '학력무관'], ['HIGH', '고졸 이상'], ['COLLEGE', '초대졸(2·3년제) 이상'],
+      ['UNIV', '대졸(4년제) 이상'], ['MASTER', '석사 이상'], ['DOCTOR', '박사 이상']];
+    var years = [];
+    for (var y = 1; y <= 20; y++) years.push([String(y), y + '년']);
+    var form = null;
+    var before = null;
+
+    function select(options, value) {
+      var s = document.createElement('select');
+      s.className = 'cond-select';
+      options.forEach(function (o) { s.add(new Option(o[1], o[0])); });
+      s.value = value || '';
+      return s;
+    }
+
+    function open() {
+      before = {};
+      Object.keys(dd).forEach(function (k) { before[k] = dd[k].textContent; });
+      form = {
+        expKind: select([['', '공고에 없음'], ['ANY', '경력무관'], ['MIN', '이상'], ['MAX', '이하']], dl.dataset.expKind),
+        expYears: select(years, dl.dataset.expYears || '3'),
+        edu: select(EDU, dl.dataset.edu)
+      };
+      var exp = document.createElement('div');
+      exp.className = 'cond-row';
+      exp.append(form.expYears, form.expKind);
+      function sync() {
+        form.expYears.hidden = !(form.expKind.value === 'MIN' || form.expKind.value === 'MAX');
+      }
+      form.expKind.addEventListener('change', sync);
+      sync();
+      dd.requiredExperience.replaceChildren(exp);
+      dd.requiredEducation.replaceChildren(form.edu);
+
+      var actions = document.createElement('div');
+      actions.className = 'conds-actions';
+      actions.innerHTML = '<button type="button" class="btn btn-ghost btn-sm">취소</button><button type="button" class="btn btn-primary btn-sm">저장</button>';
+      actions.children[0].addEventListener('click', function () { close(null); });
+      actions.children[1].addEventListener('click', save);
+      dl.appendChild(actions);
+      form.actions = actions;
+      dl.classList.add('is-editing');
+      btn.hidden = true;
+      dl.addEventListener('keydown', onKey);
+    }
+
+    function onKey(e) {
+      if (e.key === 'Escape') { e.preventDefault(); close(null); }
+      if (e.key === 'Enter' && !e.isComposing) { e.preventDefault(); save(); }
+    }
+
+    function save() {
+      var kind = form.expKind.value;
+      var exp = kind === 'ANY' ? '경력무관'
+        : kind ? '경력 ' + form.expYears.value + '년 ' + (kind === 'MIN' ? '이상' : '이하') : '';
+      var eduLabel = EDU.filter(function (o) { return o[0] === form.edu.value; })[0];
+      var edu = form.edu.value ? eduLabel[1] : '';
+      var state = { expKind: kind, expYears: kind === 'MIN' || kind === 'MAX' ? form.expYears.value : '', edu: form.edu.value };
+      api('PATCH', positionBase + '/conditions', { requiredExperience: exp, requiredEducation: edu })
+        .then(function () {
+          Object.keys(state).forEach(function (k) { dl.dataset[k] = state[k]; });
+          close({ requiredExperience: exp, requiredEducation: edu });
+          toast('저장했습니다');
+        }, function () {});
+    }
+
+    function close(values) {
+      var v = values || before;
+      Object.keys(dd).forEach(function (k) { dd[k].textContent = v[k]; });
+      form.actions.remove();
+      form = null;
+      dl.classList.remove('is-editing');
+      dl.removeEventListener('keydown', onKey);
+      btn.hidden = false;
+    }
+
+    btn.addEventListener('click', open);
+  }
+
   // ── 평가항목 편집 ──
   function initCriteria() {
     var list = document.getElementById('crit-list');
@@ -218,15 +497,8 @@
 
     function refresh() { count.textContent = list.querySelectorAll('.crit[data-id]:not([data-id=""])').length; }
 
-    function setReq(li, req) {
-      li.dataset.requirement = req;
-      var b = li.querySelector('.js-req');
-      b.className = 'req req-' + req + ' js-req';
-      b.textContent = req === 'MUST' ? '필수' : '우대';
-    }
-
     function payload(li, name, desc) {
-      return { name: name, description: desc, requirement: li.dataset.requirement };
+      return { name: name, description: desc };
     }
 
     function edit(li, isNew) {
@@ -256,14 +528,7 @@
       if (!btn) return;
       var li = btn.closest('.crit');
       if (!li.dataset.id) return;
-      if (btn.classList.contains('js-req')) {
-        var next = li.dataset.requirement === 'MUST' ? 'PREFERRED' : 'MUST';
-        var prev = li.dataset.requirement;
-        setReq(li, next);
-        api('PATCH', positionBase + '/criteria/' + li.dataset.id,
-          payload(li, li.querySelector('.crit-name').textContent, li.querySelector('.crit-desc').textContent))
-          .catch(function () { setReq(li, prev); });
-      } else if (btn.classList.contains('js-crit-edit')) {
+      if (btn.classList.contains('js-crit-edit')) {
         edit(li, false);
       } else if (btn.classList.contains('js-crit-del')) {
         if (!confirm('"' + li.querySelector('.crit-name').textContent + '" 평가항목을 삭제할까요?')) return;

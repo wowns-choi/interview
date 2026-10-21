@@ -11,6 +11,7 @@ import org.springframework.stereotype.Service;
 
 import com.example.interview.config.AiProperties;
 import com.example.interview.domain.Candidate;
+import com.example.interview.domain.CandidateProfile;
 import com.example.interview.domain.EvalCriterion;
 import com.example.interview.domain.Evidence;
 import com.example.interview.domain.InterviewQuestion;
@@ -53,7 +54,8 @@ public class ReportService {
         Map<Long, Evidence> evidenceById = new LinkedHashMap<>();
         evidences.forEach(e -> evidenceById.put(e.getId(), e));
 
-        return new ResultReport(position, candidate,
+        return new ResultReport(position, candidate, parseProfile(candidate.getProfileJson()),
+                CareerEvalService.parse(candidate.getCareerEvalJson()),
                 evidenceByCriterion(criteria, evidences),
                 questionSheet(candidateId, criteria),
                 evidenceById,
@@ -61,7 +63,7 @@ public class ReportService {
     }
 
     /** 평가항목 순서대로, 각 항목의 근거를 직접 → 간접 → 없음 순으로 */
-    private List<CriterionEvidenceView> evidenceByCriterion(List<EvalCriterion> criteria, List<Evidence> evidences) {
+    static List<CriterionEvidenceView> evidenceByCriterion(List<EvalCriterion> criteria, List<Evidence> evidences) {
         Map<Long, List<Evidence>> byCriterion = evidences.stream()
                 .collect(Collectors.groupingBy(Evidence::getCriterionId, LinkedHashMap::new, Collectors.toList()));
         List<CriterionEvidenceView> views = new ArrayList<>();
@@ -104,6 +106,17 @@ public class ReportService {
                     + summary.getOutputTokens() / 1_000_000.0 * aiProperties.outputPricePer1m());
         }
         return summary;
+    }
+
+    static CandidateProfile parseProfile(String json) {
+        if (json == null || json.isBlank()) {
+            return null;
+        }
+        try {
+            return JSON.readValue(json, CandidateProfile.class);
+        } catch (JacksonException e) {
+            return null;
+        }
     }
 
     private static List<String> parseFollowUps(String json) {

@@ -19,8 +19,26 @@
         INSERT INTO position (title, jd_text, status) VALUES (#{title}, #{jdText}, #{status})
     </insert>
 
+    <!-- AI ①이 정한 이름: 사용자가 바꾼 이름은 그대로 둔다 -->
     <update id="updateTitle">
-        UPDATE position SET title = #{title} WHERE id = #{id}
+        UPDATE position SET title = #{title} WHERE id = #{id} AND title_edited = FALSE
+    </update>
+
+    <update id="rename">
+        UPDATE position SET title = #{title}, title_edited = TRUE WHERE id = #{id}
+    </update>
+
+    <update id="updateHiring">
+        UPDATE position SET required_experience = #{requiredExperience},
+            required_education = #{requiredEducation}
+        WHERE id = #{id} AND conditions_edited = FALSE
+    </update>
+
+    <!-- 사용자가 직접 고친 경력·학력 조건: 다시 추출해도 덮어쓰지 않는다 -->
+    <update id="updateConditions">
+        UPDATE position SET required_experience = #{requiredExperience},
+            required_education = #{requiredEducation}, conditions_edited = TRUE
+        WHERE id = #{id}
     </update>
 
     <update id="updateImageText">

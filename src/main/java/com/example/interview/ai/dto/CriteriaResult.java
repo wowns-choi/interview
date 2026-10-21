@@ -20,13 +20,20 @@ public class CriteriaResult {
     @JsonProperty("image_text")
     private String imageText;
 
+    /** 공고의 요구 경력 표기 그대로 (예: "경력 3년 이상", "신입·경력"). 공고에 없으면 빈 문자열 */
+    @JsonProperty("required_experience")
+    private String requiredExperience;
+
+    /** 공고의 학력 조건 표기 그대로 (예: "학력무관", "대졸(4년) 이상"). 공고에 없으면 빈 문자열 */
+    @JsonProperty("required_education")
+    private String requiredEducation;
+
     private List<Item> criteria;
 
     @Data
     public static class Item {
         private String name;
         private String description;
-        private String requirement;
         private String category;
         @JsonProperty("resume_assessable")
         private Boolean resumeAssessable;
@@ -34,6 +41,12 @@ public class CriteriaResult {
 
     public void validate() {
         List<String> errors = new ArrayList<>();
+        if (requiredExperience == null) {
+            errors.add("required_experience 누락 (공고에 없으면 빈 문자열)");
+        }
+        if (requiredEducation == null) {
+            errors.add("required_education 누락 (공고에 없으면 빈 문자열)");
+        }
         if (criteria == null || criteria.isEmpty()) {
             throw new AiResponseInvalidException("criteria 배열이 비어 있습니다.");
         }
@@ -42,9 +55,6 @@ public class CriteriaResult {
             if (c == null || isBlank(c.name)) {
                 errors.add("criteria[" + i + "].name 누락");
                 continue;
-            }
-            if (!"MUST".equals(c.requirement) && !"PREFERRED".equals(c.requirement)) {
-                errors.add("criteria[" + i + "].requirement는 MUST 또는 PREFERRED여야 함");
             }
             if (!List.of("TECH", "EXPERIENCE", "COLLABORATION", "ETC").contains(c.category)) {
                 errors.add("criteria[" + i + "].category는 TECH, EXPERIENCE, COLLABORATION, ETC 중 하나여야 함");

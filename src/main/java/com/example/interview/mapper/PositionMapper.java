@@ -19,7 +19,15 @@ public interface PositionMapper {
 
     void updateTitle(@Param("id") Long id, @Param("title") String title);
 
+    void rename(@Param("id") Long id, @Param("title") String title);
+
     void updateImageText(@Param("id") Long id, @Param("imageText") String imageText);
+
+    void updateHiring(@Param("id") Long id,
+            @Param("requiredExperience") String requiredExperience, @Param("requiredEducation") String requiredEducation);
+
+    void updateConditions(@Param("id") Long id,
+            @Param("requiredExperience") String requiredExperience, @Param("requiredEducation") String requiredEducation);
 
     void updateStatus(@Param("id") Long id, @Param("status") PositionStatus status);
 

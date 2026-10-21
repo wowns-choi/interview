@@ -8,14 +8,16 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title><c:out value="${pageTitle}"/></title>
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.min.css">
-  <link rel="stylesheet" href="<c:url value='/css/app.css'/>">
+  <link rel="stylesheet" href="<c:url value='/css/app.css'/>?v=${applicationScope.assetVersion}">
 </head>
 <body>
 <%@ include file="/WEB-INF/views/common/icons.jspf" %>
 <header class="topbar">
-  <nav class="tabs">
+  <nav class="tabs topbar-in">
     <a class="tab ${activeTab == 'templates' ? 'active' : ''}" href="<c:url value='/templates'/>">공통 질문 설정</a>
-    <a class="tab ${activeTab == 'extract' ? 'active' : ''}" href="<c:url value='/extract'/>">면접 질문 추출하기</a>
+    <a class="tab ${activeTab == 'positions' ? 'active' : ''}" href="<c:url value='/positions'/>">평가 항목 추출</a>
+    <a class="tab ${activeTab == 'fit' ? 'active' : ''}" href="<c:url value='/fit'/>">포지션 적합도 검사</a>
+    <a class="tab ${activeTab == 'ranking' ? 'active' : ''}" href="<c:url value='/ranking'/>">지원자 비교</a>
   </nav>
 </header>
 <main class="page">

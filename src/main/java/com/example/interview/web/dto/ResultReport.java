@@ -1,9 +1,12 @@
 package com.example.interview.web.dto;
 
+import java.time.YearMonth;
 import java.util.List;
 import java.util.Map;
 
+import com.example.interview.ai.dto.CareerEvalResult;
 import com.example.interview.domain.Candidate;
+import com.example.interview.domain.CandidateProfile;
 import com.example.interview.domain.Evidence;
 import com.example.interview.domain.EvidenceType;
 import com.example.interview.domain.Position;
@@ -15,10 +18,34 @@ import lombok.Value;
 public class ResultReport {
     Position position;
     Candidate candidate;
+    /** 인적사항·학력·경력 요약. 업로드 때 못 찾았으면 null */
+    CandidateProfile profile;
+    /** 외부 AI가 계산한 총 경력·관련 경력·최종 학력. 업로드 때 계산하고 적합도 검사 때 관련 경력까지 다시 계산한다. 실패하면 null */
+    CareerEvalResult careerEval;
     List<CriterionEvidenceView> criteria;
     List<SectionView> sections;
     Map<Long, Evidence> evidenceById;
     AiUsageSummary usage;
+
+    /** 경력 막대. 공고 경력이나 지원자 경력을 숫자로 읽을 수 없으면 null */
+    public CareerGauge getCareerGauge() {
+        return CareerGauge.of(profile, position.getRequiredExperience(), careerEval);
+    }
+
+    /** 이력 타임라인. 기간을 읽기 전이면 null */
+    public TimelineView getTimeline() {
+        return TimelineView.of(profile, careerEval, YearMonth.now());
+    }
+
+    /** 지원자 비교 점수. 적합도 검사 전이면 null */
+    public FitScore getScore() {
+        return isFitChecked() ? FitScore.of(position, careerEval, getCareerGauge(), criteria) : null;
+    }
+
+    /** 경력·학력 충족 도장 */
+    public RequirementFit getFit() {
+        return RequirementFit.of(position, careerEval, getCareerGauge());
+    }
 
     public long getDirectCount() {
         return countMatch(EvidenceType.DIRECT);

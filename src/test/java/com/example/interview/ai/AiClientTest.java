@@ -22,8 +22,11 @@ import org.springframework.http.MediaType;
 import org.springframework.test.web.client.MockRestServiceServer;
 import org.springframework.web.client.RestClient;
 
+import com.example.interview.ai.dto.EducationResult;
 import com.example.interview.ai.dto.CriteriaResult;
+import com.example.interview.ai.dto.PiiExtract;
 import com.example.interview.config.AiProperties;
+import com.example.interview.config.LocalAiProperties;
 import com.example.interview.domain.AiCallLog;
 import com.example.interview.domain.AiPurpose;
 
@@ -32,9 +35,10 @@ import tools.jackson.databind.json.JsonMapper;
 class AiClientTest {
 
     private static final String VALID = """
-            {"criteria":[{"name":"Java 백엔드 개발 경험","description":"Spring 기반 API 개발","requirement":"MUST","category":"TECH","resume_assessable":true}]}""";
+            {"required_experience":"경력 3년 이상","required_education":"","criteria":[{"name":"Java 백엔드 개발 경험","description":"Spring 기반 API 개발","category":"TECH","resume_assessable":true}]}""";
 
     private MockRestServiceServer server;
+    private MockRestServiceServer localServer;
     private AiCallLogger callLogger;
     private AiClient client;
 
@@ -43,9 +47,12 @@ class AiClientTest {
         RestClient.Builder builder = RestClient.builder().baseUrl("http://ai.test/v1");
         server = MockRestServiceServer.bindTo(builder).build();
         callLogger = mock(AiCallLogger.class);
-        AiProperties props = new AiProperties("test-key", "http://ai.test/v1", "test-model", 1000,
+        AiProperties props = new AiProperties("test-key", "http://ai.test/v1", "test-model", "test-reasoning-model", 1000, 2000,
                 "max_completion_tokens", true, 5, null, null);
-        client = new AiClient(builder.build(), props, callLogger);
+        RestClient.Builder localBuilder = RestClient.builder().baseUrl("http://local.test");
+        localServer = MockRestServiceServer.bindTo(localBuilder).build();
+        client = new AiClient(builder.build(), props, localBuilder.build(),
+                new LocalAiProperties("http://local.test", "local-model", 100, 5, true), callLogger);
     }
 
     @Test
@@ -76,6 +83,24 @@ class AiClientTest {
     }
 
     @Test
+    void educationEvalUsesTheReasoningModel() {
+        server.expect(requestTo("http://ai.test/v1/chat/completions"))
+                .andExpect(jsonPath("$.model").value("test-reasoning-model"))
+                .andExpect(jsonPath("$.max_completion_tokens").value(2000))
+                .andRespond(withSuccess(completion(
+                        "{\"final_education\":\"4년제 대학교 졸업\",\"education_meets\":\"MET\"}", 1, 1),
+                        MediaType.APPLICATION_JSON));
+
+        EducationResult r = client.call(AiPurpose.EDUCATION_EVAL, 1L, "system", "user", EducationResult.class,
+                EducationResult::validate);
+
+        assertThat(r.getFinalEducation()).isEqualTo("4년제 대학교 졸업");
+        assertThat(r.getEducationReason()).isEmpty();
+        assertThat(capturedLogs(1).get(0).getModel()).isEqualTo("test-reasoning-model");
+        server.verify();
+    }
+
+    @Test
     void stripsCodeFence() {
         server.expect(requestTo("http://ai.test/v1/chat/completions"))
                 .andRespond(withSuccess(completion("```json\n" + VALID + "\n```", 1, 1), MediaType.APPLICATION_JSON));
@@ -100,7 +125,7 @@ class AiClientTest {
 
     @Test
     void failsAfterSecondInvalidResponse() {
-        String missingField = "{\"criteria\":[{\"name\":\"x\",\"requirement\":\"MUST\",\"category\":\"TECH\"}]}";
+        String missingField = "{\"criteria\":[{\"name\":\"x\",\"category\":\"TECH\"}]}";
         server.expect(requestTo("http://ai.test/v1/chat/completions"))
                 .andRespond(withSuccess(completion(missingField, 1, 1), MediaType.APPLICATION_JSON));
         server.expect(requestTo("http://ai.test/v1/chat/completions"))
@@ -126,8 +151,9 @@ class AiClientTest {
 
     @Test
     void missingApiKeyFailsWithoutCalling() {
-        AiProperties noKey = new AiProperties("", "http://ai.test/v1", "m", 10, null, null, null, null, null);
-        AiClient c = new AiClient(RestClient.create(), noKey, callLogger);
+        AiProperties noKey = new AiProperties("", "http://ai.test/v1", "m", null, 10, null, null, null, null, null, null);
+        AiClient c = new AiClient(RestClient.create(), noKey, RestClient.create(), new LocalAiProperties(null, null, null, null, null),
+                callLogger);
         assertThatThrownBy(() -> c.call(AiPurpose.EVIDENCE, 1L, "s", "u", CriteriaResult.class, r -> {
         })).isInstanceOf(AiCallException.class).hasMessageContaining("API 키");
     }
@@ -146,6 +172,69 @@ class AiClientTest {
 
         assertThat(result.getCriteria()).hasSize(1);
         server.verify();
+    }
+
+    @Test
+    void callsLocalOllamaWithSchemaAndContextSize() {
+        localServer.expect(requestTo("http://local.test/api/chat"))
+                .andExpect(method(HttpMethod.POST))
+                .andExpect(jsonPath("$.model").value("local-model"))
+                .andExpect(jsonPath("$.stream").value(false))
+                .andExpect(jsonPath("$.format.properties.이름.type").value("array"))
+                .andExpect(jsonPath("$.options.temperature").value(0))
+                .andExpect(jsonPath("$.options.num_ctx").value(100))
+                .andExpect(jsonPath("$.think").value(true))
+                .andExpect(jsonPath("$.messages[1].content").value("<resume>홍길동</resume>"))
+                .andRespond(withSuccess(ollama("{\"이름\":[\"홍길동\"]}", 30, 10),
+                        MediaType.APPLICATION_JSON));
+
+        PiiExtract result = callLocal();
+
+        assertThat(result.getNames()).containsExactly("홍길동");
+        assertThat(result.getCareers()).as("빠진 칸은 빈 값").isEmpty();
+        AiCallLog log = capturedLogs(1).get(0);
+        assertThat(log.getPurpose()).isEqualTo(AiPurpose.PII_DETECT);
+        assertThat(log.getModel()).isEqualTo("local-model");
+        assertThat(log.getInputTokens()).isEqualTo(30);
+        assertThat(log.getSuccessYn()).isEqualTo("Y");
+        localServer.verify();
+    }
+
+    @Test
+    void localCallFailsWhenInputWasTruncated() {
+        localServer.expect(requestTo("http://local.test/api/chat"))
+                .andRespond(withSuccess(ollama("{}", 95, 5), MediaType.APPLICATION_JSON));
+
+        assertThatThrownBy(this::callLocal).isInstanceOf(AiCallException.class).hasMessageContaining("num_ctx=100");
+        assertThat(capturedLogs(1).get(0).getSuccessYn()).isEqualTo("N");
+    }
+
+    @Test
+    void localCallRetriesOnBrokenJson() {
+        localServer.expect(requestTo("http://local.test/api/chat"))
+                .andRespond(withSuccess(ollama("{\"이름\": [", 10, 5),
+                        MediaType.APPLICATION_JSON));
+        localServer.expect(requestTo("http://local.test/api/chat"))
+                .andExpect(jsonPath("$.messages.length()").value(4))
+                .andRespond(withSuccess(ollama("{}", 10, 5), MediaType.APPLICATION_JSON));
+
+        assertThat(callLocal().getNames()).isEmpty();
+        localServer.verify();
+    }
+
+    private PiiExtract callLocal() {
+        return client.callLocal(AiPurpose.PII_DETECT, 7L, "system", "<resume>홍길동</resume>", PiiExtract.SCHEMA,
+                PiiExtract.class, PiiExtract::validate);
+    }
+
+    private static String ollama(String content, int promptTokens, int evalTokens) {
+        return JsonMapper.builder().build().writeValueAsString(java.util.Map.of(
+                "model", "local-model",
+                "message", java.util.Map.of("role", "assistant", "content", content),
+                "done", true,
+                "done_reason", "stop",
+                "prompt_eval_count", promptTokens,
+                "eval_count", evalTokens));
     }
 
     private CriteriaResult call() {

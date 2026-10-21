@@ -1,0 +1,15 @@
+<%@ page pageEncoding="UTF-8" %>
+<%-- 포지션 고르기 (만들기는 평가 항목 추출 탭에서만). pickBase: 고르면 갈 주소 --%>
+<div class="pick">
+  <label class="pick-select">
+    <span>포지션</span>
+    <select data-nav>
+      <c:forEach var="p" items="${positions}">
+        <option value="<c:url value='${pickBase}?position=${p.id}'/>" ${p.id == position.id ? 'selected' : ''}><c:out value="${p.title}"/></option>
+      </c:forEach>
+    </select>
+  </label>
+  <ul class="pick-crit">
+    <c:forEach var="c" items="${criteria}"><li title="<c:out value='${c.description}'/>"><c:out value="${c.name}"/></li></c:forEach>
+  </ul>
+</div>

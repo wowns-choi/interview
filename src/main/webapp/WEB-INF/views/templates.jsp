@@ -66,5 +66,5 @@
 
 <div class="toast" id="toast" role="status" hidden></div>
 
-<script src="<c:url value='/js/templates.js'/>"></script>
+<script src="<c:url value='/js/templates.js'/>?v=${applicationScope.assetVersion}"></script>
 <%@ include file="common/footer.jspf" %>

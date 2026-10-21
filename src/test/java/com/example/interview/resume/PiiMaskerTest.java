@@ -5,83 +5,91 @@ import static org.assertj.core.api.Assertions.assertThat;
 import java.io.IOException;
 import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
+import java.util.List;
 
 import org.junit.jupiter.api.Test;
+
+import com.example.interview.ai.dto.PiiResult;
+import com.example.interview.ai.dto.PiiResult.Type;
 
 class PiiMaskerTest {
 
     private final PiiMasker masker = new PiiMasker();
 
     @Test
-    void masksName() {
-        assertThat(masker.mask("지원자 김민준 입니다. 김 민 준", "김민준"))
-                .isEqualTo("지원자 [이름] 입니다. [이름]");
+    void masksEveryOccurrenceIncludingSpacedName() {
+        PiiMasker.Masked m = masker.mask("홍길동\n안녕하세요, 홍 길 동입니다. hong@example.com",
+                List.of(item(Type.APPLICANT_NAME, "홍길동"), item(Type.EMAIL, "hong@example.com")));
+
+        assertThat(m.text()).isEqualTo("[이름]\n안녕하세요, [이름]입니다. [이메일]");
+        assertThat(m.applicantName()).contains("홍길동");
     }
 
     @Test
-    void masksMobilePhonesWithVariousSeparators() {
-        assertThat(masker.mask("010-1234-5678", null)).isEqualTo("[전화번호]");
-        assertThat(masker.mask("010 1234 5678", null)).isEqualTo("[전화번호]");
-        assertThat(masker.mask("010.1234.5678", null)).isEqualTo("[전화번호]");
-        assertThat(masker.mask("01012345678", null)).isEqualTo("[전화번호]");
-        assertThat(masker.mask("+82 10-1234-5678", null)).isEqualTo("[전화번호]");
-        assertThat(masker.mask("전화 02-123-4567", null)).isEqualTo("전화 [전화번호]");
+    void labelsByType() {
+        String text = "부 남궁철 / 010-1234-5678 / 950101-1234567 / github.com/abc / 만 31세 / 화곡로 12 / 기혼";
+        PiiMasker.Masked m = masker.mask(text, List.of(
+                item(Type.OTHER_NAME, "남궁철"), item(Type.PHONE, "010-1234-5678"), item(Type.RRN, "950101-1234567"),
+                item(Type.URL, "github.com/abc"), item(Type.BIRTH, "만 31세"), item(Type.ADDRESS, "화곡로 12"),
+                item(Type.SENSITIVE, "기혼")));
+
+        assertThat(m.text()).isEqualTo("부 [이름] / [전화번호] / [주민번호] / [링크] / [생년월일] / [주소] / [개인정보]");
+        assertThat(m.applicantName()).as("지원자 이름이 없으면 비어 있음").isEmpty();
     }
 
     @Test
-    void masksEmail() {
-        assertThat(masker.mask("메일: minjun.kim+dev@example.co.kr 로 연락", null))
-                .isEqualTo("메일: [이메일] 로 연락");
+    void masksValuesWrittenWithDifferentSpacing() {
+        PiiMasker.Masked m = masker.mask("직전 연봉 : 3,400 만원\n소속회사 (주)태화 이노베이션\n남, 1993.01.01 (33세)",
+                List.of(item(Type.SALARY, "3,400만원"), item(Type.COMPANY, "태화이노베이션"), item(Type.SENSITIVE, "남"),
+                        item(Type.BIRTH, "1993.01.01"), item(Type.BIRTH, "(33세)")));
+
+        assertThat(m.text()).isEqualTo("직전 연봉 : [연봉]\n소속회사 (주)[회사]\n[개인정보], [생년월일] [생년월일]");
     }
 
     @Test
-    void masksResidentRegistrationNumber() {
-        assertThat(masker.mask("주민번호 950505-1234567", null)).isEqualTo("주민번호 [주민번호]");
-        assertThat(masker.mask("950505 - 1******", null)).isEqualTo("[주민번호]");
+    void longerValueIsMaskedFirst() {
+        PiiMasker.Masked m = masker.mask("github.com/hong-gildong 홍길동",
+                List.of(item(Type.APPLICANT_NAME, "홍길동"), item(Type.URL, "github.com/hong-gildong")));
+
+        assertThat(m.text()).isEqualTo("[링크] [이름]");
     }
 
     @Test
-    void masksLabeledBirthDateButKeepsCareerDates() {
-        assertThat(masker.mask("생년월일: 1992년 3월 14일", null)).isEqualTo("생년월일: [생년월일]");
-        assertThat(masker.mask("생일 2000.11.02", null)).isEqualTo("생일 [생년월일]");
-        assertThat(masker.mask("1992.03.14생", null)).isEqualTo("[생년월일]");
-        // 경력 기간과 프로젝트 날짜는 근거로 써야 하므로 남긴다
-        assertThat(masker.mask("2021.03 ~ 현재, 배포일 2023.05.10", null))
-                .isEqualTo("2021.03 ~ 현재, 배포일 2023.05.10");
+    void singleCharacterOnlyWhenStandalone() {
+        PiiMasker.Masked m = masker.mask("성별: 남 / 남궁 프로젝트 / 남부지사",
+                List.of(item(Type.SENSITIVE, "남")));
+
+        assertThat(m.text()).isEqualTo("성별: [개인정보] / 남궁 프로젝트 / 남부지사");
     }
 
     @Test
-    void masksDetailedAddressButKeepsRegion() {
-        assertThat(masker.mask("주소: 서울특별시 강서구 화곡로 123-4, 101동 1203호", null))
-                .isEqualTo("주소: 서울특별시 강서구 [주소]");
-        assertThat(masker.mask("경기도 성남시 분당구 판교역로 235", null))
-                .isEqualTo("경기도 성남시 분당구 [주소]");
-        assertThat(masker.mask("서울 강서구 화곡동 123-45번지", null))
-                .isEqualTo("서울 강서구 화곡동 [주소]");
+    void ignoresValuesNotInText() {
+        PiiMasker.Masked m = masker.mask("백엔드 개발자 김민준", List.of(
+                item(Type.APPLICANT_NAME, "이도현"), item(Type.APPLICANT_NAME, "김민준")));
+
+        assertThat(m.text()).isEqualTo("백엔드 개발자 [이름]");
+        assertThat(m.applicantName()).as("원문에 있는 이름을 고름").contains("김민준");
     }
 
     @Test
-    void doesNotMaskOrdinaryNumbers() {
-        String text = "일 100만 건 처리, 응답속도 40% 개선, 초당 3,000건, 4인 파트, 프로젝트로 3개월";
-        assertThat(masker.mask(text, "홍길동")).isEqualTo(text);
-    }
-
-    @Test
-    void masksSampleResume() throws IOException {
+    void keepsCareerContentAndPlaceholders() throws IOException {
         String text = read("samples/resume-rich.txt");
-        String masked = masker.mask(text, "김민준");
-        assertThat(masked)
-                .doesNotContain("김민준", "010-2345-6789", "minjun.kim.dev@example.com", "1992년 3월 14일", "화곡로 123-4")
-                .contains("[이름]", "[전화번호]", "[이메일]", "[생년월일]", "[주소]")
-                .contains("일 100만 건 주문 데이터 배치 처리 개선");
+        PiiMasker.Masked m = masker.mask(text, List.of(
+                item(Type.APPLICANT_NAME, "김민준"), item(Type.BIRTH, "1992년 3월 14일"),
+                item(Type.PHONE, "010-2345-6789"), item(Type.EMAIL, "minjun.kim.dev@example.com"),
+                item(Type.ADDRESS, "화곡로 123-4, 101동 1203호")));
+
+        assertThat(m.text())
+                .doesNotContain("김민준", "1992년 3월 14일", "010-2345-6789", "minjun.kim.dev", "화곡로")
+                .contains("서울특별시 강서구 [주소]", "2021.03 ~ 현재", "(주)가상커머스", "가상대학교 컴퓨터공학과");
+        assertThat(new PiiLeakChecker().find(m.text())).isEmpty();
     }
 
-    @Test
-    void masksInjectionSample() throws IOException {
-        String masked = masker.mask(read("samples/resume-injection.txt"), "이도현");
-        assertThat(masked)
-                .doesNotContain("이도현", "010.5555.1234", "950505-1234567", "판교역로 235")
-                .contains("[주민번호]");
+    static PiiResult.Item item(Type type, String text) {
+        PiiResult.Item item = new PiiResult.Item();
+        item.setType(type);
+        item.setText(text);
+        return item;
     }
 
     static String read(String path) throws IOException {

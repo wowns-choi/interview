@@ -3,8 +3,9 @@ package com.example.interview.service;
 import java.io.IOException;
 import java.util.HashSet;
 import java.util.List;
-import java.util.Optional;
 import java.util.Set;
+import java.util.concurrent.CompletableFuture;
+import java.util.function.Supplier;
 import java.util.stream.Collectors;
 
 import org.springframework.beans.factory.annotation.Value;
@@ -12,21 +13,27 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.support.TransactionTemplate;
 import org.springframework.web.multipart.MultipartFile;
 
+import com.example.interview.ai.dto.CareerEvalResult;
+import com.example.interview.ai.dto.EvidenceResult;
+import com.example.interview.domain.Candidate;
+import com.example.interview.domain.CandidateStatus;
 import com.example.interview.domain.InterviewQuestion;
 import com.example.interview.domain.QuestionOrigin;
 import com.example.interview.mapper.CandidateMapper;
+import com.example.interview.mapper.EvidenceMapper;
 import com.example.interview.mapper.InterviewQuestionMapper;
-import com.example.interview.resume.PdfTextExtractor;
-import com.example.interview.resume.PiiMasker;
-import com.example.interview.resume.ResumeNameDetector;
+import com.example.interview.resume.DocumentTextExtractor;
+import com.example.interview.resume.PiiLeakChecker;
 import com.example.interview.resume.ResumeProcessingException;
 import com.example.interview.web.dto.ExtractionSummary;
 import com.example.interview.web.dto.QuestionOrder;
 
 import lombok.extern.slf4j.Slf4j;
+import tools.jackson.databind.ObjectMapper;
+import tools.jackson.databind.json.JsonMapper;
 
 /**
- * 지원자 단위 작업: 이력서 업로드 → 포지션 적합도 검사 → 면접 질문 추출, 그리고 질문지 편집.
+ * 지원자 단위 작업: 이력서 업로드(개인정보 가리기) → 검토 → 포지션 적합도 검사 → 면접 질문 추출, 그리고 질문지 편집.
  * AI 단계가 실패하면 지원자는 FAILED로 남고 화면에서 다시 시도할 수 있다.
  */
 @Slf4j
@@ -35,54 +42,117 @@ public class ExtractionService {
 
     private static final int MAX_ANSWER = 20_000;
     private static final int MAX_QUESTION = 2_000;
+    private static final ObjectMapper JSON = JsonMapper.builder().build();
 
     private final PositionService positionService;
     private final CandidateService candidateService;
     private final AnalysisService analysisService;
+    private final CareerEvalService careerEvalService;
     private final CandidateMapper candidateMapper;
     private final InterviewQuestionMapper questionMapper;
-    private final PdfTextExtractor pdfTextExtractor;
-    private final ResumeNameDetector nameDetector;
-    private final PiiMasker piiMasker;
+    private final EvidenceMapper evidenceMapper;
+    private final DocumentTextExtractor documentTextExtractor;
+    private final ResumeAnonymizer resumeAnonymizer;
+    private final PiiLeakChecker leakChecker;
     private final TransactionTemplate transactionTemplate;
     private final long maxSizeBytes;
 
     public ExtractionService(PositionService positionService, CandidateService candidateService,
-            AnalysisService analysisService, CandidateMapper candidateMapper, InterviewQuestionMapper questionMapper,
-            PdfTextExtractor pdfTextExtractor, ResumeNameDetector nameDetector, PiiMasker piiMasker,
+            AnalysisService analysisService, CareerEvalService careerEvalService, CandidateMapper candidateMapper,
+            InterviewQuestionMapper questionMapper,
+            EvidenceMapper evidenceMapper, PiiLeakChecker leakChecker,
+            DocumentTextExtractor documentTextExtractor, ResumeAnonymizer resumeAnonymizer,
             TransactionTemplate transactionTemplate, @Value("${upload.max-size-mb:10}") int maxSizeMb) {
         this.positionService = positionService;
         this.candidateService = candidateService;
         this.analysisService = analysisService;
+        this.careerEvalService = careerEvalService;
         this.candidateMapper = candidateMapper;
         this.questionMapper = questionMapper;
-        this.pdfTextExtractor = pdfTextExtractor;
-        this.nameDetector = nameDetector;
-        this.piiMasker = piiMasker;
+        this.evidenceMapper = evidenceMapper;
+        this.leakChecker = leakChecker;
+        this.documentTextExtractor = documentTextExtractor;
+        this.resumeAnonymizer = resumeAnonymizer;
         this.transactionTemplate = transactionTemplate;
         this.maxSizeBytes = maxSizeMb * 1024L * 1024L;
     }
 
     /**
-     * 이력서를 저장하고 포지션 적합도 검사를 한다. PDF에 문제가 있으면 아무것도 저장하지 않는다.
+     * 이력서·포트폴리오 파일을 합쳐 개인정보를 가린 글과 프로필만 저장한다 (검토 전 상태). 외부 AI는 부르지 않는다.
+     * 파일에 문제가 있거나 개인정보를 가리지 못하면 아무것도 저장하지 않는다.
      *
      * @return 지원자 id
      */
-    public Long uploadResume(Long positionId, MultipartFile resume) {
+    public Long uploadResume(Long positionId, List<MultipartFile> files) {
         if (positionService.criteria(positionId).isEmpty()) {
             throw new BusinessException("평가항목이 없습니다. 평가항목을 먼저 추출하세요.");
         }
-        String text = pdfTextExtractor.extract(readPdf(resume));
-        Optional<String> name = nameDetector.detect(text);
-        String masked = piiMasker.mask(text, name.orElse(null));
+        List<MultipartFile> chosen = files == null ? List.of()
+                : files.stream().filter(f -> f != null && !f.isEmpty()).toList();
+        if (chosen.isEmpty()) {
+            throw new ResumeProcessingException("이력서 파일을 선택하세요.");
+        }
+        String text = combine(chosen);
+        ResumeAnonymizer.Result masked = resumeAnonymizer.anonymize(positionId, text);
 
-        Long candidateId = candidateService.create(positionId, name.orElseGet(() -> baseName(resume)), masked);
-        checkFit(candidateId);
-        return candidateId;
+        return candidateService.create(positionId, masked.applicantName().orElseGet(() -> baseName(chosen.get(0))),
+                masked.text(), profileJson(masked));
     }
 
+    /**
+     * 사용자가 검토한 글을 저장하고 적합도 검사를 한다. 주민번호·전화번호·이메일 모양이 남아 있으면 저장하지 않는다.
+     *
+     * @param reviewedText null이면 저장된 글 그대로 다시 검사한다
+     */
+    public void checkFit(Long candidateId, String reviewedText) {
+        if (reviewedText != null) {
+            candidateService.get(candidateId);
+            String text = reviewedText.replace("\r\n", "\n").strip();
+            if (text.isEmpty()) {
+                throw new BusinessException("이력서 내용이 비어 있습니다.");
+            }
+            List<String> leaks = leakChecker.find(text);
+            if (!leaks.isEmpty()) {
+                throw new BusinessException("가리지 않은 개인정보(" + String.join(", ", leaks) + ")가 있어 검사하지 않았습니다.");
+            }
+            candidateMapper.updateMaskedText(candidateId, text);
+        }
+        checkFit(candidateId);
+    }
+
+    /**
+     * 외부 AI를 세 번 동시에 부른다: 가린 글로 근거와 총 경력·관련 경력(EVIDENCE),
+     * 학교 목록으로 학력(EDUCATION_EVAL), 이름표·기간 목록으로 타임라인(TIMELINE). 한쪽이 실패해도 나머지는 저장한다.
+     */
     public void checkFit(Long candidateId) {
-        runAi(candidateId, () -> analysisService.analyzeEvidence(candidateId));
+        runAi(candidateId, () -> {
+            Candidate candidate = candidateService.get(candidateId);
+            CompletableFuture<CareerEvalResult> education =
+                    async(() -> careerEvalService.education(candidate));
+            CompletableFuture<List<CareerEvalResult.Period>> timeline =
+                    async(() -> careerEvalService.timeline(candidate));
+            EvidenceResult.Career career = null;
+            try {
+                career = analysisService.analyzeEvidence(candidateId);
+            } finally {
+                careerEvalService.save(candidate, education.join(), timeline.join(), career);
+            }
+        });
+    }
+
+    /** 공용 스레드 풀에서 돌리되, 실행 war에서도 앱 클래스·리소스가 보이도록 앱 클래스로더를 건다 */
+    private static <T> CompletableFuture<T> async(Supplier<T> task) {
+        ClassLoader app = ExtractionService.class.getClassLoader();
+        return CompletableFuture.supplyAsync(() -> {
+            Thread thread = Thread.currentThread();
+            ClassLoader before = thread.getContextClassLoader();
+            thread.setContextClassLoader(app);
+            try {
+                return task.get();
+            } finally {
+                thread.setContextClassLoader(before);
+            }
+        });
     }
 
     public void generateQuestions(Long candidateId) {
@@ -186,16 +256,29 @@ public class ExtractionService {
         }
     }
 
-    private byte[] readPdf(MultipartFile file) {
-        if (file == null || file.isEmpty()) {
-            throw new ResumeProcessingException("이력서 PDF 파일을 선택하세요.");
+    /**
+     * 파일이 여러 개면 "[첨부 n (형식)]" 줄로 구분해 합친다.
+     * 파일 이름에는 지원자 이름이 들어 있는 경우가 많아 글에 넣지 않는다.
+     */
+    String combine(List<MultipartFile> files) {
+        // 형식을 먼저 모두 확인해, 뒤 파일이 잘못돼도 앞 파일을 읽느라 시간을 쓰지 않게 한다
+        files.forEach(f -> DocumentTextExtractor.kindOf(f.getOriginalFilename()));
+        StringBuilder sb = new StringBuilder();
+        for (int i = 0; i < files.size(); i++) {
+            MultipartFile file = files.get(i);
+            DocumentTextExtractor.Extracted doc = documentTextExtractor.extract(file.getOriginalFilename(), read(file));
+            if (files.size() > 1) {
+                sb.append("[첨부 ").append(i + 1).append(" (").append(doc.kind()).append(")]\n");
+            }
+            sb.append(doc.text()).append("\n\n");
         }
+        return sb.toString().strip();
+    }
+
+    private byte[] read(MultipartFile file) {
         if (file.getSize() > maxSizeBytes) {
-            throw new ResumeProcessingException("파일이 너무 큽니다. 최대 " + (maxSizeBytes / 1024 / 1024) + "MB까지 올릴 수 있습니다.");
-        }
-        String name = file.getOriginalFilename();
-        if (name == null || !name.toLowerCase().endsWith(".pdf")) {
-            throw new ResumeProcessingException("PDF 파일만 지원합니다.");
+            throw new ResumeProcessingException(file.getOriginalFilename() + ": 파일이 너무 큽니다. 최대 "
+                    + (maxSizeBytes / 1024 / 1024) + "MB까지 올릴 수 있습니다.");
         }
         try {
             return file.getBytes();
@@ -204,13 +287,18 @@ public class ExtractionService {
         }
     }
 
-    /** 이름을 못 찾았을 때 화면 표시용: 파일 이름에서 확장자를 뗀 것 */
-    private static String baseName(MultipartFile file) {
+    static String profileJson(ResumeAnonymizer.Result masked) {
+        return masked.profile().isFilled() ? JSON.writeValueAsString(masked.profile()) : null;
+    }
+
+    /** 이름을 못 찾았을 때 화면 표시용: 첫 파일 이름에서 확장자를 뗀 것 */
+    static String baseName(MultipartFile file) {
         String name = file.getOriginalFilename();
         if (name == null || name.isBlank()) {
             return "지원자";
         }
         name = name.replaceAll("^.*[\\\\/]", "");
-        return name.toLowerCase().endsWith(".pdf") ? name.substring(0, name.length() - 4) : name;
+        int dot = name.lastIndexOf('.');
+        return dot > 0 ? name.substring(0, dot) : name;
     }
 }

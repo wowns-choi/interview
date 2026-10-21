@@ -1,5 +1,6 @@
 package com.example.interview.controller;
 
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
@@ -17,6 +18,13 @@ import jakarta.servlet.http.HttpServletResponse;
 
 @ControllerAdvice
 public class GlobalExceptionHandler {
+
+    private final String uploadLimit;
+
+    public GlobalExceptionHandler(@Value("${upload.max-size-mb:10}") int fileMb,
+            @Value("${upload.max-request-mb:30}") int requestMb) {
+        this.uploadLimit = "파일 하나 " + fileMb + "MB, 한 번에 합계 " + requestMb + "MB";
+    }
 
     @ExceptionHandler(NotFoundException.class)
     public Object notFound(NotFoundException e, HttpServletRequest request, HttpServletResponse response, Model model) {
@@ -39,7 +47,7 @@ public class GlobalExceptionHandler {
 
     @ExceptionHandler(MaxUploadSizeExceededException.class)
     public String tooLarge(HttpServletRequest request, RedirectAttributes ra) {
-        ra.addFlashAttribute("error", "파일이 너무 큽니다. 업로드 한도를 확인하세요.");
+        ra.addFlashAttribute("error", "파일이 너무 큽니다. " + uploadLimit + "까지 올릴 수 있습니다.");
         return "redirect:" + backUrl(request);
     }
 

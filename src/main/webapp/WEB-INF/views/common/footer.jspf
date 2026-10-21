@@ -7,6 +7,6 @@
     <p id="busy-sub" class="muted small"></p>
   </div>
 </div>
-<script src="<c:url value='/js/app.js'/>"></script>
+<script src="<c:url value='/js/app.js'/>?v=${applicationScope.assetVersion}"></script>
 </body>
 </html>

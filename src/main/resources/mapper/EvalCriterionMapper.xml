@@ -4,7 +4,7 @@
 
     <select id="findByPositionId" resultType="com.example.interview.domain.EvalCriterion">
         SELECT * FROM eval_criterion WHERE position_id = #{positionId}
-        ORDER BY CASE requirement WHEN 'MUST' THEN 1 ELSE 2 END, sort_order, id
+        ORDER BY sort_order, id
     </select>
 
     <select id="findById" resultType="com.example.interview.domain.EvalCriterion">
@@ -17,13 +17,13 @@
 
     <insert id="insert" useGeneratedKeys="true" keyProperty="id" keyColumn="id">
         INSERT INTO eval_criterion
-            (position_id, name, description, requirement, category, resume_assessable_yn, source, sort_order)
+            (position_id, name, description, category, resume_assessable_yn, source, sort_order)
         VALUES
-            (#{positionId}, #{name}, #{description}, #{requirement}, #{category}, #{resumeAssessableYn}, #{source}, #{sortOrder})
+            (#{positionId}, #{name}, #{description}, #{category}, #{resumeAssessableYn}, #{source}, #{sortOrder})
     </insert>
 
     <update id="update">
-        UPDATE eval_criterion SET name = #{name}, description = #{description}, requirement = #{requirement}
+        UPDATE eval_criterion SET name = #{name}, description = #{description}
         WHERE id = #{id}
     </update>
 
