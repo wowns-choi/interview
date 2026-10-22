@@ -18,6 +18,7 @@
     <a class="tab ${activeTab == 'positions' ? 'active' : ''}" href="<c:url value='/positions'/>">평가 항목 추출</a>
     <a class="tab ${activeTab == 'fit' ? 'active' : ''}" href="<c:url value='/fit'/>">포지션 적합도 검사</a>
     <a class="tab ${activeTab == 'ranking' ? 'active' : ''}" href="<c:url value='/ranking'/>">지원자 비교</a>
+    <a class="tab tab-end ${activeTab == 'settings' ? 'active' : ''}" href="<c:url value='/settings'/>">설정</a>
   </nav>
 </header>
 <main class="page">

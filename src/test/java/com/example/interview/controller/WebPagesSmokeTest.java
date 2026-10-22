@@ -67,6 +67,9 @@ class WebPagesSmokeTest {
         assertThat(positions.statusCode()).isEqualTo(200);
         assertThat(positions.body()).contains("공통 질문 설정", "평가 항목 추출", "포지션 적합도 검사", "지원자 비교", "새 포지션", "평가항목 추출<svg", "파일 추가")
                 .doesNotContain("jsessionid", "type=\"file\" id=\"resume\"");
+        HttpResponse<String> settings = get("/settings");
+        assertThat(settings.statusCode()).isEqualTo(200);
+        assertThat(settings.body()).contains("GPT API 키", "로컬 AI (Ollama)", "https://ollama.com/download", "ollama pull ");
         // 포지션이 없으면 적합도 검사·비교는 빈 화면
         assertThat(get("/fit").body()).contains("평가항목을 추출한 포지션이 없습니다");
         assertThat(get("/ranking").body()).contains("평가항목을 추출한 포지션이 없습니다");
@@ -190,7 +193,7 @@ class WebPagesSmokeTest {
         assertThat(result.statusCode()).isEqualTo(200);
         String body = result.body();
         assertThat(body).contains("100만 건 배치 처리 시간을 어떻게 측정하셨나요?", "병목은 어디였나요?", "답변 기록", "id=\"pdf-btn\"", "면접질문지_홍길동",
-                "질문 추가", "kind kind-verify\">거짓말 판독기<", "AI 의견 참고", "AI 의견 받기</button>").doesNotContain("추출한 질문 <b>");
+                "질문 추가", "kind kind-verify\">거짓말 판독기<", "AI 의견 참고", "AI 의견 받기</button>", "data-open=\"aa-panel\">자동 답변 채우기<", "name=\"transcript\"").doesNotContain("추출한 질문 <b>");
 
         HttpResponse<String> addedQ = json("POST", "/results/" + id + "/questions", "{\"section\":\"기술 검증\",\"content\":\"추가 질문\"}");
         assertThat(addedQ.statusCode()).isEqualTo(200);

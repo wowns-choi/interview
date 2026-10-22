@@ -33,6 +33,7 @@ import com.example.interview.resume.ResumeProcessingException;
 import com.example.interview.service.BatchCheckService;
 import com.example.interview.service.BusinessException;
 import com.example.interview.service.CandidateService;
+import com.example.interview.service.AutoAnswerService;
 import com.example.interview.service.ExtractionService;
 import com.example.interview.service.OpinionService;
 import com.example.interview.service.PositionService;
@@ -61,6 +62,7 @@ public class ExtractController {
     private final PositionService positionService;
     private final ExtractionService extractionService;
     private final OpinionService opinionService;
+    private final AutoAnswerService autoAnswerService;
     private final ReportService reportService;
     private final RankingService rankingService;
     private final BatchCheckService batchCheckService;
@@ -246,6 +248,19 @@ public class ExtractController {
         }
         ra.addFlashAttribute("message", message);
         return "redirect:/results/" + id + "#extract";
+    }
+
+    @PostMapping("/results/{id}/answers/auto")
+    public String autoFillAnswers(@PathVariable Long id, @RequestParam(required = false) String transcript,
+            @RequestParam(required = false) MultipartFile file, RedirectAttributes ra) {
+        AutoAnswerService.Filled result = autoAnswerService.fill(id, transcript, file);
+        String message = result.filled() == 0 && result.kept() == 0 ? "녹취록에서 질문지에 대한 답을 찾지 못했습니다."
+                : "답변 " + result.filled() + "개를 채웠습니다.";
+        if (result.kept() > 0) {
+            message += " 이미 답변이 있는 " + result.kept() + "개는 그대로 두었습니다.";
+        }
+        ra.addFlashAttribute("message", message);
+        return "redirect:/results/" + id + "#questions";
     }
 
     @PostMapping("/results/{id}/opinion")

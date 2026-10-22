@@ -35,7 +35,7 @@ public class RequirementFit {
             return null;
         }
         int candidate = gauge.getRelevantMonths() != null ? gauge.getRelevantMonths() : gauge.getActualMonths();
-        return CareerGauge.meets(required, months, candidate);
+        return CareerGauge.meets(required, candidate);
     }
 
     static Boolean education(CareerEvalResult eval) {

@@ -11,6 +11,7 @@ import java.util.regex.Pattern;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.http.MediaType;
 import org.springframework.stereotype.Component;
@@ -51,13 +52,22 @@ public class AiClient {
     private final RestClient localRestClient;
     private final LocalAiProperties localProps;
     private final AiCallLogger callLogger;
+    /** 설정 탭에서 바꿀 수 있는 API 키 */
+    private final ApiKeyStore apiKeys;
     private final ObjectMapper objectMapper = JsonMapper.builder()
             .disable(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES)
             .build();
 
+    public AiClient(RestClient aiRestClient, AiProperties props, RestClient localAiRestClient,
+            LocalAiProperties localProps, AiCallLogger callLogger) {
+        this(aiRestClient, props, localAiRestClient, localProps, callLogger, new ApiKeyStore(props));
+    }
+
+    @Autowired
     public AiClient(@Qualifier("aiRestClient") RestClient aiRestClient, AiProperties props,
             @Qualifier("localAiRestClient") RestClient localAiRestClient, LocalAiProperties localProps,
-            AiCallLogger callLogger) {
+            AiCallLogger callLogger, ApiKeyStore apiKeys) {
+        this.apiKeys = apiKeys;
         this.restClient = aiRestClient;
         this.props = props;
         this.localRestClient = localAiRestClient;
@@ -78,8 +88,8 @@ public class AiClient {
      */
     public <T> T call(AiPurpose purpose, Long refId, String systemPrompt, String userContent,
             List<AiImage> images, Class<T> type, Consumer<T> validator) {
-        if (props.apiKey() == null || props.apiKey().isBlank()) {
-            throw new AiCallException("AI API 키가 설정되지 않았습니다. 환경변수 AI_API_KEY 또는 OPENAI_API_KEY를 설정하세요.");
+        if (!apiKeys.isSet()) {
+            throw new AiCallException("AI API 키가 설정되지 않았습니다. 설정 탭에서 GPT API 키를 넣으세요.");
         }
         List<Map<String, Object>> messages = new ArrayList<>();
         messages.add(Map.of("role", "system", "content", systemPrompt));
@@ -152,7 +162,7 @@ public class AiClient {
         try {
             JsonNode response = restClient.post()
                     .uri("/chat/completions")
-                    .header("Authorization", "Bearer " + props.apiKey())
+                    .header("Authorization", "Bearer " + apiKeys.get())
                     .contentType(MediaType.APPLICATION_JSON)
                     .body(body)
                     .retrieve()

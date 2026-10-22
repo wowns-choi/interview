@@ -1,0 +1,7 @@
+# 이 파일을 같은 폴더에 application-local.properties 로 복사해서 쓴다. (그 파일은 git에 올라가지 않는다)
+
+# PostgreSQL 비밀번호가 postgres 가 아니면 적는다
+spring.datasource.password=여기에_DB_비밀번호
+
+# GPT API 키. 설정 탭에서 저장하면 이 줄이 자동으로 생기거나 바뀐다
+# ai.api-key=sk-...

@@ -1,0 +1,38 @@
+package com.example.interview.controller;
+
+import org.springframework.stereotype.Controller;
+import org.springframework.ui.Model;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.servlet.mvc.support.RedirectAttributes;
+
+import com.example.interview.ai.ApiKeyStore;
+import com.example.interview.service.OllamaStatusService;
+
+import lombok.RequiredArgsConstructor;
+
+/** "설정" 탭: GPT API 키와 로컬 AI(Ollama) 상태 */
+@Controller
+@RequestMapping("/settings")
+@RequiredArgsConstructor
+public class SettingsController {
+
+    private final ApiKeyStore apiKeys;
+    private final OllamaStatusService ollama;
+
+    @GetMapping
+    public String page(Model model) {
+        model.addAttribute("apiKey", apiKeys);
+        model.addAttribute("ollama", ollama.status());
+        return "settings";
+    }
+
+    @PostMapping("/api-key")
+    public String saveApiKey(@RequestParam(defaultValue = "") String apiKey, RedirectAttributes ra) {
+        apiKeys.save(apiKey);
+        ra.addFlashAttribute("message", "API 키를 저장했습니다.");
+        return "redirect:/settings";
+    }
+}

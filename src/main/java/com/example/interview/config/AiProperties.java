@@ -32,7 +32,8 @@ public record AiProperties(
         Double inputPricePer1m,
         Double outputPricePer1m) {
 
-    private static final Set<AiPurpose> REASONING = Set.of(AiPurpose.EVIDENCE, AiPurpose.EDUCATION_EVAL, AiPurpose.OPINION);
+    private static final Set<AiPurpose> REASONING = Set.of(AiPurpose.EVIDENCE, AiPurpose.EDUCATION_EVAL, AiPurpose.OPINION,
+            AiPurpose.AUTO_ANSWER);
 
     public AiProperties {
         if (baseUrl == null || baseUrl.isBlank()) {

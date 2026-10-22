@@ -688,3 +688,24 @@
     }
   }
 })();
+
+// ── 자동 답변 채우기: 녹취록 입력 칸 열고 닫기, 고른 파일 이름 ──
+(function () {
+  document.addEventListener('click', function (e) {
+    var btn = e.target.closest('[data-open]');
+    if (!btn) return;
+    var panel = document.getElementById(btn.getAttribute('data-open'));
+    if (!panel) return;
+    panel.hidden = !panel.hidden;
+    if (!panel.hidden) {
+      var ta = panel.querySelector('textarea');
+      if (ta) ta.focus();
+    }
+  });
+  var panel = document.getElementById('aa-panel');
+  if (!panel) return;
+  var file = panel.querySelector('input[type=file]');
+  file.addEventListener('change', function () {
+    panel.querySelector('.aa-name').textContent = file.files.length ? file.files[0].name : '';
+  });
+})();

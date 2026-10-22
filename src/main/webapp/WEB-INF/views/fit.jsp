@@ -216,6 +216,7 @@
                   <c:if test="${not empty pf.careers}">
                     <ul class="pf-list pf-timeline">
                       <c:forEach var="cr" items="${pf.careers}">
+                        <c:if test="${empty r.careerEval or r.careerEval.counts(cr.alias)}">
                         <li>
                           <div class="pf-item-main">
                             <strong><c:out value="${cr.company}"/></strong>
@@ -227,6 +228,7 @@
                             </c:if>
                           </div>
                         </li>
+                        </c:if>
                       </c:forEach>
                     </ul>
                   </c:if>
@@ -436,9 +438,19 @@
   <header class="stage-head">
     <h2>면접 질문지</h2>
     <div class="stage-actions">
+      <button type="button" class="btn btn-ghost btn-sm" data-open="aa-panel">자동 답변 채우기</button>
       <button type="button" class="btn btn-primary btn-sm" id="pdf-btn" data-filename="면접질문지_<c:out value='${r.candidate.displayName}'/>"><svg class="i"><use href="#i-download"/></svg>PDF</button>
     </div>
   </header>
+  <form class="aa" id="aa-panel" method="post" enctype="multipart/form-data" action="<c:url value='/results/${r.candidate.id}/answers/auto'/>" data-busy="녹취록으로 답변을 채우는 중" hidden>
+    <textarea name="transcript" class="aa-text" rows="6" placeholder="면접 녹취록을 붙여넣으세요"></textarea>
+    <div class="aa-foot">
+      <label class="btn btn-ghost btn-sm aa-file"><input type="file" name="file" accept=".txt,.md,.docx,.pdf,.hwp,.hwpx"><span>파일 선택</span></label>
+      <span class="aa-name"></span>
+      <button type="button" class="btn btn-ghost btn-sm" data-open="aa-panel">취소</button>
+      <button type="submit" class="btn btn-primary btn-sm">답변 채우기</button>
+    </div>
+  </form>
   <div class="iq-board" id="iq-board">
     <c:forEach var="sec" items="${r.sections}">
       <section class="iq-sec" data-section="<c:out value='${sec.section}'/>">
@@ -476,9 +488,12 @@
                 </c:if>
               </div>
               <div class="q-answer">
+                <div class="q-answer-box">
                 <textarea class="answer" rows="1" placeholder="답변 기록"
                           data-url="<c:url value='/results/${r.candidate.id}/questions/${q.id}/answer'/>"><c:out value="${q.answer}"/></textarea>
                 <span class="save-state" aria-live="polite"></span>
+                </div>
+                <c:if test="${not empty q.answerExcerpt}"><p class="q-excerpt"><span>녹취</span><c:out value="${q.answerExcerpt}"/></p></c:if>
               </div>
             </li>
           </c:forEach>

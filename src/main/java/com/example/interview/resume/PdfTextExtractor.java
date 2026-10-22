@@ -71,7 +71,7 @@ public class PdfTextExtractor {
     }
 
     /** 줄 끝 공백과 3줄 이상 연속된 빈 줄을 정리한다. 문장 내용은 바꾸지 않는다. */
-    static String normalize(String text) {
+    public static String normalize(String text) {
         if (text == null) {
             return "";
         }

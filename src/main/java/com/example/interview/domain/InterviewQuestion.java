@@ -26,6 +26,8 @@ public class InterviewQuestion {
     private int sortOrder;
     /** 면접 중 기록한 실제 답변 */
     private String answer;
+    /** 자동 답변 채우기로 넣은 답변의 녹취 원문 부분 (화면에만, PDF에는 없음) */
+    private String answerExcerpt;
     /** 면접에서 물어본 질문 (번호를 눌러 체크, 답변을 적으면 자동으로 체크) */
     private boolean checked;
     /** 공통 질문과 합쳐 질문지에 들어갔는지. false면 추출만 해 둔 질문 */

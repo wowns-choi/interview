@@ -22,7 +22,13 @@
     </insert>
 
     <update id="updateAnswer">
-        UPDATE interview_question SET answer = #{answer}<if test="answer != null">, checked = TRUE</if> WHERE id = #{id} AND candidate_id = #{candidateId}
+        UPDATE interview_question SET answer = #{answer}<if test="answer != null">, checked = TRUE</if><if test="answer == null">, answer_excerpt = NULL</if> WHERE id = #{id} AND candidate_id = #{candidateId}
+    </update>
+
+    <!-- 자동 답변 채우기: 답변이 비어 있는 질문만 -->
+    <update id="fillAnswer">
+        UPDATE interview_question SET answer = #{answer}, answer_excerpt = #{excerpt}, checked = TRUE
+        WHERE id = #{id} AND candidate_id = #{candidateId} AND (answer IS NULL OR answer = '')
     </update>
 
     <update id="updateChecked">

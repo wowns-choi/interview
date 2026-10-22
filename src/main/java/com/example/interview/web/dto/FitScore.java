@@ -48,7 +48,7 @@ public class FitScore {
             return 0;
         }
         int candidate = gauge.getRelevantMonths() != null ? gauge.getRelevantMonths() : gauge.getActualMonths();
-        return CareerGauge.meets(required, months, candidate) ? 1 : 0;
+        return CareerGauge.meets(required, candidate) ? 1 : 0;
     }
 
     static int education(CareerEvalResult eval) {

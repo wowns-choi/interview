@@ -24,6 +24,7 @@ import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import com.example.interview.ai.AiCallException;
 import com.example.interview.ai.AiClient;
 import com.example.interview.ai.dto.ArrangeResult;
+import com.example.interview.ai.dto.AutoAnswerResult;
 import com.example.interview.ai.dto.CareerEvalResult;
 import com.example.interview.ai.dto.CriteriaResult;
 import com.example.interview.ai.dto.EvidenceResult;
@@ -77,6 +78,8 @@ public class ExtractionFlowIntegrationTest {
     ReportService reportService;
     @Autowired
     OpinionService opinionService;
+    @Autowired
+    AutoAnswerService autoAnswerService;
     @Autowired
     RankingService rankingService;
     @Autowired
@@ -283,6 +286,55 @@ public class ExtractionFlowIntegrationTest {
         // 근거가 바뀌면 이전 의견은 지운다
         extractionService.checkFit(id, null);
         assertThat(reportService.report(id).getOpinion()).isNull();
+    }
+
+    @Test
+    void transcriptFillsOnlyEmptyAnswersAndKeepsOnlyRealExcerpts() {
+        stubAi(aiClient, templateMapper, sectionMapper);
+        when(pdfTextExtractor.extract(any())).thenReturn(RESUME);
+        Long id = extractionService.uploadResume(startPosition(positionService, "백엔드 개발자"), List.of(pdf()));
+        extractionService.checkFit(id, null);
+        extractionService.extractQuestions(id, QuestionType.SELECTABLE);
+        extractionService.mergeQuestions(id);
+        List<InterviewQuestion> sheet = reportService.report(id).getSections().stream().flatMap(s -> s.getQuestions().stream())
+                .map(QuestionView::getQuestion).toList();
+        extractionService.saveAnswer(id, sheet.get(1).getId(), "면접관이 직접 적은 답");
+
+        String transcript = "참석자 1 00:10\n자기소개 부탁드립니다\n\n참석자 2 00:15\n저는 백엔드 개발자고요   주문 배치를 맡았습니다\n";
+        AutoAnswerResult ai = new AutoAnswerResult();
+        ai.setAnswers(List.of(answer(1L, "백엔드 개발자, 주문 배치 담당", "저는 백엔드 개발자고요 주문 배치를 맡았습니다"),
+                answer(2L, "덮어쓰면 안 되는 답", null),
+                answer(3L, "지어낸 인용", "녹취록에 없는 말")));
+        org.mockito.ArgumentCaptor<String> input = org.mockito.ArgumentCaptor.forClass(String.class);
+        when(aiClient.call(eq(AiPurpose.AUTO_ANSWER), anyLong(), anyString(), input.capture(), eq(AutoAnswerResult.class), any()))
+                .thenReturn(ai);
+
+        MockMultipartFile file = new MockMultipartFile("file", "녹취.txt", "text/plain",
+                transcript.getBytes(java.nio.charset.StandardCharsets.UTF_8));
+        AutoAnswerService.Filled filled = autoAnswerService.fill(id, null, file);
+
+        assertThat(filled).isEqualTo(new AutoAnswerService.Filled(2, 1));
+        assertThat(input.getValue()).contains("<transcript>", "주문 배치를 맡았습니다", "\"question_id\" : 1");
+        List<InterviewQuestion> after = reportService.report(id).getSections().stream().flatMap(s -> s.getQuestions().stream())
+                .map(QuestionView::getQuestion).toList();
+        assertThat(after.get(0)).extracting(InterviewQuestion::getAnswer, InterviewQuestion::getAnswerExcerpt, InterviewQuestion::isChecked)
+                .containsExactly("백엔드 개발자, 주문 배치 담당", "저는 백엔드 개발자고요 주문 배치를 맡았습니다", true);
+        assertThat(after.get(1).getAnswer()).as("이미 있는 답변은 그대로").isEqualTo("면접관이 직접 적은 답");
+        assertThat(after.get(2).getAnswer()).isEqualTo("지어낸 인용");
+        assertThat(after.get(2).getAnswerExcerpt()).as("녹취록에 없는 인용은 버린다").isNull();
+
+        // 답변을 지우면 녹취 원문도 지운다
+        extractionService.saveAnswer(id, after.get(0).getId(), " ");
+        assertThat(reportService.report(id).getSections().get(0).getQuestions().get(0).getQuestion().getAnswerExcerpt()).isNull();
+        assertThatThrownBy(() -> autoAnswerService.fill(id, "  ", null)).isInstanceOf(BusinessException.class);
+    }
+
+    private static AutoAnswerResult.Item answer(Long questionId, String answer, String excerpt) {
+        AutoAnswerResult.Item a = new AutoAnswerResult.Item();
+        a.setQuestionId(questionId);
+        a.setAnswer(answer);
+        a.setExcerpt(excerpt);
+        return a;
     }
 
     @Test

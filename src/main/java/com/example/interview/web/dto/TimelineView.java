@@ -103,7 +103,7 @@ public class TimelineView {
         if (profile == null || eval == null || eval.getTimeline() == null) {
             return null;
         }
-        Map<String, String[]> names = names(profile);
+        Map<String, String[]> names = names(profile, eval);
         List<Item> items = new ArrayList<>();
         for (CareerEvalResult.Period p : eval.getTimeline()) {
             String[] n = names.get(p.getRef() == null ? "" : p.getRef().strip());
@@ -224,10 +224,13 @@ public class TimelineView {
         return w;
     }
 
-    /** 업로드 때 저장한 별칭 → {줄, 화면 이름, 덧붙일 설명} */
-    private static Map<String, String[]> names(CandidateProfile p) {
+    /** 업로드 때 저장한 별칭 → {줄, 화면 이름, 덧붙일 설명}. 경력은 외부 AI가 센 회사만 */
+    private static Map<String, String[]> names(CandidateProfile p, CareerEvalResult eval) {
         Map<String, String[]> names = new HashMap<>();
         for (CandidateProfile.Career c : p.getCareers()) {
+            if (!eval.counts(c.getAlias())) {
+                continue; // 외부 AI가 경력으로 세지 않은 것 (고객사 등)
+            }
             names.put(c.getAlias(), new String[] {"경력", or(c.getCompany(), "회사"), c.getDepartment()});
         }
         for (CandidateProfile.Education e : p.getEducation()) {

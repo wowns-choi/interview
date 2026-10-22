@@ -29,10 +29,17 @@ class ConditionFormTest {
 
     @Test
     void careerAtMostIsMetOnlyWhenShorter() {
-        assertThat(CareerGauge.meets("경력 3년 이하", 36, 24)).isTrue();
-        assertThat(CareerGauge.meets("경력 3년 이하", 36, 48)).isFalse();
-        assertThat(CareerGauge.meets("경력 3년 이상", 36, 48)).isTrue();
-        assertThat(CareerGauge.meets("경력 3년 이상", 36, 24)).isFalse();
+        assertThat(CareerGauge.meets("경력 3년 이하", 24)).isTrue();
+        assertThat(CareerGauge.meets("경력 3년 이하", 48)).isFalse();
+        assertThat(CareerGauge.meets("경력 3년 이상", 48)).isTrue();
+        assertThat(CareerGauge.meets("경력 3년 이상", 24)).isFalse();
+        // 하한과 상한이 함께 있으면 그 사이 (2년 3개월은 "2년 이상 10년 이하" 충족)
+        assertThat(CareerGauge.meets("경력 2년 이상 10년 이하", 27)).isTrue();
+        assertThat(CareerGauge.meets("경력 2년 이상 10년 이하", 20)).isFalse();
+        assertThat(CareerGauge.meets("경력 2년 이상 10년 이하", 121)).isFalse();
+        assertThat(CareerGauge.meets("3~5년", 48)).isTrue();
+        assertThat(CareerGauge.meets("3~5년", 72)).isFalse();
+        assertThat(CareerGauge.meets("경력 1년 미만", 6)).isTrue();
     }
 
     private static ConditionForm form(String experience, String education) {
