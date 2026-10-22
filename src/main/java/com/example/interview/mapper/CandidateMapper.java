@@ -23,6 +23,8 @@ public interface CandidateMapper {
 
     void rename(@Param("id") Long id, @Param("displayName") String displayName);
 
+    void updateOpinion(@Param("id") Long id, @Param("opinionJson") String opinionJson);
+
     void updateCareerEval(@Param("id") Long id, @Param("careerEvalJson") String careerEvalJson);
 
     void updateStatus(@Param("id") Long id, @Param("status") CandidateStatus status,

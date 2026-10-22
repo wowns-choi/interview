@@ -28,11 +28,13 @@ import com.example.interview.ai.AiCallException;
 import com.example.interview.domain.EvalCriterion;
 import com.example.interview.domain.Position;
 import com.example.interview.domain.PositionImage;
+import com.example.interview.domain.QuestionType;
 import com.example.interview.resume.ResumeProcessingException;
 import com.example.interview.service.BatchCheckService;
 import com.example.interview.service.BusinessException;
 import com.example.interview.service.CandidateService;
 import com.example.interview.service.ExtractionService;
+import com.example.interview.service.OpinionService;
 import com.example.interview.service.PositionService;
 import com.example.interview.service.RankingService;
 import com.example.interview.service.ReportService;
@@ -58,6 +60,7 @@ public class ExtractController {
 
     private final PositionService positionService;
     private final ExtractionService extractionService;
+    private final OpinionService opinionService;
     private final ReportService reportService;
     private final RankingService rankingService;
     private final BatchCheckService batchCheckService;
@@ -232,8 +235,28 @@ public class ExtractController {
     }
 
     @PostMapping("/results/{id}/questions/generate")
-    public String generateQuestions(@PathVariable Long id) {
-        extractionService.generateQuestions(id);
+    public String extractQuestions(@PathVariable Long id,
+            @RequestParam(name = "types", required = false) List<QuestionType> types, RedirectAttributes ra) {
+        var result = extractionService.extractQuestions(id, types == null ? List.of() : types);
+        String message = "질문 " + result.count() + "개를 추출했습니다.";
+        if (result.skipped().contains(QuestionType.EXPERIENCE)) {
+            message += " 모든 평가항목에 직접 근거가 있어 '해본 적 있어?' 질문은 만들지 않았습니다.";
+        } else if (!result.skipped().isEmpty()) {
+            message += " 직접·간접 근거가 없어 이력서 내용에 대한 질문은 만들지 않았습니다.";
+        }
+        ra.addFlashAttribute("message", message);
+        return "redirect:/results/" + id + "#extract";
+    }
+
+    @PostMapping("/results/{id}/opinion")
+    public String askOpinion(@PathVariable Long id) {
+        opinionService.ask(id);
+        return "redirect:/results/" + id + "#opinion";
+    }
+
+    @PostMapping("/results/{id}/questions/merge")
+    public String mergeQuestions(@PathVariable Long id) {
+        extractionService.mergeQuestions(id);
         return "redirect:/results/" + id + "#questions";
     }
 

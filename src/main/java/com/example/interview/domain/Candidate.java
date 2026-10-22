@@ -16,6 +16,8 @@ public class Candidate {
     private String profileJson;
     /** 외부 AI가 계산한 총 경력·관련 경력·최종 학력 (CareerEvalResult JSON). 적합도 검사 전에는 null */
     private String careerEvalJson;
+    /** AI 의견 참고 (OpinionResult JSON). 아직 묻지 않았으면 null */
+    private String opinionJson;
     private CandidateStatus status = CandidateStatus.UPLOADED;
     private String errorMessage;
     private LocalDateTime createdAt;

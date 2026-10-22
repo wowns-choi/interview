@@ -27,6 +27,7 @@ import com.example.interview.ai.dto.ArrangeResult;
 import com.example.interview.ai.dto.CareerEvalResult;
 import com.example.interview.ai.dto.CriteriaResult;
 import com.example.interview.ai.dto.EvidenceResult;
+import com.example.interview.ai.dto.OpinionResult;
 import com.example.interview.ai.dto.PiiExtract;
 import com.example.interview.ai.dto.PiiExtracts;
 import com.example.interview.ai.dto.PiiResult;
@@ -40,6 +41,7 @@ import com.example.interview.domain.EvidenceType;
 import com.example.interview.domain.InterviewQuestion;
 import com.example.interview.domain.QuestionOrigin;
 import com.example.interview.domain.QuestionTemplate;
+import com.example.interview.domain.QuestionType;
 import com.example.interview.mapper.QuestionSectionMapper;
 import com.example.interview.mapper.QuestionTemplateMapper;
 import com.example.interview.resume.PdfTextExtractor;
@@ -47,6 +49,7 @@ import com.example.interview.resume.ResumeProcessingException;
 import com.example.interview.web.dto.QuestionOrder;
 import com.example.interview.web.dto.QuestionView;
 import com.example.interview.web.dto.ResultReport;
+import com.example.interview.web.dto.SectionView;
 
 /** AI만 가짜로 바꾸고 "포지션 + 이력서 → 결과 → 답변 → PDF" 흐름을 실제 DB(H2)로 확인한다. */
 @SpringBootTest
@@ -72,6 +75,8 @@ public class ExtractionFlowIntegrationTest {
     ExtractionService extractionService;
     @Autowired
     ReportService reportService;
+    @Autowired
+    OpinionService opinionService;
     @Autowired
     RankingService rankingService;
     @Autowired
@@ -122,7 +127,14 @@ public class ExtractionFlowIntegrationTest {
                 .containsExactly(35, 30, "UNKNOWN");
         assertThat(checked.getTimeline()).isNotNull();
 
-        extractionService.generateQuestions(id);
+        // 질문 추출은 "추출한 질문"에 쌓이기만 하고, 합치기를 눌러야 질문지가 된다
+        assertThat(extractionService.extractQuestions(id, QuestionType.SELECTABLE).count()).isEqualTo(1);
+        ResultReport pooled = reportService.report(id);
+        assertThat(pooled.getSections()).isEmpty();
+        assertThat(pooled.getExtracted()).extracting(SectionView::getSection).containsExactly("거짓말 판독기");
+        assertThat(candidateService.get(id).getStatus()).isEqualTo(CandidateStatus.ANALYZED);
+        extractionService.mergeQuestions(id);
+        assertThat(reportService.report(id).getExtracted()).isEmpty();
         candidate = candidateService.get(id);
         assertThat(candidate.getStatus()).isEqualTo(CandidateStatus.DONE);
         assertThat(candidate.getDisplayName()).isEqualTo("홍길동");
@@ -139,12 +151,10 @@ public class ExtractionFlowIntegrationTest {
         List<InterviewQuestion> all = r.getSections().stream().flatMap(s -> s.getQuestions().stream())
                 .map(QuestionView::getQuestion).toList();
         assertThat(all).filteredOn(q -> q.getOrigin() == QuestionOrigin.CUSTOM).hasSize(1);
-        assertThat(all).filteredOn(q -> q.getOrigin() == QuestionOrigin.COMMON_PERSONALIZED
-                || q.getOrigin() == QuestionOrigin.COMMON_ORIGINAL).hasSize(24);
+        assertThat(all).filteredOn(q -> q.getOrigin() == QuestionOrigin.COMMON_ORIGINAL).hasSize(24);
         assertThat(r.getQuestionCount()).isEqualTo(24 + 1);
         assertThat(r.getSections().get(0).getSection()).isEqualTo("오프닝");
-        assertThat(r.getSections().get(1).getQuestions().get(0).getQuestion().getOrigin())
-                .isEqualTo(QuestionOrigin.COMMON_PERSONALIZED);
+        assertThat(all).as("공통 질문은 고치지 않는다").noneMatch(q -> q.getOrigin() == QuestionOrigin.COMMON_PERSONALIZED);
         assertThat(r.getSections()).extracting(s -> s.getSection()).contains("기술 검증");
 
         // 답변 기록
@@ -182,6 +192,16 @@ public class ExtractionFlowIntegrationTest {
         assertThatThrownBy(() -> extractionService.reorderQuestions(id, List.of(new QuestionOrder("마무리", List.of(added)))))
                 .isInstanceOf(BusinessException.class);
 
+        // 합친 뒤 더 추출해 넣으면 기존 질문지는 그대로, 새 질문만 끼워 넣는다 (배치 AI는 다시 부르지 않음)
+        extractionService.extractQuestions(id, List.of(QuestionType.VERIFY));
+        extractionService.reorderQuestions(id, List.of(new QuestionOrder("마무리", moved)));
+        extractionService.mergeQuestions(id);
+        ResultReport inserted = reportService.report(id);
+        assertThat(inserted.getSections()).extracting(s -> s.getSection()).containsExactly("마무리", "추가 질문");
+        assertThat(inserted.getSections().get(0).getQuestions()).hasSize(moved.size());
+        verify(aiClient, org.mockito.Mockito.times(1)).call(eq(AiPurpose.ARRANGE), anyLong(), anyString(), anyString(), any(), any());
+        assertThatThrownBy(() -> extractionService.mergeQuestions(id)).isInstanceOf(BusinessException.class);
+
         // 평가항목 편집: 검사 뒤 추가한 항목은 "검사 전"
         assertThat(rankingService.rank(positionId)).extracting("rank", "state").containsExactly(org.assertj.core.groups.Tuple.tuple(1, "RANKED"));
         positionService.addCriterion(positionId, "Kotlin 경험", null);
@@ -217,14 +237,52 @@ public class ExtractionFlowIntegrationTest {
                 .thenThrow(new AiCallException("질문 오류"));
         extractionService.checkFit(id);
         assertThat(candidateService.get(id).getStatus()).isEqualTo(CandidateStatus.ANALYZED);
-        extractionService.generateQuestions(id);
-        assertThat(candidateService.get(id).getStatus()).isEqualTo(CandidateStatus.FAILED);
+        assertThatThrownBy(() -> extractionService.extractQuestions(id, QuestionType.SELECTABLE))
+                .isInstanceOf(BusinessException.class).hasMessageContaining("질문 오류");
+        assertThat(candidateService.get(id).getStatus()).as("질문 추출 실패는 지원자 상태를 바꾸지 않음").isEqualTo(CandidateStatus.ANALYZED);
         assertThat(reportService.report(id).isFitChecked()).as("질문 단계 실패는 근거를 지우지 않음").isTrue();
 
         reset(aiClient);
         stubAi(aiClient, templateMapper, sectionMapper);
-        extractionService.generateQuestions(id);
+        extractionService.extractQuestions(id, QuestionType.SELECTABLE);
+        extractionService.mergeQuestions(id);
         assertThat(candidateService.get(id).getStatus()).isEqualTo(CandidateStatus.DONE);
+    }
+
+    @Test
+    void opinionGetsAnswersButNoPersonalDataAndARecheckClearsIt() {
+        stubAi(aiClient, templateMapper, sectionMapper);
+        when(pdfTextExtractor.extract(any())).thenReturn(RESUME);
+        Long id = extractionService.uploadResume(startPosition(positionService, "백엔드 개발자"), List.of(pdf()));
+        extractionService.checkFit(id, null);
+        extractionService.extractQuestions(id, QuestionType.SELECTABLE);
+        extractionService.mergeQuestions(id);
+        InterviewQuestion custom = reportService.report(id).getSections().stream().flatMap(s -> s.getQuestions().stream())
+                .map(QuestionView::getQuestion).filter(q -> q.getOrigin() == QuestionOrigin.CUSTOM).findFirst().orElseThrow();
+        extractionService.saveAnswer(id, custom.getId(), "nGrinder로 p95를 측정했다고 답함");
+
+        OpinionResult.Point point = new OpinionResult.Point();
+        point.setPoint("대용량 배치 개선 경험이 면접 답변으로 확인됨");
+        point.setBasis("면접 답변");
+        OpinionResult opinion = new OpinionResult();
+        opinion.setHireReasons(List.of(point));
+        opinion.setNoHireReasons(List.of());
+        org.mockito.ArgumentCaptor<String> input = org.mockito.ArgumentCaptor.forClass(String.class);
+        when(aiClient.call(eq(AiPurpose.OPINION), anyLong(), anyString(), input.capture(), eq(OpinionResult.class), any()))
+                .thenReturn(opinion);
+
+        opinionService.ask(id);
+
+        assertThat(input.getValue()).contains("<conditions>", "경력 조건", "<criteria>", "Q. " + custom.getContent(),
+                "A. nGrinder로 p95를 측정했다고 답함", "답변을 기록한 질문 1개")
+                .doesNotContain("홍길동", "010-1111-2222", "가나커머스", "5,000만원");
+        OpinionResult saved = reportService.report(id).getOpinion();
+        assertThat(saved.getHireReasons()).extracting(OpinionResult.Point::getPoint).containsExactly("대용량 배치 개선 경험이 면접 답변으로 확인됨");
+        assertThat(saved.getAskedAt()).isNotBlank();
+
+        // 근거가 바뀌면 이전 의견은 지운다
+        extractionService.checkFit(id, null);
+        assertThat(reportService.report(id).getOpinion()).isNull();
     }
 
     @Test
@@ -284,7 +342,8 @@ public class ExtractionFlowIntegrationTest {
         when(pdfTextExtractor.extract(any())).thenReturn(RESUME);
         Long id = extractionService.uploadResume(startPosition(positionService, "백엔드 개발자"), List.of(pdf()));
         extractionService.checkFit(id, null);
-        extractionService.generateQuestions(id);
+        extractionService.extractQuestions(id, QuestionType.SELECTABLE);
+        extractionService.mergeQuestions(id);
         assertThat(reportService.report(id).getSections()).isNotEmpty();
 
         String edited = candidateService.get(id).getMaskedText().replace("Redis", "[개인정보]");
@@ -493,11 +552,6 @@ public class ExtractionFlowIntegrationTest {
                             if (t.getSectionId().equals(s.getId())) {
                                 ArrangeResult.Item i = new ArrangeResult.Item();
                                 i.setTemplateId(t.getId());
-                                if (t.getContent().startsWith("PM")) {
-                                    i.setPersonalized(true);
-                                    i.setContent("배치 개선 프로젝트에서 일정 관리를 맡으셨나요?");
-                                    i.setEvidenceId(1L);
-                                }
                                 items.add(i);
                             }
                         }

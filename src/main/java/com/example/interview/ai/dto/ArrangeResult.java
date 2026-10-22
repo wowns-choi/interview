@@ -11,7 +11,7 @@ import com.fasterxml.jackson.annotation.JsonProperty;
 
 import lombok.Data;
 
-/** 호출 ③-2 배치 응답: 공통 질문과 추출한 질문을 섹션별 면접 순서로 */
+/** 호출 ③-2 배치 응답: 공통 질문과 추출한 질문을 섹션별 면접 순서로 (내용은 바꾸지 않는다) */
 @Data
 public class ArrangeResult {
 
@@ -30,12 +30,6 @@ public class ArrangeResult {
         private Long templateId;
         @JsonProperty("question_id")
         private Long questionId;
-        private Boolean personalized;
-        private String content;
-        @JsonProperty("evidence_id")
-        private Long evidenceId;
-        @JsonProperty("resume_answered")
-        private Boolean resumeAnswered;
     }
 
     /**

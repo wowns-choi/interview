@@ -1,6 +1,7 @@
 package com.example.interview.service;
 
 import java.io.IOException;
+import java.util.Collection;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
@@ -19,6 +20,7 @@ import com.example.interview.domain.Candidate;
 import com.example.interview.domain.CandidateStatus;
 import com.example.interview.domain.InterviewQuestion;
 import com.example.interview.domain.QuestionOrigin;
+import com.example.interview.domain.QuestionType;
 import com.example.interview.mapper.CandidateMapper;
 import com.example.interview.mapper.EvidenceMapper;
 import com.example.interview.mapper.InterviewQuestionMapper;
@@ -155,8 +157,12 @@ public class ExtractionService {
         });
     }
 
-    public void generateQuestions(Long candidateId) {
-        runAi(candidateId, () -> analysisService.generateQuestions(candidateId));
+    public AnalysisService.Extraction extractQuestions(Long candidateId, Collection<QuestionType> types) {
+        return analysisService.extractQuestions(candidateId, types);
+    }
+
+    public void mergeQuestions(Long candidateId) {
+        analysisService.mergeQuestions(candidateId);
     }
 
     public List<ExtractionSummary> candidates(Long positionId) {
@@ -205,10 +211,10 @@ public class ExtractionService {
         found(questionMapper.delete(candidateId, questionId), questionId);
     }
 
-    /** 화면의 질문지 전체 순서를 저장한다. 모든 질문이 정확히 한 번씩 있어야 한다. */
+    /** 화면의 질문지 전체 순서를 저장한다. 질문지의 모든 질문(추출만 해 둔 것 제외)이 정확히 한 번씩 있어야 한다. */
     public void reorderQuestions(Long candidateId, List<QuestionOrder> board) {
         Set<Long> existing = questionMapper.findByCandidateId(candidateId).stream()
-                .map(InterviewQuestion::getId).collect(Collectors.toSet());
+                .filter(InterviewQuestion::isMerged).map(InterviewQuestion::getId).collect(Collectors.toSet());
         Set<Long> seen = new HashSet<>();
         for (QuestionOrder s : board) {
             if (s.section() == null || s.section().isBlank() || s.questionIds() == null) {

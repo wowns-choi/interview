@@ -27,5 +27,9 @@ public interface InterviewQuestionMapper {
     int updatePlace(@Param("candidateId") Long candidateId, @Param("id") Long id, @Param("section") String section,
             @Param("sortOrder") int sortOrder);
 
+    /** 추출해 둔 질문을 질문지에 넣는다 */
+    int merge(@Param("candidateId") Long candidateId, @Param("id") Long id, @Param("section") String section,
+            @Param("sortOrder") int sortOrder);
+
     int delete(@Param("candidateId") Long candidateId, @Param("id") Long id);
 }

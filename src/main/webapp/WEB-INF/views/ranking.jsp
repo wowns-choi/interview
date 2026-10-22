@@ -22,11 +22,14 @@
         <label class="switch"><input type="checkbox" data-rk-exclude="career" ${position.excludeCareer ? 'checked' : ''}><span class="switch-track"></span>경력 미충족 제외</label>
         <label class="switch"><input type="checkbox" data-rk-exclude="education" ${position.excludeEducation ? 'checked' : ''}><span class="switch-track"></span>학력 미충족 제외</label>
         <div class="rk-legend">
-          <span><i class="hb ev-DIRECT"></i>직접 1</span>
-          <span><i class="hb ev-INDIRECT"></i>간접 0.5</span>
-          <span><i class="hb ev-NONE"></i>없음 0</span>
+          <span><i class="rk-sq ev-DIRECT"></i>직접 1</span>
+          <span><i class="rk-sq ev-INDIRECT"></i>간접 0.5</span>
+          <span><i class="rk-sq ev-NONE"></i>없음 0</span>
         </div>
       </div>
+      <ol class="rk-key">
+        <c:forEach var="c" items="${criteria}" varStatus="cs"><li><b>${cs.count}</b><c:out value="${c.name}"/></li></c:forEach>
+      </ol>
       <div class="rk-scroll">
         <table class="rk">
           <thead>
@@ -34,9 +37,9 @@
               <th class="rk-no"></th>
               <th class="rk-name">지원자</th>
               <th class="rk-total">점수</th>
-              <th class="rk-c rk-first">경력</th>
-              <th class="rk-c">학력</th>
-              <c:forEach var="c" items="${criteria}" varStatus="cs"><th class="rk-c${cs.first ? ' rk-first' : ''}" title="<c:out value='${c.name}'/>"><span><c:out value="${c.name}"/></span></th></c:forEach>
+              <th class="rk-cnd">경력</th>
+              <th class="rk-cnd">학력</th>
+              <c:forEach var="c" items="${criteria}" varStatus="cs"><th class="rk-c${cs.first ? ' rk-first' : ''}${cs.last ? ' rk-last' : ''}" title="<c:out value='${c.name}'/>">${cs.count}</th></c:forEach>
             </tr>
           </thead>
           <tbody>
@@ -62,10 +65,11 @@
                   </c:when>
                   <c:otherwise>
                     <td class="rk-total"><span class="rk-score">${s.totalText}<small> / ${s.max}</small></span><span class="rk-bar"><span style="width: ${s.percent}%"></span></span></td>
-                    <td class="rk-c rk-first"><span class="rk-cond is-${s.career == 1 ? 'met' : 'unmet'}">${s.career == 1 ? '충족' : '미충족'}</span></td>
-                    <td class="rk-c"><span class="rk-cond is-${s.education == 1 ? 'met' : 'unmet'}">${s.education == 1 ? '충족' : '미충족'}</span></td>
+                    <td class="rk-cnd"><span class="rk-cond is-${s.career == 1 ? 'met' : 'unmet'}">${s.career == 1 ? '충족' : '미충족'}</span></td>
+                    <td class="rk-cnd"><span class="rk-cond is-${s.education == 1 ? 'met' : 'unmet'}">${s.education == 1 ? '충족' : '미충족'}</span></td>
                     <c:forEach var="it" items="${s.items}" varStatus="is">
-                      <td class="rk-c${is.first ? ' rk-first' : ''}"><i class="hb ev-${empty it.match ? 'UNCHECKED' : it.match}" title="${empty it.match ? '검사 전' : it.match == 'DIRECT' ? '직접 근거' : it.match == 'INDIRECT' ? '간접 근거' : '근거 없음'}"></i></td>
+                      <c:set var="evK" value="${empty it.match ? 'UNCHECKED' : it.match}"/>
+                      <td class="rk-c${is.first ? ' rk-first' : ''}${is.last ? ' rk-last' : ''}"><i class="rk-sq ev-${evK}" title="${is.count}. <c:out value='${it.name}'/> · ${empty it.match ? '검사 전' : it.match == 'DIRECT' ? '직접 근거' : it.match == 'INDIRECT' ? '간접 근거' : '근거 없음'}"></i></td>
                     </c:forEach>
                   </c:otherwise>
                 </c:choose>

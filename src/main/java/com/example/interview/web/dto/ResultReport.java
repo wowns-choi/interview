@@ -5,6 +5,7 @@ import java.util.List;
 import java.util.Map;
 
 import com.example.interview.ai.dto.CareerEvalResult;
+import com.example.interview.ai.dto.OpinionResult;
 import com.example.interview.domain.Candidate;
 import com.example.interview.domain.CandidateProfile;
 import com.example.interview.domain.Evidence;
@@ -23,7 +24,12 @@ public class ResultReport {
     /** 외부 AI가 계산한 총 경력·관련 경력·최종 학력. 업로드 때 계산하고 적합도 검사 때 관련 경력까지 다시 계산한다. 실패하면 null */
     CareerEvalResult careerEval;
     List<CriterionEvidenceView> criteria;
+    /** 공통 질문과 합친 질문지 */
     List<SectionView> sections;
+    /** 추출만 해 두고 아직 질문지에 넣지 않은 질문. 유형별로 묶는다 */
+    List<SectionView> extracted;
+    /** AI 의견 참고. 아직 묻지 않았으면 null */
+    OpinionResult opinion;
     Map<Long, Evidence> evidenceById;
     AiUsageSummary usage;
 
@@ -63,8 +69,17 @@ public class ResultReport {
         return criteria.stream().anyMatch(CriterionEvidenceView::isChecked);
     }
 
+    /** "해본 적 있어?"로 물을 평가항목(직접 근거가 없는 것)이 있는지 */
+    public boolean isExperienceAskable() {
+        return criteria.stream().anyMatch(c -> c.getMatch() != EvidenceType.DIRECT);
+    }
+
     public boolean isHasUncheckedCriteria() {
         return criteria.stream().anyMatch(c -> !c.isChecked());
+    }
+
+    public long getExtractedCount() {
+        return extracted.stream().mapToLong(s -> s.getQuestions().size()).sum();
     }
 
     public long getQuestionCount() {

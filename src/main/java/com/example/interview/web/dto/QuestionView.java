@@ -12,4 +12,6 @@ public class QuestionView {
     InterviewQuestion question;
     List<String> followUps;
     String criterionName;
+    /** 맞춤으로 고친 공통 질문의 원문. 그 밖에는 null */
+    String originalContent;
 }

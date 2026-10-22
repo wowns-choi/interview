@@ -27,6 +27,10 @@
         UPDATE candidate SET masked_text = #{maskedText} WHERE id = #{id}
     </update>
 
+    <update id="updateOpinion">
+        UPDATE candidate SET opinion_json = #{opinionJson} WHERE id = #{id}
+    </update>
+
     <update id="updateCareerEval">
         UPDATE candidate SET career_eval_json = #{careerEvalJson} WHERE id = #{id}
     </update>

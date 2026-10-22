@@ -14,11 +14,11 @@
 
     <insert id="insert" useGeneratedKeys="true" keyProperty="id" keyColumn="id">
         INSERT INTO interview_question
-            (candidate_id, section, origin, question_type, content, intent, good_signal, warning_signal,
-             follow_ups, resume_answered_yn, template_id, criterion_id, evidence_id, priority, sort_order)
+            (candidate_id, section, origin, question_type, content, original_content, intent, good_signal, warning_signal,
+             follow_ups, resume_answered_yn, template_id, criterion_id, evidence_id, priority, sort_order, merged)
         VALUES
-            (#{candidateId}, #{section}, #{origin}, #{questionType}, #{content}, #{intent}, #{goodSignal}, #{warningSignal},
-             #{followUps}, #{resumeAnsweredYn}, #{templateId}, #{criterionId}, #{evidenceId}, #{priority}, #{sortOrder})
+            (#{candidateId}, #{section}, #{origin}, #{questionType}, #{content}, #{originalContent}, #{intent}, #{goodSignal}, #{warningSignal},
+             #{followUps}, #{resumeAnsweredYn}, #{templateId}, #{criterionId}, #{evidenceId}, #{priority}, #{sortOrder}, #{merged})
     </insert>
 
     <update id="updateAnswer">
@@ -35,6 +35,11 @@
 
     <update id="updatePlace">
         UPDATE interview_question SET section = #{section}, sort_order = #{sortOrder}
+        WHERE id = #{id} AND candidate_id = #{candidateId}
+    </update>
+
+    <update id="merge">
+        UPDATE interview_question SET section = #{section}, sort_order = #{sortOrder}, merged = TRUE
         WHERE id = #{id} AND candidate_id = #{candidateId}
     </update>
 

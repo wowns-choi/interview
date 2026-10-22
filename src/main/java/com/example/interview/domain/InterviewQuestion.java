@@ -11,6 +11,8 @@ public class InterviewQuestion {
     private QuestionOrigin origin;
     private QuestionType questionType;
     private String content;
+    /** 공통 질문을 지원자에 맞게 고쳤을 때 고치기 전 원문 */
+    private String originalContent;
     private String intent;
     private String goodSignal;
     private String warningSignal;
@@ -26,4 +28,6 @@ public class InterviewQuestion {
     private String answer;
     /** 면접에서 물어본 질문 (번호를 눌러 체크, 답변을 적으면 자동으로 체크) */
     private boolean checked;
+    /** 공통 질문과 합쳐 질문지에 들어갔는지. false면 추출만 해 둔 질문 */
+    private boolean merged = true;
 }

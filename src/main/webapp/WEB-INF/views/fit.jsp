@@ -369,86 +369,171 @@
         </c:if>
 </section>
 
-<%-- 면접 질문 추출 --%>
+<%-- 면접 질문 추출: 유형을 골라 여러 번 추출해 쌓고, 공통 질문과 합치면 질문지가 된다 --%>
 <c:set var="qOpen" value="${r.fitChecked}"/>
-<section class="stage ${qOpen ? '' : 'is-locked'}" id="questions">
+<section class="stage qx ${qOpen ? '' : 'is-locked'}" id="extract">
   <header class="stage-head">
     <h2>면접 질문 추출</h2>
-    <c:if test="${qOpen and not empty r.sections}">
-      <div class="stage-actions">
-        <form method="post" action="<c:url value='/results/${r.candidate.id}/questions/generate'/>" data-busy="면접 질문을 만드는 중"
-              data-confirm="질문을 새로 추출할까요? 지금 질문지의 수정 내용과 답변이 지워집니다.">
-          <button type="submit" class="btn btn-ghost btn-sm">다시 추출</button>
-        </form>
-        <button type="button" class="btn btn-primary btn-sm" id="pdf-btn" data-filename="면접질문지_<c:out value='${r.candidate.displayName}'/>"><svg class="i"><use href="#i-download"/></svg>PDF</button>
-      </div>
-    </c:if>
   </header>
 
   <c:if test="${qOpen}">
-    <c:choose>
-      <c:when test="${empty r.sections}">
-        <div class="q-cta">
-          <c:if test="${r.candidate.status == 'FAILED'}">
-            <div class="flash flash-error">질문을 만들지 못했습니다. <c:out value="${r.candidate.errorMessage}"/></div>
-          </c:if>
-          <form method="post" action="<c:url value='/results/${r.candidate.id}/questions/generate'/>" data-busy="면접 질문을 만드는 중">
-            <button type="submit" class="btn btn-primary btn-lg">면접 질문 추출</button>
+    <form class="qx-bar" method="post" action="<c:url value='/results/${r.candidate.id}/questions/generate'/>" data-busy="면접 질문을 추출하는 중">
+      <div class="qx-group">
+        <span class="qx-cap">이력서에 쓴 것</span>
+        <label class="qx-type"><input type="checkbox" name="types" value="VERIFY" checked><span>거짓말 판독기</span></label>
+        <label class="qx-type"><input type="checkbox" name="types" value="DEPTH" checked><span>어디까지 알고 한 거야?</span></label>
+        <label class="qx-type"><input type="checkbox" name="types" value="CHOICE" checked><span>그 기술 왜 선택했어?</span></label>
+      </div>
+      <div class="qx-group">
+        <span class="qx-cap">포지션 요구 기술</span>
+        <label class="qx-type"${r.experienceAskable ? '' : ' title="모든 평가항목에 직접 근거가 있습니다"'}><input type="checkbox" name="types" value="EXPERIENCE" ${r.experienceAskable ? 'checked' : 'disabled'}><span>해본 적 있어?</span></label>
+      </div>
+      <button type="submit" class="btn btn-primary">${r.extractedCount + r.questionCount > 0 ? '더 추출' : '질문 추출'}</button>
+    </form>
+
+    <c:if test="${not empty r.extracted}">
+      <div class="qx-pool" id="qx-pool">
+        <div class="qx-pool-head">
+          <h3>추출한 질문 <b>${r.extractedCount}</b></h3>
+          <form method="post" action="<c:url value='/results/${r.candidate.id}/questions/merge'/>" data-busy="질문지를 만드는 중">
+            <button type="submit" class="btn btn-primary btn-sm">${empty r.sections ? '공통 질문과 합치기' : '질문지에 넣기'}</button>
           </form>
         </div>
-      </c:when>
-      <c:otherwise>
-        <div class="iq-board" id="iq-board">
-          <c:forEach var="sec" items="${r.sections}">
-            <section class="iq-sec" data-section="<c:out value='${sec.section}'/>">
-              <h3 class="iq-sec-name"><c:out value="${sec.section}"/></h3>
-              <ol class="iq-list">
-                <c:forEach var="qv" items="${sec.questions}">
-                  <c:set var="q" value="${qv.question}"/>
-                  <c:choose>
-                    <c:when test="${q.origin == 'COMMON_PERSONALIZED'}"><c:set var="kind" value="personal"/><c:set var="kindLabel" value="공통 · 맞춤"/></c:when>
-                    <c:when test="${q.origin == 'COMMON_ORIGINAL' or q.origin == 'FIXED'}"><c:set var="kind" value="common"/><c:set var="kindLabel" value="공통"/></c:when>
-                    <c:when test="${q.origin == 'MANUAL'}"><c:set var="kind" value="manual"/><c:set var="kindLabel" value="직접 추가"/></c:when>
-                    <c:when test="${q.questionType == 'VERIFY'}"><c:set var="kind" value="verify"/><c:set var="kindLabel" value="경력 검증"/></c:when>
-                    <c:otherwise><c:set var="kind" value="skill"/><c:set var="kindLabel" value="역량 검증"/></c:otherwise>
-                  </c:choose>
-                  <li class="q-row iq${empty q.answer ? '' : ' is-answered'}${q.checked ? ' is-checked' : ''}" data-id="${q.id}">
-                    <button type="button" class="iq-no js-q-check" title="물어본 질문 체크" aria-pressed="${q.checked}"></button>
-                    <span class="handle iq-handle" title="끌어서 옮기기"><svg class="i"><use href="#i-grip"/></svg></span>
-                    <div class="iq-main">
-                      <div class="iq-top">
-                        <p class="iq-content"><c:out value="${q.content}"/></p>
-                        <span class="row-actions">
-                          <button type="button" class="icon-btn js-q-edit" title="수정"><svg class="i"><use href="#i-pencil"/></svg></button>
-                          <button type="button" class="icon-btn danger js-q-del" title="삭제"><svg class="i"><use href="#i-trash"/></svg></button>
-                        </span>
-                      </div>
-                      <c:if test="${kind != 'common'}">
-                        <div class="iq-meta">
-                          <span class="kind kind-${kind}">${kindLabel}</span>
-                          <c:if test="${not empty qv.criterionName}"><span class="iq-crit"><c:out value="${qv.criterionName}"/></span></c:if>
-                        </div>
-                      </c:if>
-                      <c:if test="${not empty qv.followUps}">
-                        <ul class="iq-follow"><c:forEach var="f" items="${qv.followUps}"><li><c:out value="${f}"/></li></c:forEach></ul>
-                      </c:if>
+        <c:forEach var="grp" items="${r.extracted}">
+          <section class="qx-sec">
+            <h4 class="iq-sec-name"><c:out value="${grp.section}"/></h4>
+            <ol class="iq-list">
+              <c:forEach var="qv" items="${grp.questions}">
+                <c:set var="q" value="${qv.question}"/>
+                <li class="iq qx-row" data-id="${q.id}">
+                  <span class="iq-no is-static"></span>
+                  <div class="iq-main">
+                    <div class="iq-top">
+                      <p class="iq-content"><c:out value="${q.content}"/></p>
+                      <span class="row-actions">
+                        <button type="button" class="icon-btn js-q-edit" title="수정"><svg class="i"><use href="#i-pencil"/></svg></button>
+                        <button type="button" class="icon-btn danger js-q-del" title="삭제"><svg class="i"><use href="#i-trash"/></svg></button>
+                      </span>
                     </div>
-                    <div class="q-answer">
-                      <textarea class="answer" rows="1" placeholder="답변 기록"
-                                data-url="<c:url value='/results/${r.candidate.id}/questions/${q.id}/answer'/>"><c:out value="${q.answer}"/></textarea>
-                      <span class="save-state" aria-live="polite"></span>
-                    </div>
-                  </li>
-                </c:forEach>
-              </ol>
-              <button type="button" class="add-row js-q-add"><svg class="i"><use href="#i-plus"/></svg>질문 추가</button>
-            </section>
-          </c:forEach>
-        </div>
-      </c:otherwise>
-    </c:choose>
+                    <c:if test="${not empty qv.criterionName}"><div class="iq-meta"><span class="iq-crit"><c:out value="${qv.criterionName}"/></span></div></c:if>
+                    <c:if test="${not empty qv.followUps}">
+                      <ul class="iq-follow"><c:if test="${not q.questionType.claim}"><li class="iq-follow-cap">해봤다고 하면</li></c:if><c:forEach var="f" items="${qv.followUps}"><li><c:out value="${f}"/></li></c:forEach></ul>
+                    </c:if>
+                  </div>
+                </li>
+              </c:forEach>
+            </ol>
+          </section>
+        </c:forEach>
+      </div>
+    </c:if>
   </c:if>
 </section>
+
+<%-- 면접 질문지 (공통 질문과 합친 것) --%>
+<c:if test="${qOpen and not empty r.sections}">
+<section class="stage" id="questions">
+  <header class="stage-head">
+    <h2>면접 질문지</h2>
+    <div class="stage-actions">
+      <button type="button" class="btn btn-primary btn-sm" id="pdf-btn" data-filename="면접질문지_<c:out value='${r.candidate.displayName}'/>"><svg class="i"><use href="#i-download"/></svg>PDF</button>
+    </div>
+  </header>
+  <div class="iq-board" id="iq-board">
+    <c:forEach var="sec" items="${r.sections}">
+      <section class="iq-sec" data-section="<c:out value='${sec.section}'/>">
+        <h3 class="iq-sec-name"><c:out value="${sec.section}"/></h3>
+        <ol class="iq-list">
+          <c:forEach var="qv" items="${sec.questions}">
+            <c:set var="q" value="${qv.question}"/>
+            <c:choose>
+              <c:when test="${q.origin == 'COMMON_PERSONALIZED'}"><c:set var="kind" value="personal"/><c:set var="kindLabel" value="공통 · 맞춤"/></c:when>
+              <c:when test="${q.origin == 'COMMON_ORIGINAL' or q.origin == 'FIXED'}"><c:set var="kind" value="common"/><c:set var="kindLabel" value="공통"/></c:when>
+              <c:when test="${q.origin == 'MANUAL' or empty q.questionType}"><c:set var="kind" value="manual"/><c:set var="kindLabel" value="직접 추가"/></c:when>
+              <c:when test="${q.questionType.claim}"><c:set var="kind" value="verify"/><c:set var="kindLabel" value="${q.questionType.label}"/></c:when>
+              <c:otherwise><c:set var="kind" value="skill"/><c:set var="kindLabel" value="${q.questionType.label}"/></c:otherwise>
+            </c:choose>
+            <li class="q-row iq${empty q.answer ? '' : ' is-answered'}${q.checked ? ' is-checked' : ''}" data-id="${q.id}">
+              <button type="button" class="iq-no js-q-check" title="물어본 질문 체크" aria-pressed="${q.checked}"></button>
+              <span class="handle iq-handle" title="끌어서 옮기기"><svg class="i"><use href="#i-grip"/></svg></span>
+              <div class="iq-main">
+                <div class="iq-top">
+                  <p class="iq-content"><c:out value="${q.content}"/></p>
+                  <span class="row-actions">
+                    <button type="button" class="icon-btn js-q-edit" title="수정"><svg class="i"><use href="#i-pencil"/></svg></button>
+                    <button type="button" class="icon-btn danger js-q-del" title="삭제"><svg class="i"><use href="#i-trash"/></svg></button>
+                  </span>
+                </div>
+                <c:if test="${not empty qv.originalContent}"><p class="iq-origin"><span>원래 질문</span><c:out value="${qv.originalContent}"/></p></c:if>
+                <c:if test="${kind != 'common'}">
+                  <div class="iq-meta">
+                    <span class="kind kind-${kind}">${kindLabel}</span>
+                    <c:if test="${not empty qv.criterionName}"><span class="iq-crit"><c:out value="${qv.criterionName}"/></span></c:if>
+                  </div>
+                </c:if>
+                <c:if test="${not empty qv.followUps}">
+                  <ul class="iq-follow"><c:if test="${not empty q.questionType and not q.questionType.claim}"><li class="iq-follow-cap">해봤다고 하면</li></c:if><c:forEach var="f" items="${qv.followUps}"><li><c:out value="${f}"/></li></c:forEach></ul>
+                </c:if>
+              </div>
+              <div class="q-answer">
+                <textarea class="answer" rows="1" placeholder="답변 기록"
+                          data-url="<c:url value='/results/${r.candidate.id}/questions/${q.id}/answer'/>"><c:out value="${q.answer}"/></textarea>
+                <span class="save-state" aria-live="polite"></span>
+              </div>
+            </li>
+          </c:forEach>
+        </ol>
+        <button type="button" class="add-row js-q-add"><svg class="i"><use href="#i-plus"/></svg>질문 추가</button>
+      </section>
+    </c:forEach>
+  </div>
+</section>
+</c:if>
+
+<%-- AI 의견 참고: 뽑는다면·안 뽑는다면 그 이유. 결정은 면접관이 한다 --%>
+<c:if test="${qOpen}">
+<section class="stage op" id="opinion">
+  <header class="stage-head">
+    <h2>AI 의견 참고</h2>
+    <c:if test="${not empty r.opinion}"><span class="op-at"><c:out value="${r.opinion.askedAt}"/></span></c:if>
+    <div class="stage-actions">
+      <form method="post" action="<c:url value='/results/${r.candidate.id}/opinion'/>" data-busy="AI 의견을 받는 중">
+        <button type="submit" class="btn btn-sm ${empty r.opinion ? 'btn-primary' : 'btn-ghost'}">${empty r.opinion ? 'AI 의견 받기' : '다시 받기'}</button>
+      </form>
+    </div>
+  </header>
+  <c:if test="${not empty r.opinion}">
+    <div class="op-grid">
+      <div class="op-col is-yes">
+        <h3>뽑는다면</h3>
+        <c:choose>
+          <c:when test="${empty r.opinion.hireReasons}"><p class="op-empty">없음</p></c:when>
+          <c:otherwise>
+            <ul class="op-list">
+              <c:forEach var="p" items="${r.opinion.hireReasons}">
+                <li><p class="op-point"><c:out value="${p.point}"/></p><c:if test="${not empty p.basis}"><p class="op-basis"><c:out value="${p.basis}"/></p></c:if></li>
+              </c:forEach>
+            </ul>
+          </c:otherwise>
+        </c:choose>
+      </div>
+      <div class="op-col is-no">
+        <h3>안 뽑는다면</h3>
+        <c:choose>
+          <c:when test="${empty r.opinion.noHireReasons}"><p class="op-empty">없음</p></c:when>
+          <c:otherwise>
+            <ul class="op-list">
+              <c:forEach var="p" items="${r.opinion.noHireReasons}">
+                <li><p class="op-point"><c:out value="${p.point}"/></p><c:if test="${not empty p.basis}"><p class="op-basis"><c:out value="${p.basis}"/></p></c:if></li>
+              </c:forEach>
+            </ul>
+          </c:otherwise>
+        </c:choose>
+      </div>
+    </div>
+  </c:if>
+</section>
+</c:if>
   </c:otherwise>
 </c:choose>
   </div>

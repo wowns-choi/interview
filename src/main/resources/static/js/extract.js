@@ -546,9 +546,13 @@
   // ── 질문지 편집 · 드래그 ──
   function initQuestions() {
     var board = document.getElementById('iq-board');
+    var pool = document.getElementById('qx-pool');
+    if (pool) pool.addEventListener('click', onClick);
     if (!board) return;
 
-    board.addEventListener('click', function (e) {
+    board.addEventListener('click', onClick);
+
+    function onClick(e) {
       var btn = e.target.closest('button');
       if (!btn) return;
       var row = btn.closest('.iq');
@@ -561,7 +565,7 @@
           }
         });
       } else if (btn.classList.contains('js-q-del')) {
-        api('DELETE', resultBase + '/questions/' + row.dataset.id).then(function () { row.remove(); toast('삭제했습니다'); });
+        api('DELETE', resultBase + '/questions/' + row.dataset.id).then(function () { removeRow(row); toast('삭제했습니다'); });
       } else if (btn.classList.contains('js-q-add')) {
         addQuestion(btn.closest('.iq-sec'));
       } else if (btn.classList.contains('js-q-check') && row.dataset.id) {
@@ -575,7 +579,19 @@
           if (!res.ok) throw new Error();
         }).catch(function () { setChecked(row, !checked); toast('저장하지 못했습니다'); });
       }
-    });
+    }
+
+    // 추출한 질문: 다 지우면 합치기 버튼도 필요 없으니 새로 그린다
+    function removeRow(row) {
+      var inPool = pool && pool.contains(row);
+      var sec = row.closest('.qx-sec');
+      row.remove();
+      if (!inPool) return;
+      if (sec && !sec.querySelector('.iq')) sec.remove();
+      var left = pool.querySelectorAll('.iq').length;
+      if (!left) location.reload();
+      else pool.querySelector('.qx-pool-head b').textContent = left;
+    }
 
     function setChecked(row, checked) {
       row.classList.toggle('is-checked', checked);

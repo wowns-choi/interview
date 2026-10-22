@@ -170,11 +170,11 @@ class WebPagesSmokeTest {
                 .doesNotContain("공고까지", "없는항목", "<h3>연봉", "5,000만원", "<h3>교육</h3>");
         assertThat(checked).contains("홍길동", "직접 근거", "총 2년 11개월", "포지션 관련 2년 6개월", "title=\"백엔드 업무 기간\"",
                 "class=\"gauge-total\" style=\"width: 97%\"", "class=\"gauge-fill\" style=\"width: 83%\"", "<span class=\"stamp is-unmet\">미충족</span>","일 100만 건 주문 데이터 배치 처리 개선", "원문에서 찾지 못한",
-                "면접 질문 추출</button>", "class=\"print-head\"").doesNotContain("<script>alert(1)</script>", "id=\"iq-board\"");
+                "질문 추출</button>", "name=\"types\" value=\"EXPERIENCE\" checked", "class=\"print-head\"").doesNotContain("<script>alert(1)</script>", "id=\"iq-board\"");
         // 점수: 경력 0(관련 30개월 < 36개월) + 학력 1(공고 조건 없음) + 근거 직접 1·없음 0·없음 0 = 2 / 5
         assertThat(checked).contains("class=\"score-pill\"", "2<small> / 5점</small>", "side-score\">2<small> / 5</small>");
         String ranking = get("/ranking?position=" + positionId).body();
-        assertThat(ranking).contains("class=\"rk-no\">1<", "href=\"/results/" + id + "\"", "rk-score\">2<small> / 5</small>", "hb ev-NONE\"", "hb ev-DIRECT\"",
+        assertThat(ranking).contains("class=\"rk-no\">1<", "href=\"/results/" + id + "\"", "rk-score\">2<small> / 5</small>", "rk-sq ev-NONE\"", "rk-sq ev-DIRECT\"",
                         "rk-cond is-unmet\">미충족<", "rk-cond is-met\">충족<")
                 .doesNotContain("검사 전", ">연봉</th>", "제외됨");
         // 경력 미충족 제외를 켜면 순위 없이 제외됨으로
@@ -182,13 +182,15 @@ class WebPagesSmokeTest {
         assertThat(get("/ranking?position=" + positionId).body()).contains("제외됨 1명", "rk-why\">경력 미충족<", "checked><span class=\"switch-track\"></span>경력 미충족 제외")
                 .doesNotContain("class=\"rk-no\">1<");
         assertThat(json("PATCH", "/positions/" + positionId + "/exclusions", "{\"career\":false,\"education\":false}").statusCode()).isEqualTo(204);
-        extractionService.generateQuestions(id);
+        extractionService.extractQuestions(id, com.example.interview.domain.QuestionType.SELECTABLE);
+        assertThat(get("/results/" + id).body()).contains("추출한 질문 <b>1</b>", "공통 질문과 합치기", "거짓말 판독기").doesNotContain("id=\"pdf-btn\"");
+        extractionService.mergeQuestions(id);
 
         HttpResponse<String> result = get("/results/" + id);
         assertThat(result.statusCode()).isEqualTo(200);
         String body = result.body();
         assertThat(body).contains("100만 건 배치 처리 시간을 어떻게 측정하셨나요?", "병목은 어디였나요?", "답변 기록", "id=\"pdf-btn\"", "면접질문지_홍길동",
-                "질문 추가", "경력 검증");
+                "질문 추가", "kind kind-verify\">거짓말 판독기<", "AI 의견 참고", "AI 의견 받기</button>").doesNotContain("추출한 질문 <b>");
 
         HttpResponse<String> addedQ = json("POST", "/results/" + id + "/questions", "{\"section\":\"기술 검증\",\"content\":\"추가 질문\"}");
         assertThat(addedQ.statusCode()).isEqualTo(200);
