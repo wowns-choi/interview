@@ -28,6 +28,10 @@ public class CriteriaResult {
     @JsonProperty("required_education")
     private String requiredEducation;
 
+    /** 공고의 요구 학과 표기 그대로 (예: "컴퓨터공학 등 관련 학과"). 공고에 없으면 빈 문자열. 빠져도 실패로 보지 않는다 */
+    @JsonProperty("required_major")
+    private String requiredMajor;
+
     private List<Item> criteria;
 
     @Data

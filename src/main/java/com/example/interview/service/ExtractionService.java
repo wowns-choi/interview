@@ -188,6 +188,11 @@ public class ExtractionService {
         found(questionMapper.updateChecked(candidateId, questionId, checked), questionId);
     }
 
+    /** 필수 질문으로 표시하거나 푼다. */
+    public void markMustAsk(Long candidateId, Long questionId, boolean mustAsk) {
+        found(questionMapper.updateMustAsk(candidateId, questionId, mustAsk), questionId);
+    }
+
     public Long addQuestion(Long candidateId, String section, String content) {
         candidateService.get(candidateId);
         if (section == null || section.isBlank()) {

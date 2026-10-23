@@ -5,6 +5,8 @@ import java.util.List;
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.annotation.JsonProperty;
 
+import com.example.interview.web.dto.CareerGauge;
+
 import lombok.Data;
 
 /**
@@ -44,6 +46,10 @@ public class CareerEvalResult {
     @JsonProperty("required_education")
     private String requiredEducation;
 
+    /** 판단에 쓴 포지션의 요구 학과. 없으면 빈 문자열 */
+    @JsonProperty("required_major")
+    private String requiredMajor;
+
     /** MET, NOT_MET, UNKNOWN (공고에 학력 조건이 없거나 판단할 수 없음) */
     @JsonProperty("education_meets")
     private String educationMeets;
@@ -56,6 +62,29 @@ public class CareerEvalResult {
         private String ref;
         private String start;
         private String end;
+    }
+
+    /** 근거 분석 호출(EVIDENCE)이 이력서에서 읽은 자격증. 그 호출 전에 검사한 지원자는 null */
+    private Certificates certificates;
+
+    @Data
+    @JsonIgnoreProperties(ignoreUnknown = true)
+    public static class Certificates {
+        /** 이력서에 적힌 자격증·어학 점수 */
+        private List<Certificate> items;
+        /** 정보처리기사가 있는지 (산업기사·기능사는 아니다) */
+        @JsonProperty("info_engineer")
+        private Boolean infoEngineer;
+        /** SQLD(SQL 개발자)가 있는지 */
+        private Boolean sqld;
+    }
+
+    @Data
+    @JsonIgnoreProperties(ignoreUnknown = true)
+    public static class Certificate {
+        private String name;
+        private String issuer;
+        private String date;
     }
 
     @Data
@@ -79,6 +108,17 @@ public class CareerEvalResult {
         return perCompany.stream().anyMatch(c -> c.getCompany() != null && bare(c.getCompany()).equals(key));
     }
 
+    /** 이 회사에서 외부 AI가 센 근무 개월 ("5개월"). 이력서에 기간 길이가 없을 때(재직중 등) 화면에 쓴다. 없으면 빈 문자열 */
+    public String durationOf(String alias) {
+        if (perCompany == null || alias == null) {
+            return "";
+        }
+        String key = bare(alias);
+        return perCompany.stream()
+                .filter(c -> c.getCompany() != null && c.getMonths() != null && c.getMonths() > 0 && bare(c.getCompany()).equals(key))
+                .findFirst().map(c -> CareerGauge.format(c.getMonths())).orElse("");
+    }
+
     private static String bare(String s) {
         return s.replaceAll("[\\[\\]\\s]", "");
     }
@@ -90,5 +130,6 @@ public class CareerEvalResult {
         totalReason = career.getTotalReason();
         relevantMonths = career.getRelevantMonths();
         relevantReason = career.getRelevantReason();
+        certificates = career.getCertificates();
     }
 }

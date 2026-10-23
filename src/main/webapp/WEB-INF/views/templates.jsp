@@ -23,6 +23,7 @@
           <li class="q" data-id="${t.id}">
             <span class="handle q-handle" title="끌어서 옮기기"><svg class="i"><use href="#i-grip"/></svg></span>
             <p class="q-content"><c:out value="${t.content}"/></p>
+            <button type="button" class="must-btn js-must${t.mustAsk ? ' is-on' : ''}" aria-pressed="${t.mustAsk}" title="필수 질문">필수</button>
             <span class="q-actions">
               <button type="button" class="icon-btn js-edit" title="수정"><svg class="i"><use href="#i-pencil"/></svg></button>
               <button type="button" class="icon-btn danger js-del" title="삭제"><svg class="i"><use href="#i-trash"/></svg></button>
@@ -57,6 +58,7 @@
   <li class="q" data-id="">
     <span class="handle q-handle" title="끌어서 옮기기"><svg class="i"><use href="#i-grip"/></svg></span>
     <p class="q-content"></p>
+    <button type="button" class="must-btn js-must" aria-pressed="false" title="필수 질문">필수</button>
     <span class="q-actions">
       <button type="button" class="icon-btn js-edit" title="수정"><svg class="i"><use href="#i-pencil"/></svg></button>
       <button type="button" class="icon-btn danger js-del" title="삭제"><svg class="i"><use href="#i-trash"/></svg></button>

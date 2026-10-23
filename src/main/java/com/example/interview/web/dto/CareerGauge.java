@@ -155,7 +155,7 @@ public class CareerGauge {
         return relevantMonths == null ? "" : format(relevantMonths);
     }
 
-    static String format(int months) {
+    public static String format(int months) {
         int y = months / 12;
         int m = months % 12;
         if (y > 0 && m > 0) {

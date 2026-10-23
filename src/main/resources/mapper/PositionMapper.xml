@@ -30,14 +30,14 @@
 
     <update id="updateHiring">
         UPDATE position SET required_experience = #{requiredExperience},
-            required_education = #{requiredEducation}
+            required_education = #{requiredEducation}, required_major = #{requiredMajor}
         WHERE id = #{id} AND conditions_edited = FALSE
     </update>
 
     <!-- 사용자가 직접 고친 경력·학력 조건: 다시 추출해도 덮어쓰지 않는다 -->
     <update id="updateConditions">
         UPDATE position SET required_experience = #{requiredExperience},
-            required_education = #{requiredEducation}, conditions_edited = TRUE
+            required_education = #{requiredEducation}, required_major = #{requiredMajor}, conditions_edited = TRUE
         WHERE id = #{id}
     </update>
 

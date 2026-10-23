@@ -1,5 +1,6 @@
 package com.example.interview.web.dto;
 
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 
 import com.example.interview.domain.CandidateStatus;
@@ -21,6 +22,14 @@ public class RankingRow {
     String exclusion;
     /** 동점일 때 쓰는 포지션 관련 경력(개월) */
     Integer relevantMonths;
+    /** 면접관이 남긴 면접 기록 */
+    boolean interviewed;
+    LocalDate interviewDate;
+    /** PASS, FAIL, null */
+    String decision;
+    /** 자격증 (로컬 AI가 옮겨 적은 목록에서 코드로 찾는다) */
+    boolean infoEngineer;
+    boolean sqld;
 
     /** 다수 검사가 진행 중인지 (대기, 가리는 중, 검사 중) */
     public boolean isInProgress() {

@@ -7,6 +7,7 @@ import java.util.List;
 import java.util.Set;
 
 import com.example.interview.ai.AiResponseInvalidException;
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.fasterxml.jackson.annotation.JsonProperty;
 
 import lombok.Data;
@@ -18,6 +19,9 @@ public class EvidenceResult {
     private List<CriterionResult> results;
 
     private Career career;
+
+    /** 이력서의 자격증과 정보처리기사·SQLD 보유 여부 */
+    private CareerEvalResult.Certificates certificates;
 
     @Data
     public static class CriterionResult {
@@ -48,6 +52,9 @@ public class EvidenceResult {
         private Integer relevantMonths;
         @JsonProperty("relevant_reason")
         private String relevantReason;
+        /** 같은 응답의 certificates를 경력 계산과 함께 저장하려고 옮겨 둔다 (응답 JSON의 career에는 없다) */
+        @JsonIgnore
+        private CareerEvalResult.Certificates certificates;
     }
 
     /** 입력한 모든 criterion_id에 결과가 있어야 하고, 경력 계산이 있어야 한다. */
@@ -86,11 +93,24 @@ public class EvidenceResult {
             }
         }
         validateCareer(errors);
+        validateCertificates(errors);
         if (!errors.isEmpty()) {
             throw new AiResponseInvalidException(String.join("; ", errors));
         }
         career.totalReason = career.totalReason == null ? "" : career.totalReason;
         career.relevantReason = career.relevantReason == null ? "" : career.relevantReason;
+        if (certificates.getItems() == null) {
+            certificates.setItems(List.of());
+        }
+        career.certificates = certificates;
+    }
+
+    private void validateCertificates(List<String> errors) {
+        if (certificates == null) {
+            errors.add("certificates 누락");
+        } else if (certificates.getInfoEngineer() == null || certificates.getSqld() == null) {
+            errors.add("certificates.info_engineer와 certificates.sqld는 true 또는 false여야 함");
+        }
     }
 
     private void validateCareer(List<String> errors) {

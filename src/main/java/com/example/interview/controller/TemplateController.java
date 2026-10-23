@@ -73,6 +73,13 @@ public class TemplateController {
         return ResponseEntity.noContent().build();
     }
 
+    @PutMapping("/questions/{id}/must-ask")
+    @ResponseBody
+    public ResponseEntity<Void> setMustAsk(@PathVariable Long id, @RequestBody Map<String, Boolean> body) {
+        templateService.setMustAsk(id, Boolean.TRUE.equals(body.get("mustAsk")));
+        return ResponseEntity.noContent().build();
+    }
+
     @DeleteMapping("/questions/{id}")
     @ResponseBody
     public ResponseEntity<Void> deleteQuestion(@PathVariable Long id) {

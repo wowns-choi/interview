@@ -21,6 +21,7 @@
   // ── 포지션 고르기: 고르면 그 주소로 ──
   document.querySelectorAll('select[data-nav]').forEach(function (sel) {
     sel.addEventListener('change', function () { location.href = sel.value; });
+    if (!sel.closest('.pick-select')) return; // 사이드바의 지원자 고르기는 칸 폭 그대로
     // 고른 이름 길이에 맞춘다 (select 폭은 보통 가장 긴 option 기준이라 제목 크기 글자가 잘린다)
     var fit = function () {
       var probe = document.createElement('span');
@@ -33,6 +34,7 @@
     };
     fit();
     if (document.fonts) document.fonts.ready.then(fit);
+    sel.addEventListener('refit', fit); // 고른 항목의 글자가 바뀌었을 때
   });
 
   // ── 표의 행 전체 클릭 ──
@@ -71,6 +73,34 @@
         document.querySelectorAll('.rk-row.is-EXCLUDED').forEach(function (tr) { tr.hidden = !open; });
       });
     });
+    // 면접 본 사람만·합격한 사람만: 화면에서만 거른다 (고른 것은 브라우저에 기억)
+    var filters = rk.querySelectorAll('[data-rk-filter]');
+    var applyFilters = function () {
+      var only = {};
+      filters.forEach(function (f) { only[f.getAttribute('data-rk-filter')] = f.checked; });
+      try { localStorage.setItem('rkFilters', JSON.stringify(only)); } catch (e) { /* 무시 */ }
+      document.querySelectorAll('.rk-row').forEach(function (tr) {
+        var out = (only.interviewed && tr.getAttribute('data-interviewed') !== 'true')
+          || (only.passed && tr.getAttribute('data-decision') !== 'PASS')
+          || (only.engineer && tr.getAttribute('data-engineer') !== 'true')
+          || (only.sqld && tr.getAttribute('data-sqld') !== 'true');
+        tr.classList.toggle('is-filtered', out);
+      });
+      // 묶음 제목은 그 아래에 남은 사람이 없으면 숨긴다
+      document.querySelectorAll('.rk-group').forEach(function (g) {
+        var left = false;
+        for (var n = g.nextElementSibling; n && !n.classList.contains('rk-group'); n = n.nextElementSibling) {
+          if (!n.classList.contains('is-filtered')) left = true;
+        }
+        g.classList.toggle('is-filtered', !left);
+      });
+    };
+    try {
+      var saved = JSON.parse(localStorage.getItem('rkFilters') || '{}');
+      filters.forEach(function (f) { f.checked = !!saved[f.getAttribute('data-rk-filter')]; });
+    } catch (e) { /* 저장소를 못 쓰면 끈 채로 */ }
+    filters.forEach(function (f) { f.addEventListener('change', applyFilters); });
+    applyFilters();
   }
 
   // ── 이력서 드롭존 (1인은 하나, 다수는 지원자마다 하나) ──
@@ -170,43 +200,24 @@
     var currentStatus = candList.getAttribute('data-current-status');
     var base = candList.getAttribute('data-url').replace(/\/positions\/\d+\/candidates$/, '');
     var render = function (rows) {
-      if (candList.querySelector('.inline-form')) return; // 이름을 고치는 중에는 그대로 둔다
+      if (document.activeElement === candList) return; // 펼쳐 보는 중에는 그대로 둔다
+      var placeholder = candList.querySelector('option[value=""]');
       candList.innerHTML = '';
+      if (placeholder) candList.appendChild(placeholder);
+      candList.closest('.side-select').querySelector('span').textContent = '지원자 ' + rows.length + '명';
       rows.forEach(function (row) {
-        var li = document.createElement('li');
-        li.className = 'side-pos';
-        var a = document.createElement('a');
-        a.className = 'side-item side-cand' + (String(row.id) === current ? ' active' : '');
-        a.href = base + '/results/' + row.id;
-        var name = document.createElement('strong');
-        name.textContent = row.name;
-        a.appendChild(name);
-        var tail = document.createElement('span');
-        if (!row.inProgress && (row.state === 'RANKED' || row.state === 'EXCLUDED')) {
-          tail.className = 'side-score';
-          tail.textContent = row.score;
-          var small = document.createElement('small');
-          small.textContent = ' / ' + row.max;
-          tail.appendChild(small);
-        } else if (!row.inProgress && row.state === 'STALE') {
-          tail.className = 'side-state is-stale';
-          tail.textContent = '재검사 필요';
-        } else {
-          tail.className = 'side-state' + (row.inProgress ? ' is-progress' : row.status === 'FAILED' ? ' is-failed' : '');
-          tail.textContent = row.label;
-        }
-        a.appendChild(tail);
-        li.appendChild(a);
-        if (!row.inProgress) {
-          var rn = document.createElement('button');
-          rn.type = 'button';
-          rn.className = 'icon-btn side-rename';
-          rn.title = '이름 바꾸기';
-          rn.innerHTML = '<svg class="i"><use href="#i-pencil"/></svg>';
-          li.appendChild(rn);
-        }
-        candList.appendChild(li);
+        var tail = row.inProgress ? row.label
+          : (row.state === 'RANKED' || row.state === 'EXCLUDED') ? row.score + ' / ' + row.max
+          : row.state === 'STALE' ? '재검사 필요'
+          : row.status === 'FAILED' ? '실패' : row.label;
+        var o = document.createElement('option');
+        o.value = base + '/results/' + row.id;
+        o.setAttribute('data-tail', tail);
+        o.textContent = row.name + ' · ' + tail;
+        o.selected = String(row.id) === current;
+        candList.appendChild(o);
       });
+      candList.dispatchEvent(new Event('refit'));
     };
     var poll = function () {
       fetch(candList.getAttribute('data-url'), { headers: { 'X-Requested-With': 'fetch' } })
@@ -221,6 +232,86 @@
         .catch(function () { setTimeout(poll, 6000); });
     };
     setTimeout(poll, 3000);
+  }
+
+  // ── 면접 기록: 바꾸면 바로 저장한다. 날짜나 합격·불합격을 고르면 "면접봤어요"도 체크된다 ──
+  var iv = document.getElementById('iv-bar');
+  if (iv) {
+    var ivDone = document.getElementById('iv-done');
+    var ivDate = document.getElementById('iv-date');
+    var ivState = document.getElementById('iv-state');
+    var ivButtons = iv.querySelectorAll('[data-decision]');
+    var decision = function () {
+      var on = iv.querySelector('[data-decision].is-on');
+      return on ? on.getAttribute('data-decision') : '';
+    };
+    var show = function (d) {
+      ivDone.checked = d.interviewed;
+      ivDate.value = d.date;
+      ivButtons.forEach(function (b) {
+        var on = b.getAttribute('data-decision') === d.decision;
+        b.classList.toggle('is-on', on);
+        b.setAttribute('aria-pressed', on);
+      });
+      // 보고서 버튼은 합격일 때만
+      var report = document.getElementById('iv-report');
+      if (report) report.hidden = d.decision !== 'PASS';
+    };
+    var ivSave = function () {
+      var before = { interviewed: ivDone.checked, date: ivDate.value, decision: decision() };
+      ivState.textContent = '저장 중';
+      ivState.classList.remove('err');
+      fetch(iv.getAttribute('data-url'), {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'fetch' },
+        body: JSON.stringify(before)
+      }).then(function (res) {
+        return res.ok ? res.json() : res.text().then(function (t) { throw new Error(t); });
+      }).then(function (saved) {
+        show(saved);
+        ivState.textContent = '저장됨';
+      }).catch(function (e) {
+        ivState.textContent = e.message || '저장하지 못했습니다';
+        ivState.classList.add('err');
+      });
+    };
+    ivDone.addEventListener('change', function () {
+      // 면접을 안 본 것으로 되돌리면 날짜와 결과도 지운다
+      if (!ivDone.checked) show({ interviewed: false, date: '', decision: '' });
+      ivSave();
+    });
+    ivDate.addEventListener('change', ivSave);
+    ivButtons.forEach(function (b) {
+      b.addEventListener('click', function () {
+        var on = !b.classList.contains('is-on');
+        ivButtons.forEach(function (x) { x.classList.remove('is-on'); x.setAttribute('aria-pressed', false); });
+        b.classList.toggle('is-on', on);
+        b.setAttribute('aria-pressed', on);
+        ivSave();
+      });
+    });
+  }
+
+  // ── 목차: 화면에 없는 영역은 숨기고, 지금 보고 있는 영역을 표시한다 ──
+  var toc = document.getElementById('toc');
+  if (toc) {
+    var links = [];
+    toc.querySelectorAll('a').forEach(function (a) {
+      var target = document.getElementById(a.getAttribute('href').slice(1));
+      if (target) links.push({ a: a, target: target }); else a.hidden = true;
+    });
+    var mark = function () {
+      var line = 140;
+      var current = links[0];
+      links.forEach(function (l) { if (l.target.getBoundingClientRect().top <= line) current = l; });
+      // 맨 아래까지 내리면 마지막 항목
+      if (window.innerHeight + window.scrollY >= document.documentElement.scrollHeight - 2) current = links[links.length - 1];
+      links.forEach(function (l) { l.a.classList.toggle('active', l === current); });
+    };
+    if (links.length) {
+      window.addEventListener('scroll', mark, { passive: true });
+      mark();
+    }
   }
 
   // ── 답변 자동 저장 ──
@@ -245,6 +336,7 @@
       // 답변을 적으면 서버도 체크해 둔다
       if (ta.value.trim() !== '') {
         row.classList.add('is-checked');
+        row.classList.remove('is-missing');
         var no = row.querySelector('.js-q-check');
         if (no) no.setAttribute('aria-pressed', 'true');
       }
@@ -284,6 +376,7 @@
   }
   document.querySelectorAll('textarea.answer').forEach(bindAnswer);
   window.bindAnswer = bindAnswer;
+  window.autosize = autosize;
 
   window.addEventListener('beforeunload', function (e) {
     if (pending.size > 0 || inflight.size > 0) {
@@ -292,19 +385,5 @@
       e.returnValue = '';
     }
   });
-
-  // PDF: 화면 그대로 인쇄한다. 저장 안 된 답변을 먼저 저장하고, 제목을 파일 이름으로 쓴다
-  var pdf = document.getElementById('pdf-btn');
-  if (pdf) {
-    pdf.addEventListener('click', function () {
-      flush().then(function () {
-        var title = document.title;
-        document.title = pdf.getAttribute('data-filename') || title;
-        document.querySelectorAll('textarea.answer').forEach(autosize);
-        window.print();
-        document.title = title;
-      });
-    });
-  }
 
 })();

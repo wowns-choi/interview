@@ -1,5 +1,6 @@
 package com.example.interview.web.dto;
 
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 
 import com.example.interview.domain.CandidateStatus;
@@ -14,4 +15,7 @@ public class ExtractionSummary {
     private String positionTitle;
     private CandidateStatus status;
     private LocalDateTime createdAt;
+    private boolean interviewed;
+    private LocalDate interviewDate;
+    private String decision;
 }

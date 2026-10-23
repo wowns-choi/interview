@@ -25,8 +25,11 @@ public class QuoteVerifier {
         return normalize(maskedText).contains(q);
     }
 
-    /** 공백·줄바꿈을 한 칸으로 합치고 가운뎃점 글머리표를 통일한 뒤 앞뒤 공백을 제거한다. */
+    /**
+     * 공백·줄바꿈을 모두 지우고 가운뎃점 글머리표를 통일한다.
+     * PDF에서 뽑은 글은 줄바꿈 위치와 띄어쓰기가 AI가 옮겨 쓴 것과 자주 달라서 ("이 벤트" / "이벤트") 공백은 보지 않는다.
+     */
     static String normalize(String s) {
-        return WHITESPACE.matcher(DOT_BULLET.matcher(s).replaceAll("·")).replaceAll(" ").strip();
+        return WHITESPACE.matcher(DOT_BULLET.matcher(s).replaceAll("·")).replaceAll("");
     }
 }

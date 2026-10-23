@@ -10,4 +10,6 @@ public class QuestionTemplate {
     private String content;
     private int sortOrder;
     private String activeYn = "Y";
+    /** 필수 질문. 질문지에 들어갈 때 함께 복사된다 */
+    private boolean mustAsk;
 }

@@ -149,17 +149,19 @@ public class PositionService {
             }
             positionMapper.updateHiring(positionId,
                     truncate(blankToNull(result.getRequiredExperience()), 300),
-                    truncate(blankToNull(result.getRequiredEducation()), 300));
+                    truncate(blankToNull(result.getRequiredEducation()), 300),
+                    truncate(blankToNull(result.getRequiredMajor()), 300));
             positionMapper.updateStatus(positionId, PositionStatus.CONFIRMED);
             return result.getCriteria().size();
         });
     }
 
-    /** 경력·학력 조건을 사용자가 직접 고친다. 비우면 조건 없음 */
-    public void updateConditions(Long positionId, String requiredExperience, String requiredEducation) {
+    /** 경력·학력·학과 조건을 사용자가 직접 고친다. 비우면 조건 없음 */
+    public void updateConditions(Long positionId, String requiredExperience, String requiredEducation,
+            String requiredMajor) {
         get(positionId);
-        positionMapper.updateConditions(positionId,
-                truncate(blankToNull(requiredExperience), 300), truncate(blankToNull(requiredEducation), 300));
+        positionMapper.updateConditions(positionId, truncate(blankToNull(requiredExperience), 300),
+                truncate(blankToNull(requiredEducation), 300), truncate(blankToNull(requiredMajor), 300));
     }
 
     public EvalCriterion addCriterion(Long positionId, String name, String description) {

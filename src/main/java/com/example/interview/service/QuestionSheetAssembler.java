@@ -186,6 +186,7 @@ public class QuestionSheetAssembler {
         q.setTemplateId(t.getId());
         q.setOrigin(QuestionOrigin.COMMON_ORIGINAL);
         q.setContent(t.getContent());
+        q.setMustAsk(t.isMustAsk());
         return q;
     }
 

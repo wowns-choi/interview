@@ -27,6 +27,8 @@ dependencies {
 	implementation 'org.glassfish.web:jakarta.servlet.jsp.jstl:3.0.1'
 	implementation 'org.apache.pdfbox:pdfbox:3.0.8'
 	implementation 'org.apache.poi:poi-ooxml:5.5.1'
+	implementation 'org.apache.poi:poi-scratchpad:5.5.1'
+	implementation 'org.jsoup:jsoup:1.18.3'
 	implementation 'kr.dogfoot:hwplib:1.1.9'
 	implementation 'kr.dogfoot:hwpxlib:1.0.5'
 	compileOnly 'org.projectlombok:lombok'

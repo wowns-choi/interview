@@ -23,10 +23,11 @@ class FitScoreTest {
         FitScore s = FitScore.of(p, eval, CareerGauge.of(new CandidateProfile(), p.getRequiredExperience(), eval),
                 List.of(view("Java", EvidenceType.DIRECT), view("Kafka", EvidenceType.INDIRECT), view("Redis", EvidenceType.NONE)));
 
-        // 경력 1 + 학력 1 + 1 + 0.5 + 0 (연봉은 평가하지 않는다)
-        assertThat(s.getTotal()).isEqualTo(3.5);
-        assertThat(s.getTotalText()).isEqualTo("3.5");
-        assertThat(s.getMax()).isEqualTo(5);
+        // 1 + 0.5 + 0. 경력·학력은 충족 여부만 들고 점수에는 넣지 않는다
+        assertThat(s.getTotal()).isEqualTo(1.5);
+        assertThat(s.getTotalText()).isEqualTo("1.5");
+        assertThat(s.getMax()).isEqualTo(3);
+        assertThat(List.of(s.getCareer(), s.getEducation())).containsExactly(1, 1);
         assertThat(s.isComplete()).isTrue();
         assertThat(s.getDirectCount()).isEqualTo(1);
     }
@@ -42,6 +43,11 @@ class FitScoreTest {
         FitScore missing = FitScore.of(position("경력 5년 이상"), eval("대졸 이상", "UNKNOWN", null), null, List.of());
         assertThat(List.of(missing.getCareer(), missing.getEducation())).containsExactly(0, 0);
         assertThat(FitScore.education(null)).as("학력 계산 실패").isZero();
+
+        // 학과 조건만 있어도 조건이 있는 것으로 본다
+        CareerEvalResult majorOnly = eval("", "NOT_MET", null);
+        majorOnly.setRequiredMajor("컴퓨터공학");
+        assertThat(FitScore.education(majorOnly)).isZero();
     }
 
     @Test

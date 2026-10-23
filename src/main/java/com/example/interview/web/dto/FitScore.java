@@ -10,8 +10,9 @@ import lombok.Value;
 
 /**
  * 지원자 비교용 점수 (사용자 규칙). AI가 매기지 않고, 이미 나온 충족 여부와 근거를 코드가 더한다.
- * 경력·학력: 충족 1, 미충족 0. 공고에 조건이 없으면 1. 이력서에 정보가 없으면 0. 연봉은 평가하지 않는다.
  * 평가항목마다: 직접 근거 1, 간접 근거 0.5, 근거 없음 0. 필수·우대 구분은 없다.
+ * 경력·학력은 점수에 넣지 않는다 (사용자, 2026-10-22). 충족 1·미충족 0으로만 들고 있어 지원자 비교의 표시와 미충족 제외에 쓴다.
+ * 공고에 조건이 없으면 1, 이력서에 정보가 없으면 0. 연봉은 평가하지 않는다.
  */
 @Value
 public class FitScore {
@@ -55,10 +56,14 @@ public class FitScore {
         if (eval == null) {
             return 0;
         }
-        if (eval.getRequiredEducation() == null || eval.getRequiredEducation().isBlank()) {
+        if (blank(eval.getRequiredEducation()) && blank(eval.getRequiredMajor())) {
             return 1;
         }
         return "MET".equals(eval.getEducationMeets()) ? 1 : 0;
+    }
+
+    private static boolean blank(String s) {
+        return s == null || s.isBlank();
     }
 
     static double points(EvidenceType match) {
@@ -70,16 +75,16 @@ public class FitScore {
     }
 
     public double getTotal() {
-        return career + education + items.stream().mapToDouble(Item::getPoints).sum();
+        return items.stream().mapToDouble(Item::getPoints).sum();
     }
 
     public int getMax() {
-        return 2 + items.size();
+        return items.size();
     }
 
     /** 0~100, 막대 폭 */
     public double getPercent() {
-        return Math.round(getTotal() / getMax() * 1000) / 10.0;
+        return getMax() == 0 ? 0 : Math.round(getTotal() / getMax() * 1000) / 10.0;
     }
 
     /** "8.5", "9" */

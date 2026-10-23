@@ -1,5 +1,7 @@
 package com.example.interview.controller;
 
+import java.time.LocalDate;
+import java.time.format.DateTimeParseException;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.LinkedHashMap;
@@ -25,6 +27,7 @@ import org.springframework.web.multipart.MultipartHttpServletRequest;
 import org.springframework.web.servlet.mvc.support.RedirectAttributes;
 
 import com.example.interview.ai.AiCallException;
+import com.example.interview.domain.Candidate;
 import com.example.interview.domain.EvalCriterion;
 import com.example.interview.domain.Position;
 import com.example.interview.domain.PositionImage;
@@ -33,8 +36,8 @@ import com.example.interview.resume.ResumeProcessingException;
 import com.example.interview.service.BatchCheckService;
 import com.example.interview.service.BusinessException;
 import com.example.interview.service.CandidateService;
-import com.example.interview.service.AutoAnswerService;
 import com.example.interview.service.ExtractionService;
+import com.example.interview.service.InterviewRecordService;
 import com.example.interview.service.OpinionService;
 import com.example.interview.service.PositionService;
 import com.example.interview.service.RankingService;
@@ -62,7 +65,6 @@ public class ExtractController {
     private final PositionService positionService;
     private final ExtractionService extractionService;
     private final OpinionService opinionService;
-    private final AutoAnswerService autoAnswerService;
     private final ReportService reportService;
     private final RankingService rankingService;
     private final BatchCheckService batchCheckService;
@@ -134,7 +136,8 @@ public class ExtractController {
     @PatchMapping("/positions/{id}/conditions")
     @ResponseBody
     public ResponseEntity<Void> updateConditions(@PathVariable Long id, @RequestBody Map<String, String> body) {
-        positionService.updateConditions(id, body.get("requiredExperience"), body.get("requiredEducation"));
+        positionService.updateConditions(id, body.get("requiredExperience"), body.get("requiredEducation"),
+                body.get("requiredMajor"));
         return ResponseEntity.noContent().build();
     }
 
@@ -219,6 +222,8 @@ public class ExtractController {
     public String result(@PathVariable Long id, Model model) {
         ResultReport r = reportService.report(id);
         model.addAttribute("r", r);
+        model.addAttribute("record", InterviewRecordService.parse(r.getCandidate().getRecordJson()));
+        model.addAttribute("hasReport", r.getCandidate().getReportJson() != null);
         addFit(model, r.getPosition().getId());
         return "fit";
     }
@@ -250,19 +255,6 @@ public class ExtractController {
         return "redirect:/results/" + id + "#extract";
     }
 
-    @PostMapping("/results/{id}/answers/auto")
-    public String autoFillAnswers(@PathVariable Long id, @RequestParam(required = false) String transcript,
-            @RequestParam(required = false) MultipartFile file, RedirectAttributes ra) {
-        AutoAnswerService.Filled result = autoAnswerService.fill(id, transcript, file);
-        String message = result.filled() == 0 && result.kept() == 0 ? "녹취록에서 질문지에 대한 답을 찾지 못했습니다."
-                : "답변 " + result.filled() + "개를 채웠습니다.";
-        if (result.kept() > 0) {
-            message += " 이미 답변이 있는 " + result.kept() + "개는 그대로 두었습니다.";
-        }
-        ra.addFlashAttribute("message", message);
-        return "redirect:/results/" + id + "#questions";
-    }
-
     @PostMapping("/results/{id}/opinion")
     public String askOpinion(@PathVariable Long id) {
         opinionService.ask(id);
@@ -279,6 +271,26 @@ public class ExtractController {
     @ResponseBody
     public Map<String, String> renameCandidate(@PathVariable Long id, @RequestBody Map<String, String> body) {
         return Map.of("name", candidateService.rename(id, body.get("name")));
+    }
+
+    /** 면접 기록: {"interviewed": true, "date": "2026-10-22" 또는 "", "decision": "PASS" | "FAIL" | ""} */
+    @PatchMapping("/results/{id}/interview")
+    @ResponseBody
+    public Map<String, Object> updateInterview(@PathVariable Long id, @RequestBody Map<String, Object> body) {
+        Object date = body.get("date");
+        LocalDate day;
+        try {
+            day = date == null || date.toString().isBlank() ? null : LocalDate.parse(date.toString());
+        } catch (DateTimeParseException e) {
+            throw new BusinessException("날짜 형식이 아닙니다.");
+        }
+        Candidate c = candidateService.updateInterview(id, Boolean.TRUE.equals(body.get("interviewed")), day,
+                body.get("decision") == null ? null : body.get("decision").toString());
+        Map<String, Object> m = new LinkedHashMap<>();
+        m.put("interviewed", c.isInterviewed());
+        m.put("date", c.getInterviewDate() == null ? "" : c.getInterviewDate().toString());
+        m.put("decision", c.getDecision() == null ? "" : c.getDecision());
+        return m;
     }
 
     @PostMapping("/results/{id}/delete")
@@ -330,6 +342,14 @@ public class ExtractController {
     public ResponseEntity<Void> checkQuestion(@PathVariable Long id, @PathVariable Long questionId,
             @RequestParam boolean checked) {
         extractionService.checkQuestion(id, questionId, checked);
+        return ResponseEntity.noContent().build();
+    }
+
+    @PostMapping("/results/{id}/questions/{questionId}/must-ask")
+    @ResponseBody
+    public ResponseEntity<Void> markMustAsk(@PathVariable Long id, @PathVariable Long questionId,
+            @RequestParam boolean mustAsk) {
+        extractionService.markMustAsk(id, questionId, mustAsk);
         return ResponseEntity.noContent().build();
     }
 

@@ -204,9 +204,7 @@ public class PiiExtract {
         for (Course c : trainings) {
             add(out, Type.TRAINING, c.getName(), c.getInstitution(), c.getPeriod());
         }
-        for (License l : certificates) {
-            add(out, Type.CERTIFICATE, l.getName(), l.getIssuer(), l.getDate());
-        }
+        // 자격증은 가리지 않는다: 근거 분석(GPT)이 자격증과 정보처리기사·SQLD 보유 여부를 읽는다 (사용자, 2026-10-22)
         for (Activity a : activities) {
             if (toActivity(a).isMilitary()) {
                 add(out, Type.SENSITIVE, a.getName(), a.getPeriod());

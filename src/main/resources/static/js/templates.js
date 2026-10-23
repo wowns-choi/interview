@@ -114,6 +114,14 @@
         value: content.textContent, multiline: true,
         onSave: function (v) { return api('PATCH', '/questions/' + q.dataset.id, { content: v }).then(function () { toast('저장했습니다'); }); }
       });
+    } else if (btn.classList.contains('js-must')) {
+      if (!q.dataset.id) return;
+      var on = !btn.classList.contains('is-on');
+      btn.classList.toggle('is-on', on);
+      btn.setAttribute('aria-pressed', on);
+      api('PUT', '/questions/' + q.dataset.id + '/must-ask', { mustAsk: on })
+        .then(function () { toast(on ? '필수 질문으로 정했습니다' : '필수 질문에서 뺐습니다'); },
+          function () { btn.classList.toggle('is-on', !on); btn.setAttribute('aria-pressed', !on); });
     } else if (btn.classList.contains('js-del')) {
       api('DELETE', '/questions/' + q.dataset.id).then(function () { q.remove(); refreshCounts(); toast('질문을 삭제했습니다'); });
     } else if (btn.classList.contains('js-add-q')) {

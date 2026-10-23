@@ -1,5 +1,6 @@
 package com.example.interview.mapper;
 
+import java.time.LocalDate;
 import java.util.List;
 
 import org.apache.ibatis.annotations.Mapper;
@@ -23,7 +24,14 @@ public interface CandidateMapper {
 
     void rename(@Param("id") Long id, @Param("displayName") String displayName);
 
+    void updateInterview(@Param("id") Long id, @Param("interviewed") boolean interviewed,
+            @Param("interviewDate") LocalDate interviewDate, @Param("decision") String decision);
+
     void updateOpinion(@Param("id") Long id, @Param("opinionJson") String opinionJson);
+
+    void updateRecord(@Param("id") Long id, @Param("transcript") String transcript, @Param("recordJson") String recordJson);
+
+    void updateReport(@Param("id") Long id, @Param("reportJson") String reportJson);
 
     void updateCareerEval(@Param("id") Long id, @Param("careerEvalJson") String careerEvalJson);
 

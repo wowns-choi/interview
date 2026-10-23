@@ -25,5 +25,7 @@ public interface QuestionTemplateMapper {
 
     void updatePlacement(@Param("id") Long id, @Param("sectionId") Long sectionId, @Param("sortOrder") int sortOrder);
 
+    void updateMustAsk(@Param("id") Long id, @Param("mustAsk") boolean mustAsk);
+
     void delete(Long id);
 }

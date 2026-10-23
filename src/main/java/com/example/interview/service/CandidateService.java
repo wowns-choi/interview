@@ -1,5 +1,7 @@
 package com.example.interview.service;
 
+import java.time.LocalDate;
+
 import org.springframework.stereotype.Service;
 
 import com.example.interview.domain.Candidate;
@@ -50,6 +52,27 @@ public class CandidateService {
         name = name.length() > 50 ? name.substring(0, 50) : name;
         candidateMapper.rename(id, name);
         return name;
+    }
+
+    /**
+     * 면접 기록을 저장한다. 날짜나 합격·불합격을 정하면 면접을 본 것으로 본다.
+     * 합격·불합격은 면접관이 정한다 (AI는 정하지 않는다).
+     *
+     * @param decision PASS, FAIL 또는 null(정하지 않음)
+     * @return 저장한 값
+     */
+    public Candidate updateInterview(Long id, boolean interviewed, LocalDate interviewDate, String decision) {
+        Candidate c = get(id);
+        String d = decision == null || decision.isBlank() ? null : decision.strip();
+        if (d != null && !d.equals("PASS") && !d.equals("FAIL")) {
+            throw new BusinessException("합격 또는 불합격만 고를 수 있습니다.");
+        }
+        boolean done = interviewed || interviewDate != null || d != null;
+        candidateMapper.updateInterview(id, done, interviewDate, d);
+        c.setInterviewed(done);
+        c.setInterviewDate(interviewDate);
+        c.setDecision(d);
+        return c;
     }
 
     /** 마스킹된 이력서 텍스트만 저장한다. PDF 파일과 마스킹 전 원문은 저장하지 않는다. */

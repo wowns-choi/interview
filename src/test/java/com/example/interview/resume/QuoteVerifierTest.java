@@ -39,4 +39,11 @@ class QuoteVerifierTest {
         assertThat(verifier.verify("   ", resume)).isFalse();
         assertThat(verifier.verify("Redis", null)).isFalse();
     }
+
+    @Test
+    void ignoresAllWhitespace() {
+        String text = "DB 저장과 카프카에 이\n벤트 발행하는 것을 원자적으로";
+        assertThat(new QuoteVerifier().verify("카프카에 이벤트 발행하는 것을", text)).isTrue();
+        assertThat(new QuoteVerifier().verify("카프카에 이 벤트 발행", "카프카에이벤트발행")).isTrue();
+    }
 }

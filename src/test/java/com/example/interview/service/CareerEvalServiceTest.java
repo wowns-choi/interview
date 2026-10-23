@@ -14,13 +14,20 @@ class CareerEvalServiceTest {
 
     @Test
     void educationCallSendsSchoolsAndConditionOnly() {
-        assertThat(CareerEvalService.educationContent("초대졸 이상", profile())).isEqualTo("""
+        assertThat(CareerEvalService.educationContent("초대졸 이상", "", profile())).isEqualTo("""
                 <education_requirement>초대졸 이상</education_requirement>
 
                 <schools>
                 한결대학교 | 중퇴 | 2013.03~2020.03
                 </schools>""");
-        assertThat(CareerEvalService.educationContent("", profile())).doesNotContain("<education_requirement>");
+        assertThat(CareerEvalService.educationContent("", "", profile())).doesNotContain("<education_requirement>");
+        // 요구 학과가 있을 때만 전공을 보낸다
+        assertThat(CareerEvalService.educationContent("", "컴퓨터공학", profile())).isEqualTo("""
+                <major_requirement>컴퓨터공학</major_requirement>
+
+                <schools>
+                한결대학교 | 시각디자인 | 중퇴 | 2013.03~2020.03
+                </schools>""");
     }
 
     @Test

@@ -32,4 +32,6 @@ public class InterviewQuestion {
     private boolean checked;
     /** 공통 질문과 합쳐 질문지에 들어갔는지. false면 추출만 해 둔 질문 */
     private boolean merged = true;
+    /** 필수 질문 ("필수질문 체크"에서 물었는지 확인). 공통 질문은 설정에서 복사되고, 질문지에서 바꿀 수 있다 */
+    private boolean mustAsk;
 }

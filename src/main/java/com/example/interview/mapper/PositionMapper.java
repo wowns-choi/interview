@@ -24,10 +24,12 @@ public interface PositionMapper {
     void updateImageText(@Param("id") Long id, @Param("imageText") String imageText);
 
     void updateHiring(@Param("id") Long id,
-            @Param("requiredExperience") String requiredExperience, @Param("requiredEducation") String requiredEducation);
+            @Param("requiredExperience") String requiredExperience, @Param("requiredEducation") String requiredEducation,
+            @Param("requiredMajor") String requiredMajor);
 
     void updateConditions(@Param("id") Long id,
-            @Param("requiredExperience") String requiredExperience, @Param("requiredEducation") String requiredEducation);
+            @Param("requiredExperience") String requiredExperience, @Param("requiredEducation") String requiredEducation,
+            @Param("requiredMajor") String requiredMajor);
 
     void updateStatus(@Param("id") Long id, @Param("status") PositionStatus status);
 

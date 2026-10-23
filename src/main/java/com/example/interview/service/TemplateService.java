@@ -12,6 +12,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import com.example.interview.domain.QuestionSection;
 import com.example.interview.domain.QuestionTemplate;
+import com.example.interview.mapper.InterviewQuestionMapper;
 import com.example.interview.mapper.QuestionSectionMapper;
 import com.example.interview.mapper.QuestionTemplateMapper;
 import com.example.interview.web.dto.SectionBoard;
@@ -28,6 +29,7 @@ public class TemplateService {
 
     private final QuestionSectionMapper sectionMapper;
     private final QuestionTemplateMapper templateMapper;
+    private final InterviewQuestionMapper questionMapper;
 
     /** 섹션 순서대로, 각 섹션의 질문을 순서대로 */
     public List<SectionBoard> board() {
@@ -80,6 +82,13 @@ public class TemplateService {
     public void updateQuestion(Long id, String content) {
         question(id);
         templateMapper.updateContent(id, content(content));
+    }
+
+    @Transactional
+    public void setMustAsk(Long id, boolean mustAsk) {
+        question(id);
+        templateMapper.updateMustAsk(id, mustAsk);
+        questionMapper.updateMustAskByTemplate(id, mustAsk);
     }
 
     @Transactional

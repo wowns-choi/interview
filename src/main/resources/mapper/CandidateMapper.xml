@@ -7,7 +7,7 @@
     </select>
 
     <select id="findByPositionId" resultType="com.example.interview.web.dto.ExtractionSummary">
-        SELECT c.id AS candidate_id, c.display_name, c.status, c.created_at, p.title AS position_title
+        SELECT c.id AS candidate_id, c.display_name, c.status, c.created_at, c.interviewed, c.interview_date, c.decision, p.title AS position_title
         FROM candidate c
         JOIN position p ON p.id = c.position_id
         WHERE c.position_id = #{positionId}
@@ -31,12 +31,24 @@
         UPDATE candidate SET opinion_json = #{opinionJson} WHERE id = #{id}
     </update>
 
+    <update id="updateRecord">
+        UPDATE candidate SET transcript = #{transcript}, record_json = #{recordJson} WHERE id = #{id}
+    </update>
+
+    <update id="updateReport">
+        UPDATE candidate SET report_json = #{reportJson} WHERE id = #{id}
+    </update>
+
     <update id="updateCareerEval">
         UPDATE candidate SET career_eval_json = #{careerEvalJson} WHERE id = #{id}
     </update>
 
     <update id="updateStatus">
         UPDATE candidate SET status = #{status}, error_message = #{errorMessage} WHERE id = #{id}
+    </update>
+
+    <update id="updateInterview">
+        UPDATE candidate SET interviewed = #{interviewed}, interview_date = #{interviewDate}, decision = #{decision} WHERE id = #{id}
     </update>
 
     <update id="rename">

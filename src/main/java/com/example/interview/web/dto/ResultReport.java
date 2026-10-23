@@ -97,6 +97,6 @@ public class ResultReport {
     }
 
     private long countMatch(EvidenceType type) {
-        return criteria.stream().filter(c -> c.getMatch() == type).count();
+        return criteria.stream().filter(c -> c.isChecked() && c.getMatch() == type).count();
     }
 }

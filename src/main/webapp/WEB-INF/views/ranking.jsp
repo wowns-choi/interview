@@ -21,6 +21,12 @@
       <div class="rk-top" id="rk" data-base="<c:url value='/positions/${position.id}'/>">
         <label class="switch"><input type="checkbox" data-rk-exclude="career" ${position.excludeCareer ? 'checked' : ''}><span class="switch-track"></span>경력 미충족 제외</label>
         <label class="switch"><input type="checkbox" data-rk-exclude="education" ${position.excludeEducation ? 'checked' : ''}><span class="switch-track"></span>학력 미충족 제외</label>
+        <span class="rk-sep"></span>
+        <label class="switch"><input type="checkbox" data-rk-filter="interviewed"><span class="switch-track"></span>면접 본 사람만</label>
+        <label class="switch"><input type="checkbox" data-rk-filter="passed"><span class="switch-track"></span>합격한 사람만</label>
+        <span class="rk-sep"></span>
+        <label class="switch"><input type="checkbox" data-rk-filter="engineer"><span class="switch-track"></span>정보처리기사 있음</label>
+        <label class="switch"><input type="checkbox" data-rk-filter="sqld"><span class="switch-track"></span>SQLD 있음</label>
         <div class="rk-legend">
           <span><i class="rk-sq ev-DIRECT"></i>직접 1</span>
           <span><i class="rk-sq ev-INDIRECT"></i>간접 0.5</span>
@@ -36,7 +42,7 @@
             <tr>
               <th class="rk-no"></th>
               <th class="rk-name">지원자</th>
-              <th class="rk-total">점수</th>
+              <th class="rk-total">평가항목충족</th>
               <th class="rk-cnd">경력</th>
               <th class="rk-cnd">학력</th>
               <c:forEach var="c" items="${criteria}" varStatus="cs"><th class="rk-c${cs.first ? ' rk-first' : ''}${cs.last ? ' rk-last' : ''}" title="<c:out value='${c.name}'/>">${cs.count}</th></c:forEach>
@@ -55,9 +61,9 @@
                 </c:choose>
               </c:if>
               <c:set var="s" value="${row.score}"/>
-              <tr class="rk-row is-${row.state}"${row.state == 'EXCLUDED' ? ' hidden' : ''} data-href="<c:url value='/results/${row.candidateId}'/>">
+              <tr class="rk-row is-${row.state}"${row.state == 'EXCLUDED' ? ' hidden' : ''} data-interviewed="${row.interviewed}" data-decision="${row.decision}" data-engineer="${row.infoEngineer}" data-sqld="${row.sqld}" data-href="<c:url value='/results/${row.candidateId}'/>">
                 <td class="rk-no">${empty row.rank ? '' : row.rank}</td>
-                <td class="rk-name"><a href="<c:url value='/results/${row.candidateId}'/>"><c:out value="${row.displayName}"/></a><c:if test="${not empty row.exclusion}"><small class="rk-why">${row.exclusion}</small></c:if></td>
+                <td class="rk-name"><a href="<c:url value='/results/${row.candidateId}'/>"><c:out value="${row.displayName}"/></a><c:if test="${not empty row.exclusion}"><small class="rk-why">${row.exclusion}</small></c:if><c:if test="${row.infoEngineer}"><span class="rk-cert">정보처리기사</span></c:if><c:if test="${row.sqld}"><span class="rk-cert">SQLD</span></c:if><c:if test="${row.interviewed}"><span class="rk-iv">면접<c:if test="${not empty row.interviewDate}"> ${row.interviewDate.monthValue}.${row.interviewDate.dayOfMonth}</c:if></span></c:if><c:if test="${not empty row.decision}"><span class="rk-dec is-${row.decision}">${row.decision == 'PASS' ? '합격' : '불합격'}</span></c:if></td>
                 <c:choose>
                   <c:when test="${empty s}">
                     <td class="rk-total"><span class="muted">${row.statusLabel}</span></td>

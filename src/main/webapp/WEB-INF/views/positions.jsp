@@ -87,6 +87,7 @@
                 data-edu="${conds.eduLevel}">
               <div><dt>요구 경력</dt><dd data-key="requiredExperience"><c:out value="${position.requiredExperience}"/></dd></div>
               <div><dt>학력</dt><dd data-key="requiredEducation"><c:out value="${position.requiredEducation}"/></dd></div>
+              <div><dt>학과</dt><dd data-key="requiredMajor"><c:out value="${position.requiredMajor}"/></dd></div>
               <button type="button" class="icon-btn conds-edit" id="conds-edit" title="조건 고치기"><svg class="i"><use href="#i-pencil"/></svg></button>
             </dl>
             <ul class="crit-list" id="crit-list">

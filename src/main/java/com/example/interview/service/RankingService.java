@@ -56,15 +56,19 @@ public class RankingService {
                     evidenceMapper.findByCandidateId(c.getId()));
             FitScore score = null;
             Integer relevant = null;
+            CareerEvalResult eval = CareerEvalService.parse(c.getCareerEvalJson());
+            CareerEvalResult.Certificates certs = eval == null ? null : eval.getCertificates();
             if (views.stream().anyMatch(CriterionEvidenceView::isChecked)) {
                 CandidateProfile profile = ReportService.parseProfile(c.getProfileJson());
-                CareerEvalResult eval = CareerEvalService.parse(c.getCareerEvalJson());
                 CareerGauge gauge = CareerGauge.of(profile, position.getRequiredExperience(), eval);
                 score = FitScore.of(position, eval, gauge, views);
                 relevant = eval == null ? null : eval.getRelevantMonths();
             }
             RankingRow row = new RankingRow(s.getCandidateId(), s.getDisplayName(), s.getStatus(), s.getCreatedAt(),
-                    score, null, exclusion(position, score), relevant);
+                    score, null, exclusion(position, score), relevant,
+                    s.isInterviewed(), s.getInterviewDate(), s.getDecision(),
+                    certs != null && Boolean.TRUE.equals(certs.getInfoEngineer()),
+                    certs != null && Boolean.TRUE.equals(certs.getSqld()));
             switch (row.getState()) {
                 case "RANKED" -> ranked.add(row);
                 case "EXCLUDED" -> excluded.add(row);
@@ -79,7 +83,8 @@ public class RankingService {
         for (int i = 0; i < ranked.size(); i++) {
             RankingRow r = ranked.get(i);
             out.add(new RankingRow(r.getCandidateId(), r.getDisplayName(), r.getStatus(), r.getCreatedAt(),
-                    r.getScore(), i + 1, null, r.getRelevantMonths()));
+                    r.getScore(), i + 1, null, r.getRelevantMonths(), r.isInterviewed(), r.getInterviewDate(), r.getDecision(),
+                    r.isInfoEngineer(), r.isSqld()));
         }
         out.addAll(excluded);
         out.addAll(stale);

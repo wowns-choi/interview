@@ -46,10 +46,12 @@ public class CareerEvalService {
     /** 최종 학력과 학력 조건 충족 여부. 학교가 없으면 묻지 않는다. 실패하면 null */
     public CareerEvalResult education(Candidate candidate) {
         CandidateProfile profile = ReportService.parseProfile(candidate.getProfileJson());
-        String required = positionService.get(candidate.getPositionId()).getRequiredEducation();
-        required = required == null ? "" : required.strip();
+        Position position = positionService.get(candidate.getPositionId());
+        String required = position.getRequiredEducation() == null ? "" : position.getRequiredEducation().strip();
+        String major = position.getRequiredMajor() == null ? "" : position.getRequiredMajor().strip();
         CareerEvalResult r = new CareerEvalResult();
         r.setRequiredEducation(required);
+        r.setRequiredMajor(major);
         if (profile == null || profile.getEducation().isEmpty()) {
             r.setFinalEducation("");
             r.setEducationReason("");
@@ -58,11 +60,11 @@ public class CareerEvalService {
         }
         try {
             EducationResult e = aiClient.call(AiPurpose.EDUCATION_EVAL, candidate.getId(), promptLoader.load("education_eval"),
-                    educationContent(required, profile), EducationResult.class, EducationResult::validate);
+                    educationContent(required, major, profile), EducationResult.class, EducationResult::validate);
             r.setFinalEducation(e.getFinalEducation());
             r.setEducationReason(e.getEducationReason());
             // 조건이 없으면 AI 답과 상관없이 판단하지 않는다
-            r.setEducationMeets(required.isEmpty() ? "UNKNOWN" : e.getEducationMeets());
+            r.setEducationMeets(required.isEmpty() && major.isEmpty() ? "UNKNOWN" : e.getEducationMeets());
             return r;
         } catch (RuntimeException e) {
             log.warn("학력 판단 실패 candidateId={}: {}", candidate.getId(), e.getMessage());
@@ -104,6 +106,7 @@ public class CareerEvalService {
             r.setFinalEducation(education.getFinalEducation());
             r.setEducationReason(education.getEducationReason());
             r.setRequiredEducation(education.getRequiredEducation());
+            r.setRequiredMajor(education.getRequiredMajor());
             r.setEducationMeets(education.getEducationMeets());
         }
         if (timeline != null) {
@@ -115,14 +118,22 @@ public class CareerEvalService {
         candidateMapper.updateCareerEval(candidate.getId(), JSON.writeValueAsString(r));
     }
 
-    static String educationContent(String required, CandidateProfile profile) {
+    /** "학교명 | 상태 | 기간". 요구 학과가 있을 때만 전공도 보낸다: "학교명 | 전공 | 상태 | 기간" */
+    static String educationContent(String required, String major, CandidateProfile profile) {
         StringBuilder sb = new StringBuilder();
         if (!required.isEmpty()) {
             sb.append("<education_requirement>").append(required).append("</education_requirement>\n\n");
         }
+        if (!major.isEmpty()) {
+            sb.append("<major_requirement>").append(major).append("</major_requirement>\n\n");
+        }
         sb.append("<schools>\n");
         for (CandidateProfile.Education e : profile.getEducation()) {
-            sb.append(e.getSchool()).append(" | ").append(e.getStatus()).append(" | ").append(e.getPeriod()).append("\n");
+            sb.append(e.getSchool()).append(" | ");
+            if (!major.isEmpty()) {
+                sb.append(e.getMajor()).append(" | ");
+            }
+            sb.append(e.getStatus()).append(" | ").append(e.getPeriod()).append("\n");
         }
         return sb.append("</schools>").toString();
     }

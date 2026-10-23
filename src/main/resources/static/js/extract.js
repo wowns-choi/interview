@@ -360,6 +360,13 @@
       document.querySelectorAll('.side-pos > a').forEach(function (a) {
         if (a.getAttribute('href') === url) a.querySelector('strong').textContent = name;
       });
+      var candList = document.getElementById('cand-list');
+      if (candList) {
+        Array.prototype.forEach.call(candList.options, function (o) {
+          if (o.value === url) o.textContent = name + ' · ' + o.getAttribute('data-tail');
+        });
+        candList.dispatchEvent(new Event('refit'));
+      }
       if (title && url === positionBase) {
         title.textContent = name;
         document.title = name;
@@ -394,13 +401,21 @@
       titleBtn.addEventListener('click', editTitle);
       title.addEventListener('click', editTitle);
     }
-    // 진행 상황을 새로 그린 목록에서도 동작하도록 위임
+    // 포지션 목록의 이름 (평가 항목 추출 탭)
     document.addEventListener('click', function (e) {
       var btn = e.target.closest('.side-rename');
       if (!btn) return;
       var a = btn.closest('.side-pos').querySelector('a');
       rename(a, btn, a.getAttribute('href'), a.querySelector('strong').textContent, '');
     });
+    // 지원자 이름 (적합도 검사 탭의 제목)
+    var candTitle = document.getElementById('cand-title');
+    var candBtn = document.getElementById('cand-rename');
+    if (candTitle && candBtn && resultBase) {
+      candBtn.addEventListener('click', function () {
+        rename(candTitle, candBtn, resultBase, candTitle.textContent, 'title-input');
+      });
+    }
   }
 
   // ── 경력·학력 조건 고치기: 드롭다운으로 고르고, 정해진 문장으로 저장한다 ──
@@ -443,6 +458,12 @@
       sync();
       dd.requiredExperience.replaceChildren(exp);
       dd.requiredEducation.replaceChildren(form.edu);
+      form.major = document.createElement('input');
+      form.major.type = 'text';
+      form.major.className = 'inline-edit';
+      form.major.placeholder = '예: 컴퓨터공학 등 관련 학과';
+      form.major.value = before.requiredMajor;
+      dd.requiredMajor.replaceChildren(form.major);
 
       var actions = document.createElement('div');
       actions.className = 'conds-actions';
@@ -468,10 +489,11 @@
       var eduLabel = EDU.filter(function (o) { return o[0] === form.edu.value; })[0];
       var edu = form.edu.value ? eduLabel[1] : '';
       var state = { expKind: kind, expYears: kind === 'MIN' || kind === 'MAX' ? form.expYears.value : '', edu: form.edu.value };
-      api('PATCH', positionBase + '/conditions', { requiredExperience: exp, requiredEducation: edu })
+      var major = form.major.value.trim();
+      api('PATCH', positionBase + '/conditions', { requiredExperience: exp, requiredEducation: edu, requiredMajor: major })
         .then(function () {
           Object.keys(state).forEach(function (k) { dl.dataset[k] = state[k]; });
-          close({ requiredExperience: exp, requiredEducation: edu });
+          close({ requiredExperience: exp, requiredEducation: edu, requiredMajor: major });
           toast('저장했습니다');
         }, function () {});
     }
@@ -578,7 +600,55 @@
         }).then(function (res) {
           if (!res.ok) throw new Error();
         }).catch(function () { setChecked(row, !checked); toast('저장하지 못했습니다'); });
+      } else if (btn.classList.contains('js-q-must') && row.dataset.id) {
+        var must = !row.classList.contains('is-must');
+        setMust(row, must);
+        fetch(resultBase + '/questions/' + row.dataset.id + '/must-ask', {
+          method: 'POST',
+          headers: { 'X-Requested-With': 'fetch' },
+          body: new URLSearchParams({ mustAsk: must })
+        }).then(function (res) {
+          if (!res.ok) throw new Error();
+        }).catch(function () { setMust(row, !must); toast('저장하지 못했습니다'); });
       }
+    }
+
+    function setMust(row, must) {
+      row.classList.toggle('is-must', must);
+      row.classList.remove('is-missing');
+      var b = row.querySelector('.js-q-must');
+      b.classList.toggle('is-on', must);
+      b.setAttribute('aria-pressed', must);
+    }
+
+    // 필수질문 체크: 필수 질문 중 번호를 체크하지 않은 것을 알려 주고 그 질문으로 간다
+    var mustCheck = document.getElementById('must-check');
+    if (mustCheck) {
+      var mustResult = document.getElementById('must-result');
+      mustCheck.addEventListener('click', function () {
+        var rows = Array.prototype.slice.call(board.querySelectorAll('.q-row'));
+        var missing = [];
+        var total = 0;
+        rows.forEach(function (row, i) {
+          row.classList.remove('is-missing');
+          if (!row.classList.contains('is-must')) return;
+          total++;
+          if (!row.classList.contains('is-checked')) {
+            row.classList.add('is-missing');
+            missing.push({ no: i + 1, row: row });
+          }
+        });
+        mustResult.hidden = false;
+        mustResult.classList.toggle('is-bad', missing.length > 0);
+        if (!total) {
+          mustResult.textContent = '필수 질문이 없습니다.';
+        } else if (!missing.length) {
+          mustResult.textContent = '필수 질문 ' + total + '개를 모두 물었습니다.';
+        } else {
+          mustResult.textContent = '아직 묻지 않은 필수 질문: ' + missing.map(function (m) { return m.no + '번'; }).join(', ');
+          missing[0].row.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }
+      });
     }
 
     // 추출한 질문: 다 지우면 합치기 버튼도 필요 없으니 새로 그린다
@@ -595,6 +665,7 @@
 
     function setChecked(row, checked) {
       row.classList.toggle('is-checked', checked);
+      if (checked) row.classList.remove('is-missing');
       row.querySelector('.js-q-check').setAttribute('aria-pressed', checked);
     }
 
@@ -689,7 +760,7 @@
   }
 })();
 
-// ── 자동 답변 채우기: 녹취록 입력 칸 열고 닫기, 고른 파일 이름 ──
+// ── 면접 질문지 탭(질문지 / 면접 기록), 입력 칸 열고 닫기, 고른 파일 이름 ──
 (function () {
   document.addEventListener('click', function (e) {
     var btn = e.target.closest('[data-open]');
@@ -702,10 +773,31 @@
       if (ta) ta.focus();
     }
   });
-  var panel = document.getElementById('aa-panel');
-  if (!panel) return;
-  var file = panel.querySelector('input[type=file]');
+
+  var tabs = document.querySelectorAll('[data-qtab]');
+  if (tabs.length) {
+    var showTab = function (name) {
+      tabs.forEach(function (t) { t.setAttribute('aria-selected', t.getAttribute('data-qtab') === name); });
+      document.querySelectorAll('[data-qpane]').forEach(function (p) { p.hidden = p.getAttribute('data-qpane') !== name; });
+      if (window.autosize) document.querySelectorAll('[data-qpane="' + name + '"] textarea.answer').forEach(window.autosize);
+      try { localStorage.setItem('qTab', name); } catch (err) { /* 무시 */ }
+    };
+    tabs.forEach(function (t) {
+      t.addEventListener('click', function () { showTab(t.getAttribute('data-qtab')); });
+    });
+    var start = 'sheet';
+    try { start = localStorage.getItem('qTab') || 'sheet'; } catch (err) { /* 무시 */ }
+    if (location.hash === '#record') start = 'record';
+    showTab(start === 'record' ? 'record' : 'sheet');
+    if (location.hash === '#record') document.getElementById('questions').scrollIntoView();
+  }
+
+  var form = document.getElementById('rec-form');
+  if (!form) return;
+  var file = form.querySelector('input[type=file]');
   file.addEventListener('change', function () {
-    panel.querySelector('.aa-name').textContent = file.files.length ? file.files[0].name : '';
+    form.querySelector('.aa-name').textContent = file.files.length ? file.files[0].name : '';
+    // 파일을 고르면 붙여넣은 글 대신 파일로 만든다
+    if (file.files.length) form.querySelector('textarea').value = '';
   });
 })();

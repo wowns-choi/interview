@@ -6,6 +6,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import java.io.ByteArrayOutputStream;
 
 import org.apache.poi.sl.usermodel.Placeholder;
+import org.apache.poi.hslf.usermodel.HSLFSlideShow;
 import org.apache.poi.xslf.usermodel.XMLSlideShow;
 import org.apache.poi.xslf.usermodel.XSLFNotes;
 import org.apache.poi.xslf.usermodel.XSLFSlide;
@@ -96,9 +97,38 @@ class DocumentTextExtractorTest {
     }
 
     @Test
+    void readsOldPptSlides() throws Exception {
+        byte[] bytes;
+        try (HSLFSlideShow show = new HSLFSlideShow(); ByteArrayOutputStream out = new ByteArrayOutputStream()) {
+            show.createSlide().addTitle().setText("정산 배치 개선 프로젝트");
+            show.write(out);
+            bytes = out.toByteArray();
+        }
+
+        DocumentTextExtractor.Extracted result = extractor.extract("포트폴리오.ppt", bytes);
+
+        assertThat(result.kind()).isEqualTo(Kind.PPT);
+        assertThat(result.text()).contains("[슬라이드 1]", "정산 배치 개선 프로젝트");
+    }
+
+    @Test
+    void readsJobSiteHtmlSavedAsDoc() {
+        String html = "<html><head><meta charset=\"utf-8\"><style>td{color:red}</style></head><body>"
+                + "<h1>이력서</h1><table><tr><th>기술</th><td>Spring Batch</td></tr><tr><th>기간</th><td>2024.08 ~ 재직중</td></tr></table>"
+                + "<p>정산 배치 개선<br>p95 320ms</p></body></html>";
+
+        DocumentTextExtractor.Extracted result = extractor.extract("사람인_이력서.doc", html.getBytes(java.nio.charset.StandardCharsets.UTF_8));
+
+        assertThat(result.kind()).isEqualTo(Kind.DOC);
+        assertThat(result.text()).contains("이력서", "기술 | Spring Batch\n기간 | 2024.08 ~ 재직중", "정산 배치 개선\np95 320ms")
+                .doesNotContain("color");
+    }
+
+    @Test
     void rejectsUnsupportedOrEmptyFiles() throws Exception {
-        assertThatThrownBy(() -> extractor.extract("old.ppt", new byte[] { 1 }))
-                .isInstanceOf(ResumeProcessingException.class).hasMessageContaining(".pptx로 다시 저장");
+        assertThat(DocumentTextExtractor.kindOf("이력서.DOC")).isEqualTo(Kind.DOC);
+        assertThatThrownBy(() -> extractor.extract("broken.doc", new byte[] { 1, 2, 3 }))
+                .isInstanceOf(ResumeProcessingException.class).hasMessageContaining("broken.doc", "읽을 수 없습니다");
         assertThatThrownBy(() -> extractor.extract("memo.txt", new byte[] { 1 }))
                 .isInstanceOf(ResumeProcessingException.class).hasMessageContaining("memo.txt");
         assertThatThrownBy(() -> extractor.extract("broken.docx", new byte[] { 1, 2, 3 }))

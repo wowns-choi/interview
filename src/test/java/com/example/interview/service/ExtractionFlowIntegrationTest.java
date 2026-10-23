@@ -14,6 +14,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import java.util.List;
+import java.util.Set;
 
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -24,7 +25,9 @@ import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import com.example.interview.ai.AiCallException;
 import com.example.interview.ai.AiClient;
 import com.example.interview.ai.dto.ArrangeResult;
-import com.example.interview.ai.dto.AutoAnswerResult;
+import com.example.interview.ai.dto.InterviewRecordResult;
+import com.example.interview.ai.dto.ReportInfoResult;
+import com.example.interview.ai.dto.ReportSortResult;
 import com.example.interview.ai.dto.CareerEvalResult;
 import com.example.interview.ai.dto.CriteriaResult;
 import com.example.interview.ai.dto.EvidenceResult;
@@ -40,6 +43,9 @@ import com.example.interview.domain.CandidateProfile;
 import com.example.interview.domain.CandidateStatus;
 import com.example.interview.domain.EvidenceType;
 import com.example.interview.domain.InterviewQuestion;
+import com.example.interview.domain.InterviewRecord;
+import com.example.interview.domain.InterviewReport;
+import com.example.interview.domain.QaItem;
 import com.example.interview.domain.QuestionOrigin;
 import com.example.interview.domain.QuestionTemplate;
 import com.example.interview.domain.QuestionType;
@@ -79,7 +85,9 @@ public class ExtractionFlowIntegrationTest {
     @Autowired
     OpinionService opinionService;
     @Autowired
-    AutoAnswerService autoAnswerService;
+    InterviewRecordService interviewRecordService;
+    @Autowired
+    InterviewReportService interviewReportService;
     @Autowired
     RankingService rankingService;
     @Autowired
@@ -90,6 +98,8 @@ public class ExtractionFlowIntegrationTest {
     PositionService positionService;
     @Autowired
     QuestionTemplateMapper templateMapper;
+    @Autowired
+    TemplateService templateService;
     @Autowired
     QuestionSectionMapper sectionMapper;
 
@@ -128,6 +138,8 @@ public class ExtractionFlowIntegrationTest {
         // 총·관련 경력은 근거 분석 호출에서, 타임라인은 학력 호출에서
         assertThat(checked.getCareerEval()).extracting("totalMonths", "relevantMonths", "educationMeets")
                 .containsExactly(35, 30, "UNKNOWN");
+        assertThat(checked.getCareerEval().getCertificates()).as("자격증은 근거 분석 호출에서")
+                .extracting("infoEngineer", "sqld").containsExactly(true, false);
         assertThat(checked.getTimeline()).isNotNull();
 
         // 질문 추출은 "추출한 질문"에 쌓이기만 하고, 합치기를 눌러야 질문지가 된다
@@ -136,7 +148,14 @@ public class ExtractionFlowIntegrationTest {
         assertThat(pooled.getSections()).isEmpty();
         assertThat(pooled.getExtracted()).extracting(SectionView::getSection).containsExactly("거짓말 판독기");
         assertThat(candidateService.get(id).getStatus()).isEqualTo(CandidateStatus.ANALYZED);
-        extractionService.mergeQuestions(id);
+        // 공통 질문 설정의 필수 표시는 질문지에 복사된다
+        Long mustTemplate = templateMapper.findActive().get(0).getId();
+        templateMapper.updateMustAsk(mustTemplate, true);
+        try {
+            extractionService.mergeQuestions(id);
+        } finally {
+            templateMapper.updateMustAsk(mustTemplate, false);
+        }
         assertThat(reportService.report(id).getExtracted()).isEmpty();
         candidate = candidateService.get(id);
         assertThat(candidate.getStatus()).isEqualTo(CandidateStatus.DONE);
@@ -153,6 +172,20 @@ public class ExtractionFlowIntegrationTest {
 
         List<InterviewQuestion> all = r.getSections().stream().flatMap(s -> s.getQuestions().stream())
                 .map(QuestionView::getQuestion).toList();
+        assertThat(all).filteredOn(InterviewQuestion::isMustAsk).extracting(InterviewQuestion::getTemplateId)
+                .containsExactly(mustTemplate);
+        // 질문지에서도 필수로 정하거나 풀 수 있다
+        InterviewQuestion firstCustom = all.stream().filter(q -> q.getOrigin() == QuestionOrigin.CUSTOM).findFirst().orElseThrow();
+        extractionService.markMustAsk(id, firstCustom.getId(), true);
+        assertThat(reportService.report(id).getSections().stream().flatMap(s -> s.getQuestions().stream())
+                .map(QuestionView::getQuestion).filter(InterviewQuestion::isMustAsk)).hasSize(2);
+        extractionService.markMustAsk(id, firstCustom.getId(), false);
+        // 설정에서 나중에 바꿔도 이미 만든 질문지에 반영된다
+        templateService.setMustAsk(mustTemplate, false);
+        assertThat(reportService.report(id).getSections().stream().flatMap(s -> s.getQuestions().stream())
+                .map(QuestionView::getQuestion).filter(InterviewQuestion::isMustAsk)).isEmpty();
+        assertThatThrownBy(() -> extractionService.markMustAsk(id + 999, firstCustom.getId(), true))
+                .isInstanceOf(NotFoundException.class);
         assertThat(all).filteredOn(q -> q.getOrigin() == QuestionOrigin.CUSTOM).hasSize(1);
         assertThat(all).filteredOn(q -> q.getOrigin() == QuestionOrigin.COMMON_ORIGINAL).hasSize(24);
         assertThat(r.getQuestionCount()).isEqualTo(24 + 1);
@@ -211,6 +244,18 @@ public class ExtractionFlowIntegrationTest {
         assertThat(reportService.report(id).isHasUncheckedCriteria()).isTrue();
         // 검사 뒤 평가항목이 바뀌면 순위에서 빠진다 (재검사 필요)
         assertThat(rankingService.rank(positionId)).extracting("rank", "state").containsExactly(org.assertj.core.groups.Tuple.tuple(null, "STALE"));
+
+        // 면접 기록: 날짜나 합격을 고르면 면접 본 것으로 저장하고, 지원자 비교에서도 보인다
+        candidateService.updateInterview(id, false, java.time.LocalDate.of(2026, 10, 22), "PASS");
+        assertThat(candidateService.get(id)).extracting("interviewed", "interviewDate", "decision")
+                .containsExactly(true, java.time.LocalDate.of(2026, 10, 22), "PASS");
+        assertThat(rankingService.rank(positionId)).extracting("interviewed", "decision")
+                .containsExactly(org.assertj.core.groups.Tuple.tuple(true, "PASS"));
+        assertThatThrownBy(() -> candidateService.updateInterview(id, true, null, "보류"))
+                .isInstanceOf(BusinessException.class);
+        candidateService.updateInterview(id, false, null, "");
+        assertThat(candidateService.get(id)).extracting("interviewed", "interviewDate", "decision")
+                .containsExactly(false, null, null);
 
         // 이력서 삭제: 포지션은 남는다
         extractionService.deleteCandidate(id);
@@ -289,7 +334,7 @@ public class ExtractionFlowIntegrationTest {
     }
 
     @Test
-    void transcriptFillsOnlyEmptyAnswersAndKeepsOnlyRealExcerpts() {
+    void transcriptBecomesOwnRecordAndReportCopiesItWithoutTouchingTheSheet() {
         stubAi(aiClient, templateMapper, sectionMapper);
         when(pdfTextExtractor.extract(any())).thenReturn(RESUME);
         Long id = extractionService.uploadResume(startPosition(positionService, "백엔드 개발자"), List.of(pdf()));
@@ -300,43 +345,100 @@ public class ExtractionFlowIntegrationTest {
                 .map(QuestionView::getQuestion).toList();
         extractionService.saveAnswer(id, sheet.get(1).getId(), "면접관이 직접 적은 답");
 
-        String transcript = "참석자 1 00:10\n자기소개 부탁드립니다\n\n참석자 2 00:15\n저는 백엔드 개발자고요   주문 배치를 맡았습니다\n";
-        AutoAnswerResult ai = new AutoAnswerResult();
-        ai.setAnswers(List.of(answer(1L, "백엔드 개발자, 주문 배치 담당", "저는 백엔드 개발자고요 주문 배치를 맡았습니다"),
-                answer(2L, "덮어쓰면 안 되는 답", null),
-                answer(3L, "지어낸 인용", "녹취록에 없는 말")));
+        String transcript = "참석자 1 00:10\n자기소개 부탁드립니다\n\n참석자 2 00:15\n저는 백엔드 개발자고요   주문 배치를 맡았습니다\n"
+                + "참석자 2 03:10\n혹시 입사하면 어떤 일을 먼저 하나요\n참석자 1 03:15\n정산 유지보수부터 합니다\n";
+        InterviewRecordResult ai = new InterviewRecordResult();
+        ai.setItems(List.of(recordItem("INTERVIEWER", "자기소개를 부탁드립니다.", "백엔드 개발자로 주문 배치를 맡았다고 답함.",
+                        "저는 백엔드 개발자고요 주문 배치를 맡았습니다"),
+                recordItem("CANDIDATE", "입사 후 처음 맡는 업무는 무엇인가요?", "정산 유지보수부터 시작한다고 안내함.", "녹음본에 없는 말"),
+                recordItem("INTERVIEWER", "주문 배치 규모는 어느 정도였나요?", "답변 없음", null)));
         org.mockito.ArgumentCaptor<String> input = org.mockito.ArgumentCaptor.forClass(String.class);
-        when(aiClient.call(eq(AiPurpose.AUTO_ANSWER), anyLong(), anyString(), input.capture(), eq(AutoAnswerResult.class), any()))
+        when(aiClient.call(eq(AiPurpose.INTERVIEW_RECORD), anyLong(), anyString(), input.capture(), eq(InterviewRecordResult.class), any()))
                 .thenReturn(ai);
 
         MockMultipartFile file = new MockMultipartFile("file", "녹취.txt", "text/plain",
                 transcript.getBytes(java.nio.charset.StandardCharsets.UTF_8));
-        AutoAnswerService.Filled filled = autoAnswerService.fill(id, null, file);
+        InterviewRecord record = interviewRecordService.create(id, null, file);
 
-        assertThat(filled).isEqualTo(new AutoAnswerService.Filled(2, 1));
-        assertThat(input.getValue()).contains("<transcript>", "주문 배치를 맡았습니다", "\"question_id\" : 1");
-        List<InterviewQuestion> after = reportService.report(id).getSections().stream().flatMap(s -> s.getQuestions().stream())
-                .map(QuestionView::getQuestion).toList();
-        assertThat(after.get(0)).extracting(InterviewQuestion::getAnswer, InterviewQuestion::getAnswerExcerpt, InterviewQuestion::isChecked)
-                .containsExactly("백엔드 개발자, 주문 배치 담당", "저는 백엔드 개발자고요 주문 배치를 맡았습니다", true);
-        assertThat(after.get(1).getAnswer()).as("이미 있는 답변은 그대로").isEqualTo("면접관이 직접 적은 답");
-        assertThat(after.get(2).getAnswer()).isEqualTo("지어낸 인용");
-        assertThat(after.get(2).getAnswerExcerpt()).as("녹취록에 없는 인용은 버린다").isNull();
+        assertThat(input.getValue()).contains("<transcript>", "주문 배치를 맡았습니다");
+        assertThat(record.getItems()).extracting(QaItem::getKind, QaItem::getExcerpt).containsExactly(
+                tuple(QaItem.INTERVIEWER, "저는 백엔드 개발자고요 주문 배치를 맡았습니다"),
+                tuple(QaItem.CANDIDATE, ""), tuple(QaItem.INTERVIEWER, ""));
+        Candidate saved = candidateService.get(id);
+        assertThat(saved.getTranscript()).as("녹음본 원문은 저장한다").contains("정산 유지보수부터 합니다");
+        assertThat(InterviewRecordService.parse(saved.getRecordJson()).getItems()).hasSize(3);
+        assertThat(reportService.report(id).getSections().stream().flatMap(s -> s.getQuestions().stream())
+                .map(q -> q.getQuestion().getAnswer())).as("질문지 답변은 건드리지 않는다").containsOnlyOnce("면접관이 직접 적은 답");
+        assertThatThrownBy(() -> interviewRecordService.create(id, "  ", null)).isInstanceOf(BusinessException.class);
 
-        // 답변을 지우면 녹취 원문도 지운다
-        extractionService.saveAnswer(id, after.get(0).getId(), " ");
-        assertThat(reportService.report(id).getSections().get(0).getQuestions().get(0).getQuestion().getAnswerExcerpt()).isNull();
-        assertThatThrownBy(() -> autoAnswerService.fill(id, "  ", null)).isInstanceOf(BusinessException.class);
+        // 보고서: 면접 기록에서 질문과 답변을 복사하고(면접관 질문 먼저), 지원자 정보 일부는 GPT가 찾는다
+        ReportInfoResult info = new ReportInfoResult();
+        info.setDispatch("가능");
+        info.setStartDate("합격 후 2주 뒤");
+        info.setDesiredSalary("4,500만원");
+        org.mockito.ArgumentCaptor<String> infoInput = org.mockito.ArgumentCaptor.forClass(String.class);
+        when(aiClient.call(eq(AiPurpose.REPORT_INFO), anyLong(), anyString(), infoInput.capture(), eq(ReportInfoResult.class), any()))
+                .thenReturn(info);
+        InterviewReport report = interviewReportService.create(id);
+
+        assertThat(infoInput.getValue()).contains("<interviewer_notes>", "면접관이 직접 적은 답", "<transcript>", "정산 유지보수부터 합니다");
+        assertThat(report.getQaSource()).isEqualTo(InterviewReport.RECORD);
+        assertThat(report.getQa()).extracting(QaItem::getQuestion).containsExactly(
+                "자기소개를 부탁드립니다.", "주문 배치 규모는 어느 정도였나요?", "입사 후 처음 맡는 업무는 무엇인가요?");
+        assertThat(report.getInfo()).extracting(InterviewReport.InfoRow::getLabel).containsExactly(
+                "성명", "나이", "경력", "학력", "정보처리기사", "SQLD", "파견 가능 여부", "입사 가능 시기", "희망연봉");
+        assertThat(report.getInfo()).extracting(InterviewReport.InfoRow::getValue)
+                .contains("홍길동", "총 2년 11개월 (포지션 관련 2년 6개월)", "있음", "없음", "가능", "합격 후 2주 뒤", "4,500만원");
+        assertThat(report.getOpinions()).hasSize(1);
+
+        // 지원자 정보 다시 찾기: 세 칸만 바꾸고(못 찾은 칸은 그대로), 지운 행은 다시 붙이고, 나머지는 그대로
+        report.getInfo().removeIf(r -> r.getLabel().equals("희망연봉"));
+        report.getInfo().get(0).setValue("고친 이름");
+        interviewReportService.save(id, report);
+        ReportInfoResult again = new ReportInfoResult();
+        again.setDispatch("가능 (수도권)");
+        again.setStartDate("");
+        again.setDesiredSalary("5,800만원");
+        when(aiClient.call(eq(AiPurpose.REPORT_INFO), anyLong(), anyString(), anyString(), eq(ReportInfoResult.class), any()))
+                .thenReturn(again);
+        assertThat(interviewReportService.refreshInfo(id)).isEqualTo(2);
+        report = interviewReportService.get(id);
+        assertThat(report.getInfo()).extracting(InterviewReport.InfoRow::getLabel, InterviewReport.InfoRow::getValue)
+                .contains(tuple("성명", "고친 이름"), tuple("파견 가능 여부", "가능 (수도권)"), tuple("입사 가능 시기", "합격 후 2주 뒤"),
+                        tuple("희망연봉", "5,800만원"));
+        assertThat(report.getQa()).hasSize(3);
+
+        // 보고서를 고쳐도 면접 기록은 그대로
+        report.getQa().get(0).setAnswer("보고서에서 고친 답");
+        report.getQa().remove(2);
+        interviewReportService.save(id, report);
+        assertThat(interviewReportService.get(id).getQa()).hasSize(2);
+        assertThat(InterviewRecordService.parse(candidateService.get(id).getRecordJson()).getItems().get(0).getAnswer())
+                .isEqualTo("백엔드 개발자로 주문 배치를 맡았다고 답함.");
+
+        // 질문지로 바꾸면 면접관이 적은 답변만 가져온다
+        interviewReportService.useSource(id, InterviewReport.SHEET);
+        assertThat(interviewReportService.get(id).getQa()).extracting(QaItem::getAnswer).containsExactly("면접관이 직접 적은 답");
+
+        // 정렬: GPT가 준 순서대로, 면접관 질문을 지원자 질문보다 앞에
+        interviewReportService.useSource(id, InterviewReport.RECORD);
+        ReportSortResult sorted = new ReportSortResult();
+        sorted.setOrder(new java.util.ArrayList<>(List.of(3, 2, 1)));
+        when(aiClient.call(eq(AiPurpose.REPORT_SORT), anyLong(), anyString(), anyString(), eq(ReportSortResult.class), any()))
+                .thenReturn(sorted);
+        interviewReportService.sort(id);
+        assertThat(interviewReportService.get(id).getQa()).extracting(QaItem::getQuestion).containsExactly(
+                "주문 배치 규모는 어느 정도였나요?", "자기소개를 부탁드립니다.", "입사 후 처음 맡는 업무는 무엇인가요?");
     }
 
-    private static AutoAnswerResult.Item answer(Long questionId, String answer, String excerpt) {
-        AutoAnswerResult.Item a = new AutoAnswerResult.Item();
-        a.setQuestionId(questionId);
-        a.setAnswer(answer);
-        a.setExcerpt(excerpt);
-        return a;
+    private static InterviewRecordResult.Item recordItem(String kind, String question, String answer, String excerpt) {
+        InterviewRecordResult.Item i = new InterviewRecordResult.Item();
+        i.setKind(kind);
+        i.setQuestion(question);
+        i.setAnswer(answer);
+        i.setExcerpt(excerpt);
+        return i;
     }
-
     @Test
     void rejectsBadInputBeforeSavingAnything() {
         stubAi(aiClient, templateMapper, sectionMapper);
@@ -577,6 +679,12 @@ public class ExtractionFlowIntegrationTest {
                     calc.setRelevantMonths(30);
                     calc.setRelevantReason("백엔드 업무 기간");
                     er.setCareer(calc);
+                    CareerEvalResult.Certificates certs = new CareerEvalResult.Certificates();
+                    certs.setItems(List.of());
+                    certs.setInfoEngineer(true);
+                    certs.setSqld(false);
+                    er.setCertificates(certs);
+                    er.validate(Set.copyOf(ids));
                     return er;
                 });
 

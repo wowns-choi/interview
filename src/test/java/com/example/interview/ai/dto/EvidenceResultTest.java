@@ -24,6 +24,11 @@ class EvidenceResultTest {
         EvidenceResult ok = result(career(27, 20));
         ok.validate(Set.of(1L));
         assertThat(ok.getCareer().getTotalReason()).isEmpty();
+        assertThat(ok.getCareer().getCertificates().getItems()).isEmpty();
+
+        EvidenceResult noCerts = result(career(27, 20));
+        noCerts.setCertificates(null);
+        assertThatThrownBy(() -> noCerts.validate(Set.of(1L))).hasMessageContaining("certificates 누락");
     }
 
     private static EvidenceResult result(EvidenceResult.Career career) {
@@ -35,6 +40,10 @@ class EvidenceResultTest {
         EvidenceResult r = new EvidenceResult();
         r.setResults(List.of(c));
         r.setCareer(career);
+        CareerEvalResult.Certificates certs = new CareerEvalResult.Certificates();
+        certs.setInfoEngineer(false);
+        certs.setSqld(true);
+        r.setCertificates(certs);
         return r;
     }
 

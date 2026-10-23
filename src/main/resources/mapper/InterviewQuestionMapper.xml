@@ -15,24 +15,27 @@
     <insert id="insert" useGeneratedKeys="true" keyProperty="id" keyColumn="id">
         INSERT INTO interview_question
             (candidate_id, section, origin, question_type, content, original_content, intent, good_signal, warning_signal,
-             follow_ups, resume_answered_yn, template_id, criterion_id, evidence_id, priority, sort_order, merged)
+             follow_ups, resume_answered_yn, template_id, criterion_id, evidence_id, priority, sort_order, merged, must_ask)
         VALUES
             (#{candidateId}, #{section}, #{origin}, #{questionType}, #{content}, #{originalContent}, #{intent}, #{goodSignal}, #{warningSignal},
-             #{followUps}, #{resumeAnsweredYn}, #{templateId}, #{criterionId}, #{evidenceId}, #{priority}, #{sortOrder}, #{merged})
+             #{followUps}, #{resumeAnsweredYn}, #{templateId}, #{criterionId}, #{evidenceId}, #{priority}, #{sortOrder}, #{merged}, #{mustAsk})
     </insert>
 
     <update id="updateAnswer">
         UPDATE interview_question SET answer = #{answer}<if test="answer != null">, checked = TRUE</if><if test="answer == null">, answer_excerpt = NULL</if> WHERE id = #{id} AND candidate_id = #{candidateId}
     </update>
 
-    <!-- 자동 답변 채우기: 답변이 비어 있는 질문만 -->
-    <update id="fillAnswer">
-        UPDATE interview_question SET answer = #{answer}, answer_excerpt = #{excerpt}, checked = TRUE
-        WHERE id = #{id} AND candidate_id = #{candidateId} AND (answer IS NULL OR answer = '')
-    </update>
-
     <update id="updateChecked">
         UPDATE interview_question SET checked = #{checked} WHERE id = #{id} AND candidate_id = #{candidateId}
+    </update>
+
+    <update id="updateMustAsk">
+        UPDATE interview_question SET must_ask = #{mustAsk} WHERE id = #{id} AND candidate_id = #{candidateId}
+    </update>
+
+    <!-- 공통 질문 설정에서 필수를 바꾸면 그 질문이 들어간 모든 질문지에 반영한다 -->
+    <update id="updateMustAskByTemplate">
+        UPDATE interview_question SET must_ask = #{mustAsk} WHERE template_id = #{templateId}
     </update>
 
     <update id="updateContent">

@@ -103,7 +103,7 @@ class ResumeAnonymizerTest {
     }
 
     @Test
-    void hidesCompanyRankEducationTrainingAndCertificatesButKeepsCareerPeriodsAndWorkContent() {
+    void hidesCompanyRankEducationAndTrainingButKeepsCareerPeriodsWorkContentAndCertificates() {
         String text = """
                 2024.08 ~ 2026.06  다온테크 연구개발팀 · 사원 · 백엔드
                 ∙ 정산 배치 처리 시간 4시간 → 40분 단축
@@ -147,7 +147,7 @@ class ResumeAnonymizerTest {
                 총 2년 3개월 / 직전 연봉 : [연봉]
                 [학력] [학교] [학력] [학력] 학점 [학력]
                 [교육] [교육] [교육]
-                [자격증] [자격증] [자격증]
+                정보처리기사 2023.11 한국산업인력공단
                 """);
         assertThat(r.profile().getTrainings()).singleElement().extracting("institution", "alias")
                 .containsExactly("KH 정보교육원", "교육1");

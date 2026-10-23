@@ -102,10 +102,10 @@ class CriteriaFlowIntegrationTest {
         positionService.extractCriteria(id);
         assertThat(positionService.get(id)).extracting("requiredExperience", "requiredEducation")
                 .containsExactly("경력 5년 이상", null);
-        positionService.updateConditions(id, " 경력 3년 이상 ", "대졸(4년) 이상");
+        positionService.updateConditions(id, " 경력 3년 이상 ", "대졸(4년) 이상", " 컴퓨터공학 ");
         positionService.extractCriteria(id);
-        assertThat(positionService.get(id)).extracting("requiredExperience", "requiredEducation")
-                .containsExactly("경력 3년 이상", "대졸(4년) 이상");
+        assertThat(positionService.get(id)).extracting("requiredExperience", "requiredEducation", "requiredMajor")
+                .containsExactly("경력 3년 이상", "대졸(4년) 이상", "컴퓨터공학");
         assertThatThrownBy(() -> positionService.rename(id + 1000, "x")).isInstanceOf(NotFoundException.class);
     }
 
