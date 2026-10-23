@@ -11,6 +11,7 @@ import org.springframework.stereotype.Service;
 
 import com.example.interview.ai.dto.OpinionResult;
 import com.example.interview.config.AiProperties;
+import com.example.interview.resume.QuoteVerifier;
 import com.example.interview.domain.Candidate;
 import com.example.interview.domain.CandidateProfile;
 import com.example.interview.domain.EvalCriterion;
@@ -50,12 +51,16 @@ public class ReportService {
     private final QuestionTemplateMapper templateMapper;
     private final AiCallLogMapper aiCallLogMapper;
     private final AiProperties aiProperties;
+    private final QuoteVerifier quoteVerifier;
 
     public ResultReport report(Long candidateId) {
         Candidate candidate = candidateService.get(candidateId);
         Position position = positionService.get(candidate.getPositionId());
         List<EvalCriterion> criteria = positionService.criteria(position.getId());
         List<Evidence> evidences = evidenceMapper.findByCandidateId(candidateId);
+        // 가장 비슷한 원문을 저장하기 전에 검사한 근거는 여기서 찾아 보여 준다 (저장은 하지 않는다)
+        evidences.stream().filter(e -> !"Y".equals(e.getVerifiedYn()) && e.getQuote() != null && e.getClosestQuote() == null)
+                .forEach(e -> e.setClosestQuote(quoteVerifier.closest(e.getQuote(), candidate.getMaskedText())));
 
         List<InterviewQuestion> questions = questionMapper.findByCandidateId(candidateId);
         Map<Long, String> criterionNames = criteria.stream()

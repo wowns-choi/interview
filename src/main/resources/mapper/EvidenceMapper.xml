@@ -10,9 +10,9 @@
 
     <insert id="insert" useGeneratedKeys="true" keyProperty="id" keyColumn="id">
         INSERT INTO evidence
-            (candidate_id, criterion_id, evidence_type, quote, interpretation, verified_yn, interview_point)
+            (candidate_id, criterion_id, evidence_type, quote, interpretation, verified_yn, interview_point, closest_quote)
         VALUES
-            (#{candidateId}, #{criterionId}, #{evidenceType}, #{quote}, #{interpretation}, #{verifiedYn}, #{interviewPoint})
+            (#{candidateId}, #{criterionId}, #{evidenceType}, #{quote}, #{interpretation}, #{verifiedYn}, #{interviewPoint}, #{closestQuote})
     </insert>
 
     <delete id="deleteByCandidateId">

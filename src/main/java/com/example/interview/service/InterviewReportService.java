@@ -2,7 +2,6 @@ package com.example.interview.service;
 
 import java.time.LocalDate;
 import java.util.ArrayList;
-import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.regex.Matcher;
@@ -16,7 +15,6 @@ import com.example.interview.ai.AiClient;
 import com.example.interview.ai.PromptLoader;
 import com.example.interview.ai.dto.CareerEvalResult;
 import com.example.interview.ai.dto.ReportInfoResult;
-import com.example.interview.ai.dto.ReportSortResult;
 import com.example.interview.domain.AiPurpose;
 import com.example.interview.domain.Candidate;
 import com.example.interview.domain.CandidateProfile;
@@ -131,43 +129,6 @@ public class InterviewReportService {
             row.setValue(value);
         }
         return 1;
-    }
-
-    /** 보고서를 받는 사람이 읽기 편한 순서로 GPT가 정렬한다. 면접관 질문과 지원자 질문은 따로 묶는다 */
-    public void sort(Long candidateId) {
-        InterviewReport report = require(candidateId);
-        List<QaItem> qa = report.getQa();
-        if (qa.size() < 2) {
-            return;
-        }
-        List<Map<String, Object>> input = new ArrayList<>();
-        for (int i = 0; i < qa.size(); i++) {
-            Map<String, Object> m = new LinkedHashMap<>();
-            m.put("no", i + 1);
-            m.put("kind", qa.get(i).isFromCandidate() ? "지원자 질문" : "면접관 질문");
-            m.put("question", qa.get(i).getQuestion());
-            m.put("answer", qa.get(i).getAnswer());
-            input.add(m);
-        }
-        ReportSortResult result;
-        try {
-            result = aiClient.call(AiPurpose.REPORT_SORT, candidateId, promptLoader.load("report_sort"),
-                    "<qa>\n" + JSON.writerWithDefaultPrettyPrinter().writeValueAsString(input) + "\n</qa>",
-                    ReportSortResult.class, r -> r.validate(qa.size()));
-        } catch (RuntimeException e) {
-            log.error("보고서 질문 정렬 실패 candidateId={}", candidateId, e);
-            throw new BusinessException("질문을 정렬하지 못했습니다. " + e.getMessage());
-        }
-        report.setQa(reorder(qa, result.getOrder()));
-        save(candidateId, report);
-    }
-
-    /** 새 순서(1부터)대로 놓고, 면접관 질문을 지원자 질문보다 앞에 둔다 */
-    static List<QaItem> reorder(List<QaItem> qa, List<Integer> order) {
-        List<QaItem> sorted = order.stream().map(n -> qa.get(n - 1)).toList();
-        List<QaItem> result = new ArrayList<>(sorted.stream().filter(q -> !q.isFromCandidate()).toList());
-        result.addAll(sorted.stream().filter(QaItem::isFromCandidate).toList());
-        return result;
     }
 
     public static InterviewReport parse(String json) {

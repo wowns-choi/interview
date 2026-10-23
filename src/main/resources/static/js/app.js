@@ -16,7 +16,73 @@
       overlay.hidden = false;
       Array.prototype.forEach.call(form.elements, function (el) { if (el.tagName === 'BUTTON') el.disabled = true; });
     }
+    var partial = form.getAttribute('data-partial');
+    if (partial && !e.defaultPrevented) {
+      e.preventDefault();
+      var body;
+      try { body = new FormData(form, e.submitter); } catch (err) {
+        body = new FormData(form);
+        if (e.submitter && e.submitter.name) body.append(e.submitter.name, e.submitter.value);
+      }
+      partialLoad(fetch(form.action, { method: 'POST', body: body }), partial, form);
+    }
   });
+
+  // ── 일부만 다시 그리기: 서버가 돌려준 같은 페이지에서 그 영역만 바꿔 끼운다 (보던 위치 그대로) ──
+  function partialLoad(request, selectors, form) {
+    var overlay = document.getElementById('busy-overlay');
+    var done = function () {
+      overlay.hidden = true;
+      if (form) Array.prototype.forEach.call(form.elements, function (el) { if (el.tagName === 'BUTTON') el.disabled = false; });
+    };
+    return request.then(function (res) {
+      return res.text().then(function (html) { return { url: res.url, html: html }; });
+    }).then(function (page) {
+      var url = new URL(page.url);
+      if (url.pathname !== location.pathname) { location.href = page.url; return; }
+      var doc = new DOMParser().parseFromString(page.html, 'text/html');
+      var pairs = selectors.split(',').map(function (s) {
+        return { old: document.querySelector(s.trim()), neu: doc.querySelector(s.trim()) };
+      });
+      if (pairs.some(function (p) { return !p.old || !p.neu; })) { location.href = page.url; return; }
+      pairs.forEach(function (p) {
+        Array.prototype.slice.call(p.old.attributes).forEach(function (a) { p.old.removeAttribute(a.name); });
+        Array.prototype.forEach.call(p.neu.attributes, function (a) { p.old.setAttribute(a.name, a.value); });
+        p.old.replaceChildren.apply(p.old, Array.prototype.slice.call(p.neu.childNodes));
+        p.old.querySelectorAll('textarea.answer').forEach(bindAnswer);
+      });
+      done();
+      var err = doc.querySelector('.flash-error');
+      var ok = doc.querySelector('.flash-ok');
+      if (err) showToast(err.textContent.trim(), true);
+      else if (ok) showToast(ok.textContent.trim(), false);
+      document.dispatchEvent(new CustomEvent('partial', { detail: pairs.map(function (p) { return p.old; }) }));
+    }).catch(function () {
+      done();
+      showToast('요청을 처리하지 못했습니다.', true);
+    });
+  }
+  window.refreshPartial = function (selectors) {
+    return partialLoad(fetch(location.pathname, { headers: { Accept: 'text/html' } }), selectors);
+  };
+
+  var toastTimer = null;
+  function showToast(msg, isError) {
+    if (!msg) return;
+    var el = document.getElementById('toast');
+    if (!el) {
+      el = document.createElement('div');
+      el.className = 'toast';
+      el.id = 'toast';
+      el.setAttribute('role', 'status');
+      document.body.appendChild(el);
+    }
+    el.textContent = msg;
+    el.classList.toggle('is-error', !!isError);
+    el.hidden = false;
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(function () { el.hidden = true; }, isError ? 4000 : 1800);
+  }
 
   // ── 포지션 고르기: 고르면 그 주소로 ──
   document.querySelectorAll('select[data-nav]').forEach(function (sel) {
@@ -292,6 +358,25 @@
     });
   }
 
+  // ── 포지션·평가 기준 고정 줄: 원래 자리가 위로 사라지면 보인다 ──
+  var pickBar = document.getElementById('pick-bar');
+  var pick = document.querySelector('.pick');
+  if (pickBar && pick) {
+    pickBar.hidden = false;
+    document.documentElement.style.setProperty('--pin-h', pickBar.offsetHeight + 'px');
+    var pinTop = parseFloat(getComputedStyle(pickBar).top);
+    var pin = function () { pickBar.hidden = pick.getBoundingClientRect().bottom > pinTop; };
+    window.addEventListener('scroll', pin, { passive: true });
+    window.addEventListener('resize', function () {
+      var was = pickBar.hidden;
+      pickBar.hidden = false;
+      document.documentElement.style.setProperty('--pin-h', pickBar.offsetHeight + 'px');
+      pickBar.hidden = was;
+      pin();
+    });
+    pin();
+  }
+
   // ── 목차: 화면에 없는 영역은 숨기고, 지금 보고 있는 영역을 표시한다 ──
   var toc = document.getElementById('toc');
   if (toc) {
@@ -301,7 +386,7 @@
       if (target) links.push({ a: a, target: target }); else a.hidden = true;
     });
     var mark = function () {
-      var line = 140;
+      var line = 140 + (pickBar ? pickBar.offsetHeight : 0);
       var current = links[0];
       links.forEach(function (l) { if (l.target.getBoundingClientRect().top <= line) current = l; });
       // 맨 아래까지 내리면 마지막 항목
@@ -310,6 +395,14 @@
     };
     if (links.length) {
       window.addEventListener('scroll', mark, { passive: true });
+      // 목차를 누르면 부드럽게 옮긴다 (새로 연 페이지가 #위치로 갈 때는 바로 간다)
+      links.forEach(function (l) {
+        l.a.addEventListener('click', function (e) {
+          e.preventDefault();
+          l.target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+          history.replaceState(null, '', l.a.getAttribute('href'));
+        });
+      });
       mark();
     }
   }

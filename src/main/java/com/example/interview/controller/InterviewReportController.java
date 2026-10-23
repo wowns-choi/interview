@@ -79,11 +79,4 @@ public class InterviewReportController {
                 : "지원자 정보 " + filled + "칸을 채웠습니다.");
         return "redirect:/results/" + id + "/report";
     }
-
-    @PostMapping("/results/{id}/report/sort")
-    public String sort(@PathVariable Long id, RedirectAttributes ra) {
-        reportService.sort(id);
-        ra.addFlashAttribute("message", "보고서를 읽는 사람이 이해하기 쉬운 순서로 정렬했습니다.");
-        return "redirect:/results/" + id + "/report";
-    }
 }

@@ -107,8 +107,8 @@ public class AnalysisService {
                 .toList();
         if (possible.isEmpty()) {
             throw new BusinessException(chosen.contains(QuestionType.EXPERIENCE)
-                    ? "모든 평가항목에 직접 근거가 있어 '해본 적 있어?' 질문을 만들 평가항목이 없습니다."
-                    : "직접·간접 근거가 없어 이력서 내용에 대한 질문을 만들 수 없습니다.");
+                    ? "모든 평가 기준을 충족해 '해본 적 있어?' 질문을 만들 평가 기준이 없습니다."
+                    : "충족·부분 충족한 평가 기준이 없어 이력서 내용에 대한 질문을 만들 수 없습니다.");
         }
 
         List<InterviewQuestion> existing = questionMapper.findByCandidateId(candidateId);
@@ -197,7 +197,7 @@ public class AnalysisService {
     private List<EvalCriterion> criteria(Candidate candidate) {
         List<EvalCriterion> criteria = positionService.criteria(candidate.getPositionId());
         if (criteria.isEmpty()) {
-            throw new BusinessException("평가항목이 없습니다.");
+            throw new BusinessException("평가 기준이 없습니다.");
         }
         return criteria;
     }

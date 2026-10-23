@@ -28,6 +28,7 @@
     return {
       reportDate: rp.querySelector('[data-f="reportDate"]').value,
       interviewDate: rp.querySelector('[data-f="interviewDate"]').value,
+      position: rp.querySelector('[data-f="position"]').value,
       qaSource: rp.getAttribute('data-source'),
       info: Array.prototype.map.call(rp.querySelectorAll('[data-list="info"] .rp-item'), function (el) {
         return { label: val(el, 'label'), value: val(el, 'value') };
@@ -83,6 +84,11 @@
 
   rp.querySelectorAll('textarea').forEach(autosize);
   renumber();
+  // 출처 바꾸기·다시 찾기 뒤에는 보고서 내용만 새로 받아 온다
+  document.addEventListener('partial', function () {
+    rp.querySelectorAll('textarea').forEach(autosize);
+    renumber();
+  });
 
   rp.addEventListener('input', function (e) {
     if (e.target.tagName === 'TEXTAREA') autosize(e.target);
@@ -159,7 +165,7 @@
     if (!dragging) rp.querySelectorAll('.rp-item[draggable]').forEach(function (el) { el.removeAttribute('draggable'); });
   });
 
-  // 서버에서 보고서를 바꾸는 버튼(정렬, 다시 만들기)은 고친 내용을 먼저 저장한 뒤 보낸다
+  // 서버에서 보고서를 바꾸는 버튼(출처 바꾸기, 다시 찾기, 다시 만들기)은 고친 내용을 먼저 저장한 뒤 보낸다
   document.addEventListener('submit', function (e) {
     if (!dirty && !timer && !inflight) return;
     var form = e.target;

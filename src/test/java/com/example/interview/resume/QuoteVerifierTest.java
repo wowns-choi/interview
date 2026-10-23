@@ -41,6 +41,28 @@ class QuoteVerifierTest {
     }
 
     @Test
+    void punctuationDifferencesAreIgnored() {
+        String text = "- URL 하나만 입력하면, 크롤링 -> AI 글 생성 -> 블로거 업로드 까지 자동화";
+        assertThat(verifier.verify("URL 하나만 입력하면 크롤링, AI 글 생성, 블로거 업로드까지 자동화", text)).isTrue();
+    }
+
+    @Test
+    void closestShowsTheOriginalSpanAsWritten() {
+        String text = "[A사] 2023.01 ~ 2024.06\n∙ 대법원 경매 사이트를 Selenium으로 크롤링해 60개 법원, 수만 건 규모의 경매 데이터를\n"
+                + "자동 수집하던 중 봇 감지로 IP가 차단되는 문제 발생\n- Redis 캐시 도입";
+        String quote = "대법원 경매 사이트를 Selenium으로 크롤링해 60개 법원, 수만 건 규모의 경매 데이터를 자동 수집·처리하고";
+        assertThat(verifier.verify(quote, text)).isFalse();
+        assertThat(verifier.closest(quote, text))
+                .isEqualTo("대법원 경매 사이트를 Selenium으로 크롤링해 60개 법원, 수만 건 규모의 경매 데이터를\n자동 수집하");
+    }
+
+    @Test
+    void closestIsNullWhenNothingIsSimilar() {
+        assertThat(verifier.closest("Kubernetes 클러스터 운영 경험", resume)).isNull();
+        assertThat(verifier.closest(null, resume)).isNull();
+    }
+
+    @Test
     void ignoresAllWhitespace() {
         String text = "DB 저장과 카프카에 이\n벤트 발행하는 것을 원자적으로";
         assertThat(new QuoteVerifier().verify("카프카에 이벤트 발행하는 것을", text)).isTrue();

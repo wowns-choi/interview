@@ -22,6 +22,8 @@ public class InterviewReport {
     /** yyyy-MM-dd */
     private String reportDate = "";
     private String interviewDate = "";
+    /** 지원 포지션. null이면 포지션 이름을 쓴다 (예전 보고서). 고쳐도 포지션은 그대로 */
+    private String position;
     private String qaSource = RECORD;
     private List<InfoRow> info = new ArrayList<>();
     private List<QaItem> qa = new ArrayList<>();
@@ -73,6 +75,7 @@ public class InterviewReport {
         });
         reportDate = reportDate == null ? "" : reportDate.strip();
         interviewDate = interviewDate == null ? "" : interviewDate.strip();
+        position = position == null ? null : position.strip();
         qaSource = SHEET.equals(qaSource) ? SHEET : RECORD;
     }
 }

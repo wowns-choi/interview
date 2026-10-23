@@ -96,6 +96,10 @@
   initCriteria();
   initQuestions();
   initReview();
+  // 질문 추출·합치기·면접 기록 뒤에는 그 영역만 새로 받아 오므로 다시 붙인다
+  document.addEventListener('partial', function (e) {
+    if (e.detail.some(function (el) { return el.id === 'questions'; })) initQuestions();
+  });
   // 타임라인이 넓으면 최근 기록이 보이도록 오른쪽 끝에서 시작
   document.querySelectorAll('.tl-scroll').forEach(function (el) { el.scrollLeft = el.scrollWidth; });
 
@@ -528,7 +532,7 @@
       var name = li.querySelector('.crit-name');
       var desc = li.querySelector('.crit-desc');
       editInline(body, [
-        { value: name.textContent, placeholder: '평가항목', className: 'crit-name-input' },
+        { value: name.textContent, placeholder: '평가 기준', className: 'crit-name-input' },
         { value: desc.textContent, placeholder: '무엇을 보면 충족인지', multiline: true }
       ], {
         onSave: function (v) {
@@ -553,7 +557,7 @@
       if (btn.classList.contains('js-crit-edit')) {
         edit(li, false);
       } else if (btn.classList.contains('js-crit-del')) {
-        if (!confirm('"' + li.querySelector('.crit-name').textContent + '" 평가항목을 삭제할까요?')) return;
+        if (!confirm('"' + li.querySelector('.crit-name').textContent + '" 평가 기준을 삭제할까요?')) return;
         api('DELETE', positionBase + '/criteria/' + li.dataset.id).then(function () { li.remove(); refresh(); });
       }
     });
@@ -659,7 +663,7 @@
       if (!inPool) return;
       if (sec && !sec.querySelector('.iq')) sec.remove();
       var left = pool.querySelectorAll('.iq').length;
-      if (!left) location.reload();
+      if (!left) window.refreshPartial('#questions');
       else pool.querySelector('.qx-pool-head b').textContent = left;
     }
 
@@ -774,6 +778,10 @@
     }
   });
 
+  initTabs(true);
+  document.addEventListener('partial', function () { initTabs(false); });
+
+  function initTabs(first) {
   var tabs = document.querySelectorAll('[data-qtab]');
   if (tabs.length) {
     var showTab = function (name) {
@@ -787,9 +795,11 @@
     });
     var start = 'sheet';
     try { start = localStorage.getItem('qTab') || 'sheet'; } catch (err) { /* 무시 */ }
-    if (location.hash === '#record') start = 'record';
+    if (first && location.hash === '#record') start = 'record';
+    // 질문 추출·질문지로 돌아오면 타이핑 탭
+    if (first && (location.hash === '#extract' || location.hash === '#questions')) start = 'sheet';
     showTab(start === 'record' ? 'record' : 'sheet');
-    if (location.hash === '#record') document.getElementById('questions').scrollIntoView();
+    if (first && location.hash === '#record') document.getElementById('questions').scrollIntoView();
   }
 
   var form = document.getElementById('rec-form');
@@ -800,4 +810,5 @@
     // 파일을 고르면 붙여넣은 글 대신 파일로 만든다
     if (file.files.length) form.querySelector('textarea').value = '';
   });
+  }
 })();

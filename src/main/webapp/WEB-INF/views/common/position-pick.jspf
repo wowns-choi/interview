@@ -1,5 +1,5 @@
 <%@ page pageEncoding="UTF-8" %>
-<%-- 포지션 고르기 (만들기는 평가 항목 추출 탭에서만). pickBase: 고르면 갈 주소 --%>
+<%-- 포지션 고르기 (만들기는 평가 기준 추출 탭에서만). pickBase: 고르면 갈 주소 --%>
 <div class="pick">
   <label class="pick-select">
     <span>포지션</span>
@@ -11,10 +11,30 @@
   </label>
   <c:if test="${pickBase != '/ranking' and not empty criteria}">
   <div class="pick-crit">
-    <span class="pick-label">평가항목</span>
+    <span class="pick-label">평가 기준</span>
     <ul>
       <c:forEach var="c" items="${criteria}"><li title="<c:out value='${c.description}'/>"><c:out value="${c.name}"/></li></c:forEach>
     </ul>
   </div>
   </c:if>
 </div>
+<%-- 적합도 검사에서 아래로 내리면 포지션과 평가 기준을 위에 붙여 둔다 --%>
+<c:if test="${pickBase == '/fit'}">
+<div class="pick-bar" id="pick-bar" hidden>
+  <div class="pick-bar-in">
+    <select class="pick-bar-select" data-nav aria-label="포지션">
+      <c:forEach var="p" items="${positions}">
+        <option value="<c:url value='${pickBase}?position=${p.id}'/>" ${p.id == position.id ? 'selected' : ''}><c:out value="${p.title}"/></option>
+      </c:forEach>
+    </select>
+    <c:if test="${not empty criteria}">
+    <div class="pick-crit">
+      <span class="pick-label">평가 기준</span>
+      <ul>
+        <c:forEach var="c" items="${criteria}"><li title="<c:out value='${c.description}'/>"><c:out value="${c.name}"/></li></c:forEach>
+      </ul>
+    </div>
+    </c:if>
+  </div>
+</div>
+</c:if>

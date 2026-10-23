@@ -106,6 +106,7 @@ CREATE TABLE IF NOT EXISTS evidence (
     verified_yn      CHAR(1)     NOT NULL DEFAULT 'N',
     interview_point  TEXT
 );
+ALTER TABLE evidence ADD COLUMN IF NOT EXISTS closest_quote TEXT;
 
 -- 면접 질문. section 에는 질문지를 만들 당시의 섹션 이름을 그대로 남긴다 (나중에 섹션을 바꿔도 결과는 유지)
 CREATE TABLE IF NOT EXISTS interview_question (

@@ -208,14 +208,14 @@ public class PositionService {
     private EvalCriterion criterion(Long positionId, Long criterionId) {
         EvalCriterion c = criterionMapper.findById(criterionId);
         if (c == null || !c.getPositionId().equals(positionId)) {
-            throw new NotFoundException("평가항목을 찾을 수 없습니다: " + criterionId);
+            throw new NotFoundException("평가 기준을 찾을 수 없습니다: " + criterionId);
         }
         return c;
     }
 
     private static String requireName(String name) {
         if (name == null || name.isBlank()) {
-            throw new BusinessException("평가항목 이름을 입력하세요.");
+            throw new BusinessException("평가 기준 이름을 입력하세요.");
         }
         return truncate(name.strip(), 200);
     }

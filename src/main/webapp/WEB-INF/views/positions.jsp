@@ -1,6 +1,6 @@
 <%@ page contentType="text/html; charset=UTF-8" pageEncoding="UTF-8" %>
 <%@ taglib prefix="c" uri="jakarta.tags.core" %>
-<c:set var="pageTitle" value="${empty position ? '평가 항목 추출' : position.title}"/>
+<c:set var="pageTitle" value="${empty position ? '평가 기준 추출' : position.title}"/>
 <c:set var="activeTab" value="positions"/>
 <%@ include file="common/header.jspf" %>
 
@@ -15,7 +15,7 @@
         <li class="side-pos">
           <a class="side-item ${not empty position and position.id == p.id ? 'active' : ''}" href="<c:url value='/positions/${p.id}'/>">
             <strong><c:out value="${p.title}"/></strong>
-            <small>${fn:substring(fn:replace(p.createdAt, '-', '.'), 5, 10)} · 평가항목 ${p.criteriaCount} · 지원자 ${p.candidateCount}</small>
+            <small>${fn:substring(fn:replace(p.createdAt, '-', '.'), 5, 10)} · 평가 기준 ${p.criteriaCount} · 지원자 ${p.candidateCount}</small>
           </a>
           <button type="button" class="icon-btn side-rename" title="이름 바꾸기"><svg class="i"><use href="#i-pencil"/></svg></button>
         </li>
@@ -39,8 +39,8 @@
           <c:if test="${not empty criteria}">
             <a class="btn btn-primary btn-sm" href="<c:url value='/fit?position=${position.id}'/>">적합도 검사<svg class="i"><use href="#i-arrow-right"/></svg></a>
           </c:if>
-          <form method="post" action="<c:url value='/positions/${position.id}/criteria/extract'/>" data-busy="평가항목을 추출하는 중"
-                data-confirm="평가항목을 새로 추출할까요? 지금 평가항목과 이 포지션의 검사 결과가 바뀝니다.">
+          <form method="post" action="<c:url value='/positions/${position.id}/criteria/extract'/>" data-busy="평가 기준을 추출하는 중"
+                data-confirm="평가 기준을 새로 추출할까요? 지금 평가 기준과 이 포지션의 검사 결과가 바뀝니다.">
             <button type="submit" class="btn btn-ghost btn-sm">다시 추출</button>
           </form>
           <form method="post" action="<c:url value='/positions/${position.id}/delete'/>" data-confirm="이 포지션을 삭제할까요? 검사한 이력서와 질문지도 함께 삭제됩니다.">
@@ -53,7 +53,7 @@
     <c:choose>
       <c:when test="${empty position}">
         <form class="composer crit-in" id="crit-form" method="post" enctype="multipart/form-data" action="<c:url value='/positions'/>"
-              data-busy="평가항목을 추출하는 중">
+              data-busy="평가 기준을 추출하는 중">
           <textarea id="jdText" name="jdText" class="composer-text" placeholder="채용공고나 포지션 설명을 붙여 넣으세요"><c:out value="${jdText}"/></textarea>
           <input type="file" id="files" name="files" accept="image/png,image/jpeg,image/webp,image/gif,application/pdf,.pdf,text/plain,.txt,.md" multiple hidden>
           <ul class="img-list" id="img-list"></ul>
@@ -61,7 +61,7 @@
             <button type="button" class="btn btn-ghost btn-sm" id="img-add"><svg class="i"><use href="#i-file"/></svg>파일 추가</button>
             <span class="img-hint">PDF · TXT · MD · 이미지</span>
             <p class="img-note" id="img-note"></p>
-            <button type="submit" class="btn btn-primary composer-go">평가항목 추출<svg class="i"><use href="#i-arrow-right"/></svg></button>
+            <button type="submit" class="btn btn-primary composer-go">평가 기준 추출<svg class="i"><use href="#i-arrow-right"/></svg></button>
           </div>
         </form>
       </c:when>
@@ -82,7 +82,7 @@
             </c:if>
           </section>
           <section class="pos-col">
-            <h3 class="col-label">평가항목<span class="count" id="crit-count">${fn:length(criteria)}</span></h3>
+            <h3 class="col-label">평가 기준<span class="count" id="crit-count">${fn:length(criteria)}</span></h3>
             <dl class="terms conds" id="conds" data-exp-kind="${conds.expKind}" data-exp-years="${conds.expYears}"
                 data-edu="${conds.eduLevel}">
               <div><dt>요구 경력</dt><dd data-key="requiredExperience"><c:out value="${position.requiredExperience}"/></dd></div>
@@ -104,7 +104,7 @@
                 </li>
               </c:forEach>
             </ul>
-            <button type="button" class="add-row" id="crit-add"><svg class="i"><use href="#i-plus"/></svg>평가항목 추가</button>
+            <button type="button" class="add-row" id="crit-add"><svg class="i"><use href="#i-plus"/></svg>평가 기준 추가</button>
           </section>
         </div>
       </c:otherwise>

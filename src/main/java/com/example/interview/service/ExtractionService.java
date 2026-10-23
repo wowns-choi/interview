@@ -87,7 +87,7 @@ public class ExtractionService {
      */
     public Long uploadResume(Long positionId, List<MultipartFile> files) {
         if (positionService.criteria(positionId).isEmpty()) {
-            throw new BusinessException("평가항목이 없습니다. 평가항목을 먼저 추출하세요.");
+            throw new BusinessException("평가 기준이 없습니다. 평가 기준을 먼저 추출하세요.");
         }
         List<MultipartFile> chosen = files == null ? List.of()
                 : files.stream().filter(f -> f != null && !f.isEmpty()).toList();

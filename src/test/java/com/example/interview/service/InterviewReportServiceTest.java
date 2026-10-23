@@ -3,11 +3,8 @@ package com.example.interview.service;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import java.time.LocalDate;
-import java.util.List;
 
 import org.junit.jupiter.api.Test;
-
-import com.example.interview.domain.QaItem;
 
 class InterviewReportServiceTest {
 
@@ -21,12 +18,5 @@ class InterviewReportServiceTest {
         assertThat(InterviewReportService.age("98년생", TODAY)).isEqualTo("만 27~28세 (1998년생)");
         assertThat(InterviewReportService.age("만 29세", TODAY)).isEqualTo("만 29세");
         assertThat(InterviewReportService.age("", TODAY)).isEmpty();
-    }
-
-    @Test
-    void reorderKeepsInterviewerQuestionsFirst() {
-        List<QaItem> qa = List.of(QaItem.of(QaItem.CANDIDATE, "c", "", ""), QaItem.of(QaItem.INTERVIEWER, "a", "", ""),
-                QaItem.of(QaItem.INTERVIEWER, "b", "", ""));
-        assertThat(InterviewReportService.reorder(qa, List.of(1, 3, 2))).extracting(QaItem::getQuestion).containsExactly("b", "a", "c");
     }
 }

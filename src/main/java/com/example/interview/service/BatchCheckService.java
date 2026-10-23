@@ -55,7 +55,7 @@ public class BatchCheckService {
      */
     public int start(Long positionId, List<List<MultipartFile>> applicants) {
         if (positionService.criteria(positionId).isEmpty()) {
-            throw new BusinessException("평가항목이 없습니다. 평가항목을 먼저 추출하세요.");
+            throw new BusinessException("평가 기준이 없습니다. 평가 기준을 먼저 추출하세요.");
         }
         List<List<MultipartFile>> chosen = applicants.stream()
                 .map(files -> files.stream().filter(f -> f != null && !f.isEmpty()).toList())

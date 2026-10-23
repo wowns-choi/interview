@@ -72,6 +72,7 @@ public class EvidenceService {
                     quoted++;
                     if (!verified) {
                         failed++;
+                        e.setClosestQuote(quoteVerifier.closest(item.getQuote(), candidate.getMaskedText()));
                     }
                 }
                 evidences.add(e);

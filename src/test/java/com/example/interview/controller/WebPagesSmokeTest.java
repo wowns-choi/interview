@@ -65,14 +65,14 @@ class WebPagesSmokeTest {
         assertThat(get("/extract").statusCode()).isEqualTo(302);
         HttpResponse<String> positions = get("/positions");
         assertThat(positions.statusCode()).isEqualTo(200);
-        assertThat(positions.body()).contains("공통 질문 설정", "평가 항목 추출", "포지션 적합도 검사", "지원자 비교", "새 포지션", "평가항목 추출<svg", "파일 추가")
+        assertThat(positions.body()).contains("공통 질문 설정", "평가 기준 추출", "포지션 적합도 검사", "지원자 비교", "새 포지션", "평가 기준 추출<svg", "파일 추가")
                 .doesNotContain("jsessionid", "type=\"file\" id=\"resume\"");
         HttpResponse<String> settings = get("/settings");
         assertThat(settings.statusCode()).isEqualTo(200);
         assertThat(settings.body()).contains("GPT API 키", "로컬 AI (Ollama)", "https://ollama.com/download", "ollama pull ");
         // 포지션이 없으면 적합도 검사·비교는 빈 화면
-        assertThat(get("/fit").body()).contains("평가항목을 추출한 포지션이 없습니다");
-        assertThat(get("/ranking").body()).contains("평가항목을 추출한 포지션이 없습니다");
+        assertThat(get("/fit").body()).contains("평가 기준을 추출한 포지션이 없습니다");
+        assertThat(get("/ranking").body()).contains("평가 기준을 추출한 포지션이 없습니다");
         // 다른 사이트에서 보낸 POST는 거절한다
         assertThat(http.send(HttpRequest.newBuilder(uri("/positions"))
                 .header("Origin", "https://evil.example")
@@ -83,10 +83,10 @@ class WebPagesSmokeTest {
         assertThat(templates.statusCode()).isEqualTo(200);
         assertThat(templates.body()).contains("js-must", "[출퇴근]", "스펙터 작성 가능하신가요?", "질문 추가", "섹션 추가", "기술 검증")
                 .doesNotContain("면접 준비 도우미");
-        // 탭 순서: 공통 질문 설정 → 평가 항목 추출 → 포지션 적합도 검사 → 지원자 비교
+        // 탭 순서: 공통 질문 설정 → 평가 기준 추출 → 포지션 적합도 검사 → 지원자 비교
         String tb = templates.body();
-        assertThat(tb.indexOf("공통 질문 설정")).isLessThan(tb.indexOf("평가 항목 추출"));
-        assertThat(tb.indexOf("평가 항목 추출")).isLessThan(tb.indexOf("포지션 적합도 검사"));
+        assertThat(tb.indexOf("공통 질문 설정")).isLessThan(tb.indexOf("평가 기준 추출"));
+        assertThat(tb.indexOf("평가 기준 추출")).isLessThan(tb.indexOf("포지션 적합도 검사"));
         assertThat(tb.indexOf("포지션 적합도 검사")).isLessThan(tb.indexOf("지원자 비교"));
 
         // 섹션·질문 편집 API
@@ -113,12 +113,12 @@ class WebPagesSmokeTest {
         // ① 평가항목: 화면 + 편집 API
         String positionPage = get("/positions/" + positionId).body();
         assertThat(positionPage).contains("백엔드 개발자 (Java)", "대용량 트래픽 처리 경험", "Kafka 사용 경험",
-                "평가항목 추가", "href=\"/fit?position=" + positionId + "\"", "요구 경력", "경력 3년 이상")
+                "평가 기준 추가", "href=\"/fit?position=" + positionId + "\"", "요구 경력", "경력 3년 이상")
                 .doesNotContain("필수", "우대", "type=\"file\" id=\"resume\"", "<dt>연봉</dt>");
         // 적합도 검사: 포지션은 고르기만, 평가항목은 읽기 전용
         String fitPage = get("/fit?position=" + positionId).body();
         assertThat(fitPage).contains("type=\"file\" id=\"resume\"", "data-nav", "selected", "class=\"pick-crit\"", "대용량 트래픽 처리 경험", "포지션 적합도 검사 (1인)")
-                .doesNotContain("평가항목 추가", "js-crit-edit");
+                .doesNotContain("평가 기준 추가", "js-crit-edit");
         assertThat(get("/fit").body()).contains("type=\"file\" id=\"resume\"");
         assertThat(get("/fit?position=" + positionId + "&mode=batch").body()).contains("name=\"applicant-1\"", "name=\"applicant-3\"", "지원자 추가",
                 "개인정보 가리기 및 포지션 적합도 검사 일괄 진행", "포지션 적합도 검사 (1인)", "포지션 적합도 검사 (다수)").doesNotContain("id=\"resume\"");
@@ -132,7 +132,7 @@ class WebPagesSmokeTest {
         assertThat(json("DELETE", "/positions/" + positionId + "/criteria/" + critId, null).statusCode()).isEqualTo(204);
         assertThat(json("PATCH", "/positions/" + (positionId + 999) + "/criteria/" + critId, "{\"name\":\"x\"}").statusCode())
                 .isEqualTo(404);
-        assertThat(get("/positions").body()).contains("class=\"side-item \"", "백엔드 개발자 (Java)", "평가항목 3");
+        assertThat(get("/positions").body()).contains("class=\"side-item \"", "백엔드 개발자 (Java)", "평가 기준 3");
         // 경력·학력 조건 칸 (값을 바꾸면 뒤의 점수 확인이 달라지므로 화면과 없는 포지션만 본다)
         assertThat(get("/positions/" + positionId).body()).contains("id=\"conds\"", "data-key=\"requiredEducation\"", "id=\"conds-edit\"", "data-exp-kind=");
         assertThat(json("PATCH", "/positions/" + (positionId + 999) + "/conditions", "{\"requiredExperience\":\"x\"}").statusCode()).isEqualTo(404);
@@ -150,7 +150,7 @@ class WebPagesSmokeTest {
         // 가리기 직후에는 가린 본문만, 인적사항·경력·학력·연봉·타임라인은 적합도 검사 뒤에
         assertThat(review).contains("id=\"mask-view\"", "name=\"maskedText\"", "[전화번호]", "[A사] 백엔드팀", "&lt;script&gt;", "적합도 검사</button>", "[교육]")
                 .doesNotContain("class=\"profile\"", "가나커머스", "가나정보교육원", "<h3>타임라인</h3>",
-                        "<script>alert(1)</script>", "010-1111-2222", "직접 근거");
+                        "<script>alert(1)</script>", "010-1111-2222", "부분 충족");
         assertThat(get("/ranking?position=" + positionId).body()).contains("검사 전", "검토 중", "홍길동").doesNotContain("class=\"rk-no\">1<");
         assertThat(get("/positions/" + positionId + "/candidates").body()).contains("\"name\":\"홍길동\"", "\"label\":\"검토 중\"", "\"inProgress\":false");
         // 지원자 이름 바꾸기 (목록의 연필)
@@ -171,7 +171,7 @@ class WebPagesSmokeTest {
         assertThat(checked).contains("가나커머스", "class=\"gauge\"", "공고 경력 3년 이상",
                 "<h3>타임라인</h3>", "is-career", "title=\"가나커머스 · 백엔드팀 · 2021.03 ~ 2024.02\"", "title=\"이력서상 기록 없음 · 2020.07 ~ 2021.02 (8개월)\"")
                 .doesNotContain("공고까지", "없는항목", "<h3>연봉", "5,000만원", "<h3>교육</h3>");
-        assertThat(checked).contains("홍길동", "직접 근거", "총 2년 11개월", "포지션 관련 2년 6개월", "title=\"백엔드 업무 기간\"",
+        assertThat(checked).contains("홍길동", "부분 충족", "총 2년 11개월", "포지션 관련 2년 6개월", "title=\"백엔드 업무 기간\"",
                 "class=\"gauge-total\" style=\"width: 97%\"", "class=\"gauge-fill\" style=\"width: 83%\"", "<span class=\"stamp is-unmet\">미충족</span>","일 100만 건 주문 데이터 배치 처리 개선", "원문에서 찾지 못한",
                 "질문 추출</button>", "name=\"types\" value=\"EXPERIENCE\" checked", "class=\"print-head\"").doesNotContain("<script>alert(1)</script>", "id=\"iq-board\"");
         // 점수: 근거 직접 1·없음 0·없음 0 (경력·학력은 점수에 넣지 않는다)
@@ -220,7 +220,7 @@ class WebPagesSmokeTest {
         assertThat(post("/results/" + id + "/report", "", false).statusCode()).isEqualTo(302);
         assertThat(get("/results/" + id).body()).contains("href=\"/results/" + id + "/report\"");
         assertThat(get("/results/" + id + "/report").body()).contains("면접 결과 보고서", "value=\"2026-10-20\"", "측정은 nGrinder로 했다고 답함",
-                "파견 가능 여부", "희망연봉", "질문 정렬하기", "class=\"rp-box is-on\">합격<", "면접관 추가");
+                "파견 가능 여부", "희망연봉", "class=\"rp-box is-on\">합격<", "면접관 추가", "data-f=\"position\"");
         assertThat(json("PUT", "/results/" + id + "/report", "{\"reportDate\":\"2026-10-23\",\"qaSource\":\"SHEET\","
                 + "\"info\":[{\"label\":\"성명\",\"value\":\"<b>x</b>\"}],\"qa\":[{\"kind\":\"CANDIDATE\",\"question\":\"복지는요?\",\"answer\":\"안내함\"}],"
                 + "\"opinions\":[{\"team\":\"플랫폼팀\",\"name\":\"김면접\",\"content\":\"기술 깊이가 좋음\"}]}").statusCode()).isEqualTo(204);

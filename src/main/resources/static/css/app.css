@@ -29,7 +29,8 @@
 }
 
 * { box-sizing: border-box; }
-html { scroll-behavior: smooth; scroll-padding-top: 126px; }
+/* 부드러운 스크롤은 걸지 않는다: 새로 연 페이지가 #위치로 갈 때 맨 위에서 미끄러져 내려오지 않게. 목차는 JS로 부드럽게 옮긴다 */
+html { scroll-padding-top: calc(126px + var(--pin-h, 0px)); }
 body {
   margin: 0; background: var(--bg); color: var(--text);
   font-family: "Pretendard Variable", Pretendard, "Malgun Gothic", "Apple SD Gothic Neo", system-ui, sans-serif;
@@ -202,7 +203,7 @@ textarea:focus, input:focus { outline: 0; border-color: var(--accent); box-shado
 
 /* ── 목록 + 상세 ── */
 .split { display: grid; grid-template-columns: 300px minmax(0, 1fr); gap: 24px; align-items: start; }
-.side { position: sticky; top: 84px; display: grid; gap: 10px; max-height: calc(100vh - 108px); overflow: auto; }
+.side { position: sticky; top: calc(84px + var(--pin-h, 0px)); display: grid; gap: 10px; max-height: calc(100vh - 108px - var(--pin-h, 0px)); overflow: auto; }
 .side-new {
   display: flex; align-items: center; gap: 8px; height: 44px; padding: 0 14px; border: 1.5px dashed var(--border-2); border-radius: 10px;
   color: var(--text-2); font-weight: 700;
@@ -264,6 +265,21 @@ textarea:focus, input:focus { outline: 0; border-color: var(--accent); box-shado
 .pick-crit ul { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; row-gap: 2px; }
 .pick-crit li { color: var(--text-2); font-size: 14.5px; font-weight: 500; }
 .pick-crit li + li::before { content: ""; display: inline-block; width: 3px; height: 3px; margin: 0 12px; border-radius: 50%; background: var(--faint); vertical-align: middle; }
+.pick-bar {
+  position: fixed; top: 60px; left: 0; right: 0; z-index: 25;
+  background: rgba(255, 255, 255, .94); backdrop-filter: saturate(180%) blur(10px); border-bottom: 1px solid var(--border);
+}
+.pick-bar-in { display: flex; align-items: baseline; gap: 20px; max-width: 1680px; margin: 0 auto; padding: 11px 32px; }
+.pick-bar-select {
+  flex: none; appearance: none; -webkit-appearance: none; field-sizing: content; max-width: 40%; margin-left: -10px; padding: 3px 34px 3px 10px; border: 0; border-radius: 8px;
+  background: transparent url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%2378746c' stroke-width='2.4' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E") no-repeat right 10px center / 15px;
+  color: var(--text); font: inherit; font-size: 16.5px; font-weight: 800; letter-spacing: -0.02em; cursor: pointer;
+}
+.pick-bar-select:hover { background-color: var(--chip); }
+.pick-bar-select:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.pick-bar-select option { font-size: 15px; font-weight: 500; }
+.pick-bar-in { align-items: center; }
+.pick-bar .pick-crit li { font-size: 13.5px; }
 
 /* ── 지원자 비교 ── */
 .rk-top { display: flex; align-items: center; flex-wrap: wrap; gap: 10px 28px; margin-bottom: 22px; }
@@ -448,7 +464,7 @@ textarea.inline-edit { resize: none; overflow: hidden; }
 @keyframes pulse { 50% { opacity: .25; } }
 
 .review { display: grid; grid-template-columns: minmax(0, 1fr) 240px; gap: 16px; }
-.review-side { position: sticky; top: 136px; align-self: start; display: grid; gap: 10px; }
+.review-side { position: sticky; top: calc(136px + var(--pin-h, 0px)); align-self: start; display: grid; gap: 10px; }
 .review-side .btn-lg { height: 56px; }
 .review-tools { display: flex; justify-content: space-between; }
 .review-tools { gap: 4px; }
@@ -628,6 +644,9 @@ textarea.inline-edit { resize: none; overflow: hidden; }
   white-space: pre-wrap; font-size: 16px; line-height: 1.6; color: var(--text); }
 .quote-unverified { border-left-color: var(--danger); background: #fbf1ef; }
 .warn-text { margin-top: 6px; color: var(--danger); font-size: 13.5px; font-weight: 600; }
+.ev-closest { margin-top: 8px; padding: 10px 14px; border-left: 3px solid var(--border-2); border-radius: 0 10px 10px 0; background: var(--surface-2); }
+.ev-closest span { display: block; margin-bottom: 4px; color: var(--muted); font-size: 12.5px; font-weight: 700; }
+.ev-closest p { white-space: pre-wrap; color: var(--text-2); font-size: 15px; line-height: 1.6; }
 .interp { margin-top: 8px; padding-left: 19px; color: var(--muted); font-size: 15px; line-height: 1.6; }
 .ev-none { color: var(--muted); font-size: 15.5px; }
 
@@ -708,6 +727,18 @@ textarea.inline-edit { resize: none; overflow: hidden; }
 .save-state.err { color: var(--danger); }
 
 /* 질문 추출: 유형을 골라 여러 번 추출하고, 쌓인 질문을 질문지에 합친다 */
+/* 질문 추출: 타이핑 탭 맨 위에 접었다 폈다 하는 상자 */
+.qx { margin-bottom: 26px; border: 1px solid var(--border); border-radius: 14px; background: var(--surface-2); }
+.qx-sum { display: flex; align-items: center; gap: 14px; padding: 14px 20px; cursor: pointer; list-style: none; user-select: none; }
+.qx-sum::-webkit-details-marker { display: none; }
+.qx-sum::after { content: ""; width: 8px; height: 8px; margin: -4px 4px 0 auto; border-right: 2px solid var(--muted); border-bottom: 2px solid var(--muted); transform: rotate(45deg); transition: transform .15s; }
+.qx[open] > .qx-sum::after { margin-top: 4px; transform: rotate(-135deg); }
+.qx-title { font-size: 16px; font-weight: 800; }
+.qx-pending { color: var(--muted); font-size: 14px; font-weight: 600; }
+.qx-pending b { margin-left: 4px; color: var(--accent); }
+.qx-body { padding: 0 20px 20px; }
+.qx .qx-bar { border: 1px solid var(--border); background: var(--surface); }
+.qx .qx-pool { margin-top: 22px; }
 .qx-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 14px 32px; padding: 14px 16px 14px 22px; border-radius: 14px; background: var(--surface-2); }
 .qx-bar .btn { margin-left: auto; }
 .qx-group { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
@@ -772,6 +803,8 @@ textarea.inline-edit { resize: none; overflow: hidden; }
   .page { padding: 20px 16px 60px; }
   .topbar { height: 64px; }
   .topbar-in { padding: 0 16px; }
+  .pick-bar { top: 64px; }
+  .pick-bar-in { padding: 10px 16px; }
   .tabs { gap: 22px; overflow-x: auto; }
   .tab { flex: none; font-size: 16px; }
   .stage { padding: 18px 16px 20px; }
@@ -811,7 +844,7 @@ textarea.inline-edit { resize: none; overflow: hidden; }
   * { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
   html, body { background: #fff; }
   .page { max-width: none; padding: 0; }
-  .topbar, .flash, .toast, .busy-overlay, .side, #cand-rename, .pick, .review, .score-pill, .mask-float,
+  .topbar, .flash, .toast, .busy-overlay, .side, .pick-bar, #cand-rename, .pick, .review, .score-pill, .mask-float,
   .stage-actions, .people, .row-actions, .iq-handle, .add-row, .save-state, .aa, .q-excerpt { display: none !important; }
   .split { display: block; }
   .print-head { display: flex; align-items: baseline; gap: 14px; margin-bottom: 16px; }

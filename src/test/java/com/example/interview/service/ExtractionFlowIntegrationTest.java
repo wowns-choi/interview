@@ -27,7 +27,6 @@ import com.example.interview.ai.AiClient;
 import com.example.interview.ai.dto.ArrangeResult;
 import com.example.interview.ai.dto.InterviewRecordResult;
 import com.example.interview.ai.dto.ReportInfoResult;
-import com.example.interview.ai.dto.ReportSortResult;
 import com.example.interview.ai.dto.CareerEvalResult;
 import com.example.interview.ai.dto.CriteriaResult;
 import com.example.interview.ai.dto.EvidenceResult;
@@ -419,16 +418,6 @@ public class ExtractionFlowIntegrationTest {
         // 질문지로 바꾸면 면접관이 적은 답변만 가져온다
         interviewReportService.useSource(id, InterviewReport.SHEET);
         assertThat(interviewReportService.get(id).getQa()).extracting(QaItem::getAnswer).containsExactly("면접관이 직접 적은 답");
-
-        // 정렬: GPT가 준 순서대로, 면접관 질문을 지원자 질문보다 앞에
-        interviewReportService.useSource(id, InterviewReport.RECORD);
-        ReportSortResult sorted = new ReportSortResult();
-        sorted.setOrder(new java.util.ArrayList<>(List.of(3, 2, 1)));
-        when(aiClient.call(eq(AiPurpose.REPORT_SORT), anyLong(), anyString(), anyString(), eq(ReportSortResult.class), any()))
-                .thenReturn(sorted);
-        interviewReportService.sort(id);
-        assertThat(interviewReportService.get(id).getQa()).extracting(QaItem::getQuestion).containsExactly(
-                "주문 배치 규모는 어느 정도였나요?", "자기소개를 부탁드립니다.", "입사 후 처음 맡는 업무는 무엇인가요?");
     }
 
     private static InterviewRecordResult.Item recordItem(String kind, String question, String answer, String excerpt) {

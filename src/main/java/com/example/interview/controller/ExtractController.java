@@ -247,9 +247,9 @@ public class ExtractController {
         var result = extractionService.extractQuestions(id, types == null ? List.of() : types);
         String message = "질문 " + result.count() + "개를 추출했습니다.";
         if (result.skipped().contains(QuestionType.EXPERIENCE)) {
-            message += " 모든 평가항목에 직접 근거가 있어 '해본 적 있어?' 질문은 만들지 않았습니다.";
+            message += " 모든 평가 기준을 충족해 '해본 적 있어?' 질문은 만들지 않았습니다.";
         } else if (!result.skipped().isEmpty()) {
-            message += " 직접·간접 근거가 없어 이력서 내용에 대한 질문은 만들지 않았습니다.";
+            message += " 충족·부분 충족한 평가 기준이 없어 이력서 내용에 대한 질문은 만들지 않았습니다.";
         }
         ra.addFlashAttribute("message", message);
         return "redirect:/results/" + id + "#extract";
@@ -414,7 +414,7 @@ public class ExtractController {
             positionService.extractCriteria(positionId);
         } catch (AiCallException e) {
             log.warn("평가항목 추출 실패 positionId={}: {}", positionId, e.getMessage());
-            ra.addFlashAttribute("error", "평가항목을 추출하지 못했습니다. " + e.getMessage());
+            ra.addFlashAttribute("error", "평가 기준을 추출하지 못했습니다. " + e.getMessage());
         }
     }
 }

@@ -6,7 +6,7 @@
 
 <c:choose>
 <c:when test="${empty position}">
-  <div class="empty-page">평가항목을 추출한 포지션이 없습니다. <a href="<c:url value='/positions'/>">평가 항목 추출</a></div>
+  <div class="empty-page">평가 기준을 추출한 포지션이 없습니다. <a href="<c:url value='/positions'/>">평가 기준 추출</a></div>
 </c:when>
 <c:otherwise>
 <div class="ws" id="ws"
@@ -51,8 +51,8 @@
     <nav class="toc" id="toc">
       <a href="#sec-review">개인정보 가리기</a>
       <a href="#sec-profile">개인정보</a>
-      <a href="#sec-evidence">평가항목별 근거</a>
-      <a href="#extract">면접 질문</a>
+      <a href="#sec-evidence">평가 기준 충족 여부</a>
+      <a href="#questions">면접 질문</a>
       <a href="#opinion">AI 의견</a>
     </nav>
     </c:if>
@@ -128,7 +128,7 @@
     </div>
     <c:set var="score" value="${r.score}"/>
     <c:if test="${not empty score}">
-      <span class="score-pill${score.complete ? '' : ' is-stale'}" title="${score.complete ? '' : '검사 뒤에 평가항목이 바뀌었습니다. 다시 검사하세요.'}">${score.totalText}<small> / ${score.max}점</small></span>
+      <span class="score-pill${score.complete ? '' : ' is-stale'}" title="${score.complete ? '' : '검사 뒤에 평가 기준이 바뀌었습니다. 다시 검사하세요.'}">${score.totalText}<small> / ${score.max}점</small></span>
     </c:if>
   </header>
         <c:set var="st" value="${r.candidate.status}"/>
@@ -385,12 +385,12 @@
 
         <c:if test="${r.fitChecked}">
         <section class="stage" id="sec-evidence">
-          <header class="stage-head"><h2>평가항목별 근거</h2></header>
+          <header class="stage-head"><h2>평가 기준 충족 여부</h2></header>
           <div class="ev-list">
             <div class="ev-sum">
-              <span class="ev-tag ev-DIRECT"><i class="hb ev-DIRECT"></i>직접 근거 <b>${r.directCount}</b></span>
-              <span class="ev-tag ev-INDIRECT"><i class="hb ev-INDIRECT"></i>간접 근거 <b>${r.indirectCount}</b></span>
-              <span class="ev-tag ev-NONE"><i class="hb ev-NONE"></i>근거 없음 <b>${r.noneCount}</b></span>
+              <span class="ev-tag ev-DIRECT"><i class="hb ev-DIRECT"></i>충족 <b>${r.directCount}</b></span>
+              <span class="ev-tag ev-INDIRECT"><i class="hb ev-INDIRECT"></i>부분 충족 <b>${r.indirectCount}</b></span>
+              <span class="ev-tag ev-NONE"><i class="hb ev-NONE"></i>미확인 <b>${r.noneCount}</b></span>
             </div>
             <c:forEach var="cv" items="${r.criteria}" varStatus="cs">
               <c:set var="evKind" value="${cv.checked ? cv.match : 'UNCHECKED'}"/>
@@ -398,7 +398,7 @@
                 <header class="ev-head">
                   <span class="ev-no">${cs.count < 10 ? '0' : ''}${cs.count}</span>
                   <h4><c:out value="${cv.criterion.name}"/></h4>
-                  <span class="ev-tag"><i class="hb ev-${evKind}"></i>${evKind == 'DIRECT' ? '직접 근거' : evKind == 'INDIRECT' ? '간접 근거' : evKind == 'NONE' ? '근거 없음' : '검사 전'}</span>
+                  <span class="ev-tag"><i class="hb ev-${evKind}"></i>${evKind == 'DIRECT' ? '충족' : evKind == 'INDIRECT' ? '부분 충족' : evKind == 'NONE' ? '미확인' : '검사 전'}</span>
                 </header>
                 <c:if test="${cv.checked}">
                   <div class="ev-body">
@@ -410,7 +410,9 @@
                         <c:forEach var="ev" items="${cv.quotedEvidences}">
                           <div class="ev-item">
                             <blockquote class="quote ${ev.verifiedYn == 'Y' ? '' : 'quote-unverified'}"><c:out value="${ev.quote}"/></blockquote>
-                            <c:if test="${ev.verifiedYn != 'Y'}"><p class="warn-text">이력서 원문에서 찾지 못한 문장입니다</p></c:if>
+                            <c:if test="${ev.verifiedYn != 'Y'}"><p class="warn-text">이력서 원문에서 찾지 못한 문장입니다</p>
+                              <c:if test="${not empty ev.closestQuote}"><div class="ev-closest"><span>가장 비슷한 원문</span><p><c:out value="${ev.closestQuote}"/></p></div></c:if>
+                            </c:if>
                             <p class="interp"><c:out value="${ev.interpretation}"/></p>
                           </div>
                         </c:forEach>
@@ -424,15 +426,32 @@
         </section>
         </c:if>
 
-<%-- 면접 질문 추출: 유형을 골라 여러 번 추출해 쌓고, 공통 질문과 합치면 질문지가 된다 --%>
+<%-- 면접 질문지: 타이핑(질문 추출 → 질문지, 면접관이 적는 답변) / 녹음본(녹음본으로 만든 질문-답변).
+     질문 추출은 타이핑 질문지에만 넣으므로 타이핑 탭 안에 둔다 --%>
 <c:set var="qOpen" value="${r.fitChecked}"/>
-<section class="stage qx ${qOpen ? '' : 'is-locked'}" id="extract">
+<c:if test="${not qOpen}">
+<section class="stage is-locked" id="questions">
+  <header class="stage-head"><h2>면접 질문지</h2></header>
+</section>
+</c:if>
+<c:if test="${qOpen}">
+<section class="stage" id="questions">
   <header class="stage-head">
-    <h2>면접 질문 추출</h2>
+    <h2>면접 질문지</h2>
+    <div class="qtabs" role="tablist">
+      <button type="button" role="tab" class="qtab" data-qtab="sheet" aria-selected="true">타이핑</button>
+      <button type="button" role="tab" class="qtab" data-qtab="record" aria-selected="false">녹음본<c:if test="${not empty record}"> <b>${fn:length(record.items)}</b></c:if></button>
+    </div>
   </header>
-
-  <c:if test="${qOpen}">
-    <form class="qx-bar" method="post" action="<c:url value='/results/${r.candidate.id}/questions/generate'/>" data-busy="면접 질문을 추출하는 중">
+  <div class="qpane" data-qpane="sheet">
+  <%-- 질문 추출: 유형을 골라 여러 번 추출해 쌓고, 질문지에 넣는다. 질문지가 있고 넣을 질문이 없으면 접어 둔다 --%>
+  <details class="qx" id="extract" ${empty r.sections or not empty r.extracted ? 'open' : ''}>
+    <summary class="qx-sum">
+      <span class="qx-title">질문 추출</span>
+      <c:if test="${not empty r.extracted}"><span class="qx-pending">질문지에 넣지 않은 질문 <b>${r.extractedCount}</b></span></c:if>
+    </summary>
+    <div class="qx-body">
+    <form class="qx-bar" method="post" data-partial="#questions" action="<c:url value='/results/${r.candidate.id}/questions/generate'/>" data-busy="면접 질문을 추출하는 중">
       <div class="qx-group">
         <span class="qx-cap">이력서에 쓴 것</span>
         <label class="qx-type"><input type="checkbox" name="types" value="VERIFY" checked><span>거짓말 판독기</span></label>
@@ -441,7 +460,7 @@
       </div>
       <div class="qx-group">
         <span class="qx-cap">포지션 요구 기술</span>
-        <label class="qx-type"${r.experienceAskable ? '' : ' title="모든 평가항목에 직접 근거가 있습니다"'}><input type="checkbox" name="types" value="EXPERIENCE" ${r.experienceAskable ? 'checked' : 'disabled'}><span>해본 적 있어?</span></label>
+        <label class="qx-type"${r.experienceAskable ? '' : ' title="모든 평가 기준을 충족했습니다"'}><input type="checkbox" name="types" value="EXPERIENCE" ${r.experienceAskable ? 'checked' : 'disabled'}><span>해본 적 있어?</span></label>
       </div>
       <button type="submit" class="btn btn-primary">${r.extractedCount + r.questionCount > 0 ? '더 추출' : '질문 추출'}</button>
     </form>
@@ -450,7 +469,7 @@
       <div class="qx-pool" id="qx-pool">
         <div class="qx-pool-head">
           <h3>추출한 질문 <b>${r.extractedCount}</b></h3>
-          <form method="post" action="<c:url value='/results/${r.candidate.id}/questions/merge'/>" data-busy="질문지를 만드는 중">
+          <form method="post" action="<c:url value='/results/${r.candidate.id}/questions/merge'/>" data-partial="#questions" data-busy="질문지를 만드는 중">
             <button type="submit" class="btn btn-primary btn-sm">${empty r.sections ? '공통 질문과 합치기' : '질문지에 넣기'}</button>
           </form>
         </div>
@@ -482,21 +501,8 @@
         </c:forEach>
       </div>
     </c:if>
-  </c:if>
-</section>
-
-<%-- 면접 질문지 (공통 질문과 합친 것) --%>
-<c:if test="${qOpen}">
-<section class="stage" id="questions">
-  <header class="stage-head">
-    <h2>면접 질문지</h2>
-    <div class="qtabs" role="tablist">
-      <button type="button" role="tab" class="qtab" data-qtab="sheet" aria-selected="true">타이핑</button>
-      <button type="button" role="tab" class="qtab" data-qtab="record" aria-selected="false">녹음본<c:if test="${not empty record}"> <b>${fn:length(record.items)}</b></c:if></button>
     </div>
-  </header>
-  <div class="qpane" data-qpane="sheet">
-  <c:if test="${empty r.sections}"><p class="qpane-empty">공통 질문과 합치면 질문지가 만들어집니다.</p></c:if>
+  </details>
   <c:if test="${not empty r.sections}">
   <div class="iq-board" id="iq-board">
     <c:forEach var="sec" items="${r.sections}">
@@ -559,7 +565,7 @@
 
   <%-- 면접 기록: 녹음본만 보고 만든 질문-답변 (녹음본 순서). 질문지 답변과 섞지 않는다 --%>
   <div class="qpane" data-qpane="record" id="record" hidden>
-    <form class="aa rec-form" id="rec-form" method="post" enctype="multipart/form-data" action="<c:url value='/results/${r.candidate.id}/record'/>"
+    <form class="aa rec-form" id="rec-form" method="post" data-partial="#questions" enctype="multipart/form-data" action="<c:url value='/results/${r.candidate.id}/record'/>"
           data-busy="녹음본으로 면접 기록을 만드는 중" data-busy-sub="녹음본이 길면 몇 분 걸립니다"
           <c:if test="${not empty record}">data-confirm="면접 기록을 새로 만듭니다. 지금 기록은 바뀝니다." hidden</c:if>>
       <textarea name="transcript" class="aa-text" rows="8" placeholder="면접 녹음본 글을 붙여넣으세요"><c:out value="${r.candidate.transcript}"/></textarea>
@@ -606,7 +612,7 @@
     <h2>AI 의견 참고</h2>
     <c:if test="${not empty r.opinion}"><span class="op-at"><c:out value="${r.opinion.askedAt}"/></span></c:if>
     <div class="stage-actions">
-      <form method="post" action="<c:url value='/results/${r.candidate.id}/opinion'/>" data-busy="AI 의견을 받는 중">
+      <form method="post" action="<c:url value='/results/${r.candidate.id}/opinion'/>" data-partial="#opinion" data-busy="AI 의견을 받는 중">
         <button type="submit" class="btn btn-sm ${empty r.opinion ? 'btn-primary' : 'btn-ghost'}">${empty r.opinion ? 'AI 의견 받기' : '다시 받기'}</button>
       </form>
     </div>

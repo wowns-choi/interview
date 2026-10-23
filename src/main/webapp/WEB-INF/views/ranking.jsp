@@ -6,7 +6,7 @@
 
 <c:choose>
 <c:when test="${empty position}">
-  <div class="empty-page">평가항목을 추출한 포지션이 없습니다. <a href="<c:url value='/positions'/>">평가 항목 추출</a></div>
+  <div class="empty-page">평가 기준을 추출한 포지션이 없습니다. <a href="<c:url value='/positions'/>">평가 기준 추출</a></div>
 </c:when>
 <c:otherwise>
 <c:set var="pickBase" value="/ranking"/>
@@ -28,9 +28,9 @@
         <label class="switch"><input type="checkbox" data-rk-filter="engineer"><span class="switch-track"></span>정보처리기사 있음</label>
         <label class="switch"><input type="checkbox" data-rk-filter="sqld"><span class="switch-track"></span>SQLD 있음</label>
         <div class="rk-legend">
-          <span><i class="rk-sq ev-DIRECT"></i>직접 1</span>
-          <span><i class="rk-sq ev-INDIRECT"></i>간접 0.5</span>
-          <span><i class="rk-sq ev-NONE"></i>없음 0</span>
+          <span><i class="rk-sq ev-DIRECT"></i>충족 1</span>
+          <span><i class="rk-sq ev-INDIRECT"></i>부분 충족 0.5</span>
+          <span><i class="rk-sq ev-NONE"></i>미확인 0</span>
         </div>
       </div>
       <ol class="rk-key">
@@ -42,7 +42,7 @@
             <tr>
               <th class="rk-no"></th>
               <th class="rk-name">지원자</th>
-              <th class="rk-total">평가항목충족</th>
+              <th class="rk-total">평가 기준 충족</th>
               <th class="rk-cnd">경력</th>
               <th class="rk-cnd">학력</th>
               <c:forEach var="c" items="${criteria}" varStatus="cs"><th class="rk-c${cs.first ? ' rk-first' : ''}${cs.last ? ' rk-last' : ''}" title="<c:out value='${c.name}'/>">${cs.count}</th></c:forEach>
@@ -75,7 +75,7 @@
                     <td class="rk-cnd"><span class="rk-cond is-${s.education == 1 ? 'met' : 'unmet'}">${s.education == 1 ? '충족' : '미충족'}</span></td>
                     <c:forEach var="it" items="${s.items}" varStatus="is">
                       <c:set var="evK" value="${empty it.match ? 'UNCHECKED' : it.match}"/>
-                      <td class="rk-c${is.first ? ' rk-first' : ''}${is.last ? ' rk-last' : ''}"><i class="rk-sq ev-${evK}" title="${is.count}. <c:out value='${it.name}'/> · ${empty it.match ? '검사 전' : it.match == 'DIRECT' ? '직접 근거' : it.match == 'INDIRECT' ? '간접 근거' : '근거 없음'}"></i></td>
+                      <td class="rk-c${is.first ? ' rk-first' : ''}${is.last ? ' rk-last' : ''}"><i class="rk-sq ev-${evK}" title="${is.count}. <c:out value='${it.name}'/> · ${empty it.match ? '검사 전' : it.match == 'DIRECT' ? '충족' : it.match == 'INDIRECT' ? '부분 충족' : '미확인'}"></i></td>
                     </c:forEach>
                   </c:otherwise>
                 </c:choose>
