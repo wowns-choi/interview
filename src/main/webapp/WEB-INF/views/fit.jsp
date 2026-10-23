@@ -3,6 +3,12 @@
 <c:set var="pageTitle" value="${not empty r ? r.candidate.displayName : '포지션 적합도 검사'}"/>
 <c:set var="activeTab" value="fit"/>
 <%@ include file="common/header.jspf" %>
+<%-- 결과 연출: 그리기 전에 숨겨 두어야 깜빡이지 않는다 (app.js가 풀어 준다) --%>
+<script>
+  try {
+    if (${justChecked ? 'true' : 'false'} || sessionStorage.getItem('reveal')) document.documentElement.classList.add('revealing');
+  } catch (e) { /* 연출만 빠진다 */ }
+</script>
 
 <c:choose>
 <c:when test="${empty position}">
@@ -23,50 +29,27 @@
 <c:set var="pickBase" value="/fit"/>
 <%@ include file="common/position-pick.jspf" %>
 
-<div class="split">
+<div class="split fit-split${empty r ? ' is-single' : ''}">
+  <c:if test="${not empty r}">
   <aside class="side">
-    <a class="side-new ${empty r and not batch ? 'active' : ''}" href="<c:url value='/fit?position=${position.id}'/>"><svg class="i"><use href="#i-plus"/></svg>포지션 적합도 검사 (1인)</a>
-    <a class="side-new ${empty r and batch ? 'active' : ''}" href="<c:url value='/fit?position=${position.id}&mode=batch'/>"><svg class="i"><use href="#i-plus"/></svg>포지션 적합도 검사 (다수)</a>
-    <c:if test="${not empty candidates}">
-    <label class="side-select">
-      <span>지원자 ${fn:length(candidates)}명</span>
-      <select data-nav id="cand-list" data-url="<c:url value='/positions/${position.id}/candidates'/>"
-              data-current="${empty r ? '' : r.candidate.id}" data-current-status="${empty r ? '' : r.candidate.status}">
-        <c:if test="${empty r}"><option value="" disabled selected>지원자 선택</option></c:if>
-        <c:forEach var="row" items="${candidates}">
-          <c:choose>
-            <c:when test="${row.inProgress}"><c:set var="tail" value="${row.statusLabel}"/></c:when>
-            <c:when test="${row.state == 'RANKED' or row.state == 'EXCLUDED'}"><c:set var="tail" value="${row.score.totalText} / ${row.score.max}"/></c:when>
-            <c:when test="${row.state == 'STALE'}"><c:set var="tail" value="재검사 필요"/></c:when>
-            <c:when test="${row.status == 'FAILED'}"><c:set var="tail" value="실패"/></c:when>
-            <c:otherwise><c:set var="tail" value="${row.statusLabel}"/></c:otherwise>
-          </c:choose>
-          <option value="<c:url value='/results/${row.candidateId}'/>" data-in-progress="${row.inProgress}" data-tail="${tail}"
-                  ${not empty r and r.candidate.id == row.candidateId ? 'selected' : ''}><c:out value="${row.displayName}"/> · ${tail}</option>
-        </c:forEach>
-      </select>
-    </label>
-    </c:if>
-    <c:if test="${not empty r}">
     <nav class="toc" id="toc">
-      <a href="#sec-review">개인정보 가리기</a>
       <a href="#sec-profile">개인정보</a>
       <a href="#sec-evidence">평가 기준 충족 여부</a>
       <a href="#questions">면접 질문</a>
       <a href="#opinion">AI 의견</a>
     </nav>
-    </c:if>
   </aside>
+  </c:if>
 
-  <div class="detail">
+  <div class="detail"${justChecked ? ' data-reveal' : ''}>
 <c:choose>
-  <c:when test="${empty r and batch}">
+  <c:when test="${empty r}">
     <section class="stage" id="fit">
-      <header class="stage-head"><h2>포지션 적합도 검사 (다수)</h2></header>
+      <header class="stage-head"><h2>포지션 적합도 검사</h2></header>
       <form method="post" enctype="multipart/form-data" action="<c:url value='/positions/${position.id}/batch'/>"
             data-busy="이력서를 읽는 중" id="batch-form">
         <div class="bz-grid" id="bz-grid">
-          <c:forEach var="n" begin="1" end="3">
+          <c:forEach var="n" begin="1" end="1">
             <div class="bz">
               <label class="dropzone">
                 <input type="file" name="applicant-${n}" accept=".pdf,.doc,.docx,.ppt,.pptx,.hwp,.hwpx" multiple>
@@ -79,34 +62,23 @@
           </c:forEach>
         </div>
         <button type="button" class="add-row bz-add" id="bz-add"><svg class="i"><use href="#i-plus"/></svg>지원자 추가</button>
-        <button type="submit" class="btn btn-primary btn-lg bz-submit">개인정보 가리기 및 포지션 적합도 검사 일괄 진행</button>
-      </form>
-    </section>
-  </c:when>
-  <c:when test="${empty r}">
-    <section class="stage" id="fit">
-      <header class="stage-head"><h2>포지션 적합도 검사 (1인)</h2></header>
-      <form method="post" enctype="multipart/form-data" action="<c:url value='/positions/${position.id}/resume'/>"
-            data-busy="개인정보를 가리는 중" class="resume-form">
-        <label class="dropzone" id="dropzone">
-          <input type="file" id="resume" name="resume" accept=".pdf,.doc,.docx,.ppt,.pptx,.hwp,.hwpx" multiple required>
-          <span class="dz-icon" aria-hidden="true"><svg class="i"><use href="#i-file"/></svg></span>
-          <span class="dz-text" id="dz-text">이력서·포트폴리오를 끌어다 놓거나 클릭</span>
-        </label>
-        <button type="submit" class="btn btn-primary btn-lg">개인정보 가리기</button>
+        <button type="submit" class="btn btn-primary btn-lg bz-submit">포지션 적합도 검사</button>
       </form>
     </section>
   </c:when>
   <c:otherwise>
+<c:set var="st" value="${r.candidate.status}"/>
+<c:set var="busy" value="${st == 'QUEUED' or st == 'MASKING' or st == 'ANALYZING'}"/>
+<c:set var="pf" value="${r.profile}"/>
+<c:set var="showProfile" value="${r.fitChecked and ((not empty pf and pf.filled) or not empty position.requiredExperience)}"/>
+<c:set var="renameBtn"><c:if test="${not busy}"><button type="button" class="icon-btn" id="cand-rename" title="이름 바꾸기"><svg class="i"><use href="#i-pencil"/></svg></button></c:if></c:set>
 <%-- 면접 기록: 면접관이 직접 체크한다 (AI는 합격·불합격을 정하지 않는다) --%>
-<div class="iv-bar" id="iv-bar" data-url="<c:url value='/results/${r.candidate.id}/interview'/>">
-  <label class="iv-check"><input type="checkbox" id="iv-done" ${r.candidate.interviewed ? 'checked' : ''}>면접봤어요</label>
-  <label class="iv-date">면접 본 날짜<input type="date" id="iv-date" value="${r.candidate.interviewDate}"></label>
+<div class="iv-bar" id="iv-bar" data-url="<c:url value='/results/${r.candidate.id}/interview'/>" data-interviewed="${r.candidate.interviewed}" data-date="${r.candidate.interviewDate}">
+  <span class="iv-result-label">결과</span>
   <div class="iv-decision" role="group" aria-label="합격 여부">
     <button type="button" class="iv-pass${r.candidate.decision == 'PASS' ? ' is-on' : ''}" data-decision="PASS" aria-pressed="${r.candidate.decision == 'PASS'}">합격</button>
     <button type="button" class="iv-fail${r.candidate.decision == 'FAIL' ? ' is-on' : ''}" data-decision="FAIL" aria-pressed="${r.candidate.decision == 'FAIL'}">불합격</button>
   </div>
-  <span class="save-state" id="iv-state" aria-live="polite"></span>
   <%-- 보고서는 합격으로 기록한 지원자만 --%>
   <c:choose>
     <c:when test="${hasReport}">
@@ -119,19 +91,29 @@
       </form>
     </c:otherwise>
   </c:choose>
+  <span class="save-state" id="iv-state" aria-live="polite"></span>
+  <c:if test="${not busy}">
+  <div class="cand-actions">
+  <c:if test="${not empty r.candidate.maskedText}">
+  <form method="post" action="<c:url value='/results/${r.candidate.id}/check'/>" data-busy="포지션 적합도를 검사하는 중"
+        <c:if test="${not empty r.sections}">data-confirm="다시 검사하면 지금 질문지가 지워집니다. 계속할까요?"</c:if>>
+    <button type="submit" class="btn btn-sm ${r.fitChecked ? 'btn-ghost' : 'btn-primary'}">${r.fitChecked ? '다시 검사' : '검사'}</button>
+  </form>
+  </c:if>
+  <form method="post" action="<c:url value='/results/${r.candidate.id}/delete'/>" data-confirm="이 지원자의 검사 결과와 질문지를 삭제할까요?">
+    <button type="submit" class="btn btn-ghost btn-sm btn-danger-text">삭제</button>
+  </form>
+  </div>
+  </c:if>
 </div>
+<c:if test="${busy or empty r.candidate.maskedText or (st == 'FAILED' and not r.fitChecked) or not showProfile}">
 <section class="stage" id="fit">
   <header class="stage-head">
     <div class="title-edit">
       <h2 data-cand-name id="cand-title"><c:out value="${r.candidate.displayName}"/></h2>
-      <c:if test="${not (r.candidate.status == 'QUEUED' or r.candidate.status == 'MASKING' or r.candidate.status == 'ANALYZING')}"><button type="button" class="icon-btn" id="cand-rename" title="이름 바꾸기"><svg class="i"><use href="#i-pencil"/></svg></button></c:if>
+      ${renameBtn}
     </div>
-    <c:set var="score" value="${r.score}"/>
-    <c:if test="${not empty score}">
-      <span class="score-pill${score.complete ? '' : ' is-stale'}" title="${score.complete ? '' : '검사 뒤에 평가 기준이 바뀌었습니다. 다시 검사하세요.'}">${score.totalText}<small> / ${score.max}점</small></span>
-    </c:if>
   </header>
-        <c:set var="st" value="${r.candidate.status}"/>
         <c:choose>
           <c:when test="${st == 'QUEUED' or st == 'MASKING' or st == 'ANALYZING'}">
             <div class="progress-box" id="progress-box">
@@ -141,35 +123,13 @@
           </c:when>
           <c:when test="${empty r.candidate.maskedText}">
             <div class="flash flash-error"><c:out value="${r.candidate.errorMessage}"/></div>
-            <form method="post" action="<c:url value='/results/${r.candidate.id}/delete'/>" data-confirm="이 지원자를 삭제할까요?">
-              <button type="submit" class="btn btn-ghost btn-sm btn-danger-text">삭제</button>
-            </form>
           </c:when>
-          <c:otherwise>
-        <div class="review" id="sec-review">
-          <form method="post" action="<c:url value='/results/${r.candidate.id}/check'/>" data-busy="이력서를 검사하는 중" id="review-form"
-                <c:if test="${not empty r.sections}">data-confirm="다시 검사하면 지금 질문지가 지워집니다. 계속할까요?"</c:if>>
-            <div class="mask-view" id="mask-view" hidden></div>
-            <textarea name="maskedText" id="masked-text" class="crit-text"><c:out value="${r.candidate.maskedText}"/></textarea>
-          </form>
-          <div class="review-side">
-            <button type="submit" form="review-form" class="btn btn-primary btn-lg">${r.fitChecked ? '다시 검사' : '적합도 검사'}</button>
-            <div class="review-tools">
-              <button type="button" class="btn btn-ghost btn-sm" id="mask-edit">직접 고치기</button>
-              <button type="button" class="btn btn-ghost btn-sm" id="mask-undo" hidden>되돌리기</button>
-              <form method="post" action="<c:url value='/results/${r.candidate.id}/delete'/>" data-confirm="이 이력서의 검사 결과와 질문지를 삭제할까요?">
-                <button type="submit" class="btn btn-ghost btn-sm btn-danger-text">삭제</button>
-              </form>
-            </div>
-          </div>
-        </div>
-
-        <c:if test="${r.candidate.status == 'FAILED' and not r.fitChecked}">
-          <div class="flash flash-error">검사하지 못했습니다. <c:out value="${r.candidate.errorMessage}"/></div>
-        </c:if>
-          </c:otherwise>
+          <c:when test="${st == 'FAILED' and not r.fitChecked}">
+            <div class="flash flash-error">검사하지 못했습니다. <c:out value="${r.candidate.errorMessage}"/></div>
+          </c:when>
         </c:choose>
 </section>
+</c:if>
 
         <c:set var="pf" value="${r.profile}"/>
         <c:set var="cev" value="${r.careerEval}"/>
@@ -178,206 +138,158 @@
         <section class="stage" id="sec-profile">
           <header class="stage-head"><h2>개인정보</h2></header>
           <div class="profile${justChecked ? ' is-stamping' : ''}">
-            <c:if test="${pf.personFilled}">
-              <div class="pf-person">
+            <%-- 인적사항: 왼쪽에 이름, 오른쪽에 연락처를 이름표 · 값 목록으로 --%>
+              <div class="pf-person${pf.personFilled ? '' : ' is-name-only'}">
                 <div class="pf-who">
-                  <span class="pf-avatar"><c:out value="${fn:substring(r.candidate.displayName, 0, 1)}"/></span>
                   <div>
-                    <div class="pf-name" data-cand-name><c:out value="${r.candidate.displayName}"/></div>
-                    <div class="pf-tags">
-                      <c:if test="${not empty pf.gender}"><span><c:out value="${pf.gender}"/></span></c:if>
-                      <c:if test="${not empty pf.birth}"><span><c:out value="${pf.birth}"/></span></c:if>
+                    <div class="title-edit">
+                      <div class="pf-name" data-cand-name id="cand-title"><c:out value="${r.candidate.displayName}"/></div>
+                      ${renameBtn}
+                    </div>
+                    <div class="pf-meta">
+                      <c:out value="${pf.gender}"/><c:if test="${not empty pf.gender and not empty pf.birth}"> · </c:if><c:out value="${pf.birth}"/>
                     </div>
                   </div>
                 </div>
-                <div class="pf-contacts">
-                  <c:if test="${not empty pf.phone}">
-                    <div class="pf-field"><svg class="i"><use href="#i-phone"/></svg><div><small>전화번호</small><span><c:out value="${pf.phone}"/></span></div></div>
-                  </c:if>
-                  <c:if test="${not empty pf.email}">
-                    <div class="pf-field"><svg class="i"><use href="#i-mail"/></svg><div><small>이메일</small><span><c:out value="${pf.email}"/></span></div></div>
-                  </c:if>
-                  <c:if test="${not empty pf.address}">
-                    <div class="pf-field"><svg class="i"><use href="#i-pin"/></svg><div><small>주소</small><span><c:out value="${pf.address}"/></span></div></div>
-                  </c:if>
-                  <c:if test="${not empty pf.link}">
-                    <div class="pf-field"><svg class="i"><use href="#i-link"/></svg><div><small>포트폴리오</small>
-                      <c:choose>
-                        <c:when test="${fn:startsWith(pf.link, 'http://') or fn:startsWith(pf.link, 'https://')}">
-                          <a href="<c:out value='${pf.link}'/>" target="_blank" rel="noopener noreferrer"><c:out value="${pf.link}"/></a>
-                        </c:when>
-                        <c:otherwise><span><c:out value="${pf.link}"/></span></c:otherwise>
-                      </c:choose>
-                    </div></div>
-                  </c:if>
-                </div>
+                <c:if test="${pf.personFilled}">
+                <dl class="pf-info">
+                  <c:if test="${not empty pf.phone}"><dt>전화번호</dt><dd><c:out value="${pf.phone}"/></dd></c:if>
+                  <c:if test="${not empty pf.email}"><dt>이메일</dt><dd><c:out value="${pf.email}"/></dd></c:if>
+                  <c:if test="${not empty pf.address}"><dt>주소</dt><dd><c:out value="${pf.address}"/></dd></c:if>
+                  <c:if test="${not empty pf.link}"><dt>포트폴리오</dt><dd>
+                    <c:choose>
+                      <c:when test="${fn:startsWith(pf.link, 'http://') or fn:startsWith(pf.link, 'https://')}">
+                        <a href="<c:out value='${pf.link}'/>" target="_blank" rel="noopener noreferrer"><c:out value="${pf.link}"/></a>
+                      </c:when>
+                      <c:otherwise><c:out value="${pf.link}"/></c:otherwise>
+                    </c:choose>
+                  </dd></c:if>
+                </dl>
+                </c:if>
               </div>
-            </c:if>
 
-            <%-- 자격증: 근거 분석 호출(GPT)이 읽은 것. 정보처리기사·SQLD는 있는지 따로 보여 준다 (지원자 비교 필터와 같은 기준) --%>
+            <%-- 경력 · 학력 · 자격증: 충족 여부가 먼저 보이고, 자세한 내용은 상세보기에서 --%>
+            <c:set var="gauge" value="${r.careerGauge}"/>
             <c:set var="certs" value="${cev.certificates}"/>
-            <div class="pf-card pf-certs">
-              <div class="pf-card-head">
-                <h3>자격증</h3>
+            <div class="pf-checks">
+              <div class="pf-check">
+                <div class="pf-check-head">
+                  <h3>경력</h3>
+                  <c:choose>
+                    <c:when test="${not empty fit.career}"><span class="stamp stamp-lg ${fit.career ? 'is-met' : 'is-unmet'}">${fit.career ? '충족' : '미충족'}</span></c:when>
+                    <c:when test="${empty position.requiredExperience}"><span class="verdict-none">조건 없음</span></c:when>
+                    <c:otherwise><span class="verdict-none">판단 못 함</span></c:otherwise>
+                  </c:choose>
+                </div>
+                <c:set var="ln" value="${r.careerLine}"/><c:set var="lnTitle" value="${cev.relevantReason}"/>
+                <div class="cmps">
+<%@ include file="common/compare-line.jspf" %>
+                </div>
+                <c:if test="${not empty pf.careers}"><button type="button" class="pf-more" data-dialog="dlg-career">상세보기</button></c:if>
+              </div>
+
+              <div class="pf-check">
+                <div class="pf-check-head">
+                  <h3>학력</h3>
+                  <c:choose>
+                    <c:when test="${not empty fit.education}"><span class="stamp stamp-lg ${fit.education ? 'is-met' : 'is-unmet'}">${fit.education ? '충족' : '미충족'}</span></c:when>
+                    <c:when test="${empty position.requiredEducation and empty position.requiredMajor}"><span class="verdict-none">조건 없음</span></c:when>
+                    <c:otherwise><span class="verdict-none">판단 못 함</span></c:otherwise>
+                  </c:choose>
+                </div>
+                <c:set var="lnTitle" value="${cev.educationReason}"/>
+                <div class="cmps">
+                  <c:forEach var="ln" items="${r.educationLines}">
+<%@ include file="common/compare-line.jspf" %>
+                  </c:forEach>
+                </div>
+                <c:if test="${not empty pf.education}"><button type="button" class="pf-more" data-dialog="dlg-education">상세보기</button></c:if>
+              </div>
+
+              <%-- 자격증: 근거 분석 호출(GPT)이 읽은 것. 있는지만 --%>
+              <div class="pf-check">
+                <div class="pf-check-head"><h3>자격증</h3></div>
                 <c:choose>
-                  <c:when test="${empty certs}"><span class="pf-sub">다시 검사하면 표시됩니다</span></c:when>
+                  <c:when test="${empty certs}"><p class="pf-sub">다시 검사하면 표시됩니다</p></c:when>
                   <c:otherwise>
-                    <span class="cert-flag ${certs.infoEngineer ? 'is-yes' : 'is-no'}">${certs.infoEngineer ? '✓' : '✕'} 정보처리기사</span>
-                    <span class="cert-flag ${certs.sqld ? 'is-yes' : 'is-no'}">${certs.sqld ? '✓' : '✕'} SQLD</span>
+                    <dl class="pf-facts">
+                      <dt>정보처리기사</dt><dd><span class="cert-flag ${certs.infoEngineer ? 'is-yes' : 'is-no'}">${certs.infoEngineer ? '있음' : '없음'}</span></dd>
+                      <dt>SQLD</dt><dd><span class="cert-flag ${certs.sqld ? 'is-yes' : 'is-no'}">${certs.sqld ? '있음' : '없음'}</span></dd>
+                    </dl>
                   </c:otherwise>
                 </c:choose>
               </div>
-              <c:if test="${not empty certs.items}">
-                <ul class="cert-list">
-                  <c:forEach var="ce" items="${certs.items}">
-                    <li><strong><c:out value="${ce.name}"/></strong><c:if test="${not empty ce.issuer}"><span class="pf-sub"><c:out value="${ce.issuer}"/></span></c:if><c:if test="${not empty ce.date}"><span class="pf-when"><c:out value="${ce.date}"/></span></c:if></li>
-                  </c:forEach>
-                </ul>
-              </c:if>
             </div>
 
-            <div class="pf-cards">
-              <c:if test="${not empty pf.careers or not empty pf.totalCareer or not empty position.requiredExperience}">
-                <div class="pf-card pf-wide">
-                  <c:set var="gauge" value="${r.careerGauge}"/>
-                  <div class="pf-card-head">
-                    <h3>경력<c:if test="${not empty fit.career}"><span class="stamp ${fit.career ? 'is-met' : 'is-unmet'}">${fit.career ? '충족' : '미충족'}</span></c:if></h3>
-                    <c:choose>
-                      <c:when test="${not empty cev and not empty gauge}"><strong class="pf-big" title="<c:out value='${cev.totalReason}'/>">총 <c:out value="${gauge.actualText}"/></strong></c:when>
-                      <c:when test="${not empty pf.totalCareer}"><strong class="pf-big"><c:out value="${pf.totalCareer}"/></strong></c:when>
-                      <c:when test="${not empty gauge}"><strong class="pf-big">총 <c:out value="${gauge.actualText}"/></strong></c:when>
-                    </c:choose>
-                    <c:if test="${not empty gauge.relevantMonths}">
-                      <span class="pf-rel" title="<c:out value='${cev.relevantReason}'/>">포지션 관련 <c:out value="${gauge.relevantText}"/></span>
-                    </c:if>
-                    <span class="pf-end">
-                      <c:choose>
-                        <c:when test="${empty gauge.markPercent}">
-                          <c:if test="${not empty position.requiredExperience}"><span class="pf-req">공고 <c:out value="${position.requiredExperience}"/></span></c:if>
-                        </c:when>
-                        <c:when test="${gauge.over}"><span class="gauge-diff is-over">공고보다 <c:out value="${gauge.diffText}"/> 더</span></c:when>
-                      </c:choose>
-                    </span>
-                  </div>
-                  <c:if test="${not empty gauge}">
-                    <div class="gauge">
-                      <div class="gauge-bar">
-                        <span class="gauge-total" style="width: ${gauge.totalPercent}%"></span>
-                        <c:if test="${not empty gauge.relevantPercent}"><span class="gauge-fill" style="width: ${gauge.relevantPercent}%"></span></c:if>
-                        <c:if test="${not empty gauge.markPercent}"><i class="gauge-mark" style="left: ${gauge.markPercent}%"></i></c:if>
-                      </div>
-                      <c:if test="${not empty gauge.markPercent}">
-                        <div class="gauge-labels">
-                          <span class="gauge-req${gauge.markPercent >= 85 ? ' is-end' : ''}" style="left: ${gauge.markPercent}%">공고 <c:out value="${position.requiredExperience}"/></span>
-                        </div>
-                      </c:if>
-                    </div>
-                  </c:if>
-                  <c:if test="${not empty pf.careers}">
-                    <ul class="pf-list pf-timeline">
-                      <c:forEach var="cr" items="${pf.careers}">
-                        <c:if test="${empty r.careerEval or r.careerEval.counts(cr.alias)}">
-                        <li>
-                          <div class="pf-item-main">
-                            <strong><c:out value="${cr.company}"/></strong>
-                            <c:if test="${not empty cr.department or not empty cr.position}">
-                              <span class="pf-sub"><c:out value="${cr.department}"/><c:if test="${not empty cr.department and not empty cr.position}"> · </c:if><c:out value="${cr.position}"/></span>
-                            </c:if>
-                            <c:set var="crDuration" value="${not empty cr.duration ? cr.duration : (empty cev ? '' : cev.durationOf(cr.alias))}"/>
-                            <c:if test="${not empty cr.period or not empty crDuration}">
-                              <span class="pf-when"><c:out value="${cr.period}"/><c:if test="${not empty crDuration}"> <em><c:out value="${crDuration}"/></em></c:if></span>
-                            </c:if>
-                          </div>
-                        </li>
-                        </c:if>
-                      </c:forEach>
-                    </ul>
-                  </c:if>
-                </div>
-              </c:if>
-
-              <c:if test="${not empty pf.education}">
-                <div class="pf-card">
-                  <div class="pf-card-head">
-                    <h3>학력<c:if test="${not empty fit.education}"><span class="stamp ${fit.education ? 'is-met' : 'is-unmet'}">${fit.education ? '충족' : '미충족'}</span></c:if></h3>
-                    <c:if test="${not empty cev.finalEducation}"><strong class="pf-big" title="<c:out value='${cev.educationReason}'/>">최종 <c:out value="${cev.finalEducation}"/></strong></c:if>
-                    <c:if test="${not empty cev.requiredEducation or not empty cev.requiredMajor}"><span class="pf-req">공고 <c:out value="${cev.requiredEducation}"/><c:if test="${not empty cev.requiredEducation and not empty cev.requiredMajor}"> · </c:if><c:out value="${cev.requiredMajor}"/></span></c:if>
-                  </div>
-                  <ul class="pf-list">
-                    <c:forEach var="ed" items="${pf.education}">
-                      <li>
-                        <div class="pf-item-main">
-                          <strong><c:out value="${ed.school}"/></strong>
-                          <c:if test="${not empty ed.major}"><span class="pf-sub"><c:out value="${ed.major}"/></span></c:if>
-                          <c:if test="${not empty ed.period}"><span class="pf-when"><c:out value="${ed.period}"/></span></c:if>
-                        </div>
-                        <c:if test="${not empty ed.status or not empty ed.gpa}">
-                          <div class="pf-item-side">
-                            <c:if test="${not empty ed.status}"><span class="pf-badge"><c:out value="${ed.status}"/></span></c:if>
-                            <c:if test="${not empty ed.gpa}"><span class="pf-pill">학점 <c:out value="${ed.gpa}"/></span></c:if>
-                          </div>
-                        </c:if>
-                      </li>
-                    </c:forEach>
-                  </ul>
-                </div>
-              </c:if>
-
-            </div>
-
+            <%-- 타임라인: 시작 순서대로 한 줄씩 --%>
             <c:set var="tl" value="${r.timeline}"/>
-            <c:if test="${not empty tl}">
+            <c:if test="${not empty tl and not empty tl.entries}">
               <div class="pf-card tl-card">
                 <div class="pf-card-head"><h3>타임라인</h3></div>
-                <div class="tl-scroll">
-                <div class="tl" style="min-width: calc(var(--tl-name) + ${tl.width}px)">
-                  <div class="tl-grid" aria-hidden="true">
-                    <c:forEach var="tick" items="${tl.ticks}"><i style="left: ${tick.left}%"></i></c:forEach>
-                    <c:forEach var="gap" items="${tl.gaps}"><b style="left: ${gap.left}%; width: ${gap.width}%"></b></c:forEach>
-                  </div>
-                  <c:forEach var="lane" items="${tl.lanes}">
-                    <div class="tl-lane is-${lane.tone}">
-                      <span class="tl-name"><c:out value="${lane.name}"/></span>
-                      <div class="tl-rows">
-                        <c:if test="${empty lane.rows}"><div class="tl-row"></div></c:if>
-                        <c:forEach var="row" items="${lane.rows}">
-                          <div class="tl-row">
-                            <c:forEach var="bar" items="${row}">
-                              <span class="tl-bar${empty bar.side ? '' : ' is-out is-out-'.concat(bar.side)}" style="left: ${bar.left}%; width: ${bar.width}%"
-                                    title="<c:out value='${bar.label}'/><c:if test='${not empty bar.detail}'> · <c:out value='${bar.detail}'/></c:if> · <c:out value='${bar.periodText}'/>">
-                                <span class="tl-text"><strong><c:out value="${bar.label}"/></strong><small><c:out value="${bar.periodText}"/></small></span>
-                              </span>
-                            </c:forEach>
-                          </div>
-                        </c:forEach>
-                      </div>
-                    </div>
-                  </c:forEach>
-                  <div class="tl-lane is-gap">
-                    <span class="tl-name">기록 없음</span>
-                    <div class="tl-rows">
-                      <div class="tl-row">
-                        <c:forEach var="gap" items="${tl.gaps}">
-                          <span class="tl-bar" style="left: ${gap.left}%; width: ${gap.width}%" title="이력서상 기록 없음 · <c:out value='${gap.periodText}'/> (<c:out value='${gap.lengthText}'/>)">
-                            <strong><c:out value="${gap.lengthText}"/></strong><small><c:out value="${gap.periodText}"/></small>
-                          </span>
-                        </c:forEach>
-                      </div>
-                    </div>
-                  </div>
-                  <div class="tl-axis">
-                    <span class="tl-name"></span>
-                    <div class="tl-rows"><c:forEach var="tick" items="${tl.ticks}"><span style="left: ${tick.left}%">${tick.year}</span></c:forEach></div>
-                  </div>
-                </div>
-                </div>
-                <%-- PDF에서는 그래프 대신 이 목록만 보인다 --%>
-                <table class="tl-list">
+                <ol class="tl-items">
                   <c:forEach var="e" items="${tl.entries}">
-                    <tr class="is-${e.tone}"><th><c:out value="${e.kind}"/></th><td><c:out value="${e.label}"/><c:if test="${not empty e.detail}"><small> · <c:out value="${e.detail}"/></small></c:if></td><td><c:out value="${e.periodText}"/></td></tr>
+                    <li class="is-${e.tone}">
+                      <span class="tl-when"><c:out value="${e.periodText}"/></span>
+                      <span class="tl-kind"><c:out value="${e.tone == 'gap' ? '공백' : e.kind}"/></span>
+                      <span class="tl-what">
+                        <c:choose>
+                          <c:when test="${e.tone == 'gap'}">이력서상 기록 없음 <small><c:out value="${e.label}"/></small></c:when>
+                          <c:otherwise><strong><c:out value="${e.label}"/></strong><c:if test="${not empty e.detail}"><small><c:out value="${e.detail}"/></small></c:if></c:otherwise>
+                        </c:choose>
+                      </span>
+                    </li>
                   </c:forEach>
-                </table>
+                </ol>
               </div>
+            </c:if>
+
+            <%-- 상세보기 창 --%>
+            <c:if test="${not empty pf.careers}">
+              <dialog class="pf-dialog" id="dlg-career">
+                <header><h3>경력 상세</h3><button type="button" class="icon-btn" data-close title="닫기"><svg class="i"><use href="#i-x"/></svg></button></header>
+                <c:if test="${not empty gauge}"><p class="pf-dialog-sum">총 경력 <c:out value="${gauge.actualText}"/><c:if test="${not empty gauge.relevantMonths}"> · 포지션 관련 <c:out value="${gauge.relevantText}"/></c:if></p></c:if>
+                <ul class="pf-list">
+                  <c:forEach var="cr" items="${pf.careers}">
+                    <c:if test="${empty r.careerEval or r.careerEval.counts(cr.alias)}">
+                    <li>
+                      <div class="pf-item-main">
+                        <strong><c:out value="${cr.company}"/></strong>
+                        <c:if test="${not empty cr.department or not empty cr.position}">
+                          <span class="pf-sub"><c:out value="${cr.department}"/><c:if test="${not empty cr.department and not empty cr.position}"> · </c:if><c:out value="${cr.position}"/></span>
+                        </c:if>
+                        <c:set var="crDuration" value="${not empty cr.duration ? cr.duration : (empty cev ? '' : cev.durationOf(cr.alias))}"/>
+                        <c:if test="${not empty cr.period or not empty crDuration}">
+                          <span class="pf-when"><c:out value="${cr.period}"/><c:if test="${not empty crDuration}"> <em><c:out value="${crDuration}"/></em></c:if></span>
+                        </c:if>
+                      </div>
+                    </li>
+                    </c:if>
+                  </c:forEach>
+                </ul>
+              </dialog>
+            </c:if>
+            <c:if test="${not empty pf.education}">
+              <dialog class="pf-dialog" id="dlg-education">
+                <header><h3>학력 상세</h3><button type="button" class="icon-btn" data-close title="닫기"><svg class="i"><use href="#i-x"/></svg></button></header>
+                <c:if test="${not empty cev.educationReason}"><p class="pf-dialog-sum"><c:out value="${cev.educationReason}"/></p></c:if>
+                <ul class="pf-list">
+                  <c:forEach var="ed" items="${pf.education}">
+                    <li>
+                      <div class="pf-item-main">
+                        <strong><c:out value="${ed.school}"/></strong>
+                        <c:if test="${not empty ed.major}"><span class="pf-sub"><c:out value="${ed.major}"/></span></c:if>
+                        <c:if test="${not empty ed.period}"><span class="pf-when"><c:out value="${ed.period}"/></span></c:if>
+                      </div>
+                      <c:if test="${not empty ed.status or not empty ed.gpa}">
+                        <div class="pf-item-side">
+                          <c:if test="${not empty ed.status}"><span class="pf-badge"><c:out value="${ed.status}"/></span></c:if>
+                          <c:if test="${not empty ed.gpa}"><span class="pf-pill">학점 <c:out value="${ed.gpa}"/></span></c:if>
+                        </div>
+                      </c:if>
+                    </li>
+                  </c:forEach>
+                </ul>
+              </dialog>
             </c:if>
           </div>
         </section>
@@ -385,7 +297,12 @@
 
         <c:if test="${r.fitChecked}">
         <section class="stage" id="sec-evidence">
-          <header class="stage-head"><h2>평가 기준 충족 여부</h2></header>
+          <header class="stage-head"><h2>평가 기준 충족 여부</h2>
+            <c:set var="score" value="${r.score}"/>
+            <c:if test="${not empty score}">
+              <span class="score-pill${score.complete ? '' : ' is-stale'}" title="${score.complete ? '' : '검사 뒤에 평가 기준이 바뀌었습니다. 다시 검사하세요.'}">${score.totalText}<small> / ${score.max}점</small></span>
+            </c:if>
+          </header>
           <div class="ev-list">
             <div class="ev-sum">
               <span class="ev-tag ev-DIRECT"><i class="hb ev-DIRECT"></i>충족 <b>${r.directCount}</b></span>
@@ -394,12 +311,13 @@
             </div>
             <c:forEach var="cv" items="${r.criteria}" varStatus="cs">
               <c:set var="evKind" value="${cv.checked ? cv.match : 'UNCHECKED'}"/>
-              <article class="ev ev-${evKind}">
-                <header class="ev-head">
+              <details class="ev ev-${evKind}"${cv.checked ? "" : " data-static"}>
+                <summary class="ev-head">
                   <span class="ev-no">${cs.count < 10 ? '0' : ''}${cs.count}</span>
                   <h4><c:out value="${cv.criterion.name}"/></h4>
                   <span class="ev-tag"><i class="hb ev-${evKind}"></i>${evKind == 'DIRECT' ? '충족' : evKind == 'INDIRECT' ? '부분 충족' : evKind == 'NONE' ? '미확인' : '검사 전'}</span>
-                </header>
+                  <c:if test="${cv.checked}"><svg class="ev-chev" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 9l6 6 6-6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></c:if>
+                </summary>
                 <c:if test="${cv.checked}">
                   <div class="ev-body">
                     <c:choose>
@@ -420,7 +338,7 @@
                     </c:choose>
                   </div>
                 </c:if>
-              </article>
+              </details>
             </c:forEach>
           </div>
         </section>
@@ -442,6 +360,7 @@
       <button type="button" role="tab" class="qtab" data-qtab="sheet" aria-selected="true">타이핑</button>
       <button type="button" role="tab" class="qtab" data-qtab="record" aria-selected="false">녹음본<c:if test="${not empty record}"> <b>${fn:length(record.items)}</b></c:if></button>
     </div>
+    <label class="iv-date">면접 본 날짜<input type="date" id="iv-date" value="${r.candidate.interviewDate}"><span class="save-state" id="iv-date-state" aria-live="polite"></span></label>
   </header>
   <div class="qpane" data-qpane="sheet">
   <%-- 질문 추출: 유형을 골라 여러 번 추출해 쌓고, 질문지에 넣는다. 질문지가 있고 넣을 질문이 없으면 접어 둔다 --%>

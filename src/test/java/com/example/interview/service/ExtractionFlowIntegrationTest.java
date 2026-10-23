@@ -505,8 +505,8 @@ public class ExtractionFlowIntegrationTest {
         Long positionId = startPosition(positionService, "백엔드 개발자 채용");
 
         // 빈 칸은 건너뛰고, 한 칸에 여러 파일이면 한 사람
-        int started = batchCheckService.start(positionId, List.of(List.of(pdf()), List.of(), List.of(pdf(), pdf())));
-        assertThat(started).isEqualTo(2);
+        List<Long> started = batchCheckService.start(positionId, List.of(List.of(pdf()), List.of(), List.of(pdf(), pdf())));
+        assertThat(started).hasSize(2);
         batchCheckService.awaitIdle();
 
         List<com.example.interview.web.dto.RankingRow> rows = rankingService.rank(positionId);
@@ -535,7 +535,7 @@ public class ExtractionFlowIntegrationTest {
         Candidate c = candidateService.get(rankingService.rank(positionId).get(0).getCandidateId());
         assertThat(c.getStatus()).isEqualTo(CandidateStatus.FAILED);
         assertThat(c.getMaskedText()).isNull();
-        assertThat(c.getErrorMessage()).contains("1인");
+        assertThat(c.getErrorMessage()).contains("다시 올려");
         verify(aiClient, never()).call(eq(AiPurpose.EVIDENCE), anyLong(), anyString(), anyString(), any(), any());
     }
 

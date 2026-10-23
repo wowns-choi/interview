@@ -169,18 +169,7 @@ public class ExtractController {
         return ResponseEntity.noContent().build();
     }
 
-    @PostMapping("/positions/{id}/resume")
-    public String uploadResume(@PathVariable Long id, @RequestParam(required = false) List<MultipartFile> resume,
-            RedirectAttributes ra) {
-        try {
-            return "redirect:/results/" + extractionService.uploadResume(id, resume);
-        } catch (BusinessException | ResumeProcessingException e) {
-            ra.addFlashAttribute("error", e.getMessage());
-            return "redirect:/fit?position=" + id;
-        }
-    }
-
-    /** 포지션 적합도 검사(다수): applicant-1, applicant-2 … 칸마다 한 명. 빈 칸은 건너뛴다 */
+    /** 포지션 적합도 검사: applicant-1, applicant-2 … 칸마다 한 명. 빈 칸은 건너뛴다. 가리기부터 검사까지 한 번에 돈다 */
     @PostMapping("/positions/{id}/batch")
     public String batch(@PathVariable Long id, MultipartHttpServletRequest request, RedirectAttributes ra) {
         List<List<MultipartFile>> applicants = new ArrayList<>();
@@ -189,12 +178,15 @@ public class ExtractController {
                 .sorted(Comparator.comparingInt(e -> Integer.parseInt(e.getKey().substring("applicant-".length()))))
                 .forEach(e -> applicants.add(e.getValue()));
         try {
-            int n = batchCheckService.start(id, applicants);
-            ra.addFlashAttribute("message", n + "명의 검사를 시작했습니다.");
+            List<Long> ids = batchCheckService.start(id, applicants);
+            if (ids.size() == 1) {
+                return "redirect:/results/" + ids.get(0);
+            }
+            ra.addFlashAttribute("message", ids.size() + "명의 검사를 시작했습니다.");
         } catch (BusinessException | ResumeProcessingException e) {
             ra.addFlashAttribute("error", e.getMessage());
         }
-        return "redirect:/fit?position=" + id + "&mode=batch";
+        return "redirect:/fit?position=" + id;
     }
 
     /** 적합도 검사 화면의 지원자 목록 (다수 검사 진행 상황을 새로 그릴 때) */
@@ -354,9 +346,7 @@ public class ExtractController {
     }
 
     @GetMapping("/fit")
-    public String fit(@RequestParam(required = false) Long position, @RequestParam(required = false) String mode,
-            Model model) {
-        model.addAttribute("batch", "batch".equals(mode));
+    public String fit(@RequestParam(required = false) Long position, Model model) {
         Long id = choose(model, position);
         if (id != null) {
             addFit(model, id);

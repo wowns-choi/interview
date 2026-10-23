@@ -15,6 +15,7 @@ import org.springframework.stereotype.Service;
 import com.example.interview.ai.AiClient;
 import com.example.interview.ai.PromptLoader;
 import com.example.interview.ai.dto.ArrangeResult;
+import com.example.interview.ai.dto.PlaceResult;
 import com.example.interview.ai.dto.QuestionResult;
 import com.example.interview.domain.AiPurpose;
 import com.example.interview.domain.Candidate;
@@ -134,6 +135,30 @@ public class QuestionService {
                 sb.toString(), ArrangeResult.class, r -> r.validate(templateIds, questions.size()));
     }
 
+    /**
+     * 질문지에 넣기: 이미 있는 질문지(섹션·질문 글)와 새 질문을 주고, 새 질문마다 몇 번 질문 뒤에 넣을지 받는다.
+     * 답변·이력서는 보내지 않는다.
+     */
+    public PlaceResult place(Candidate candidate, List<EvalCriterion> criteria, List<InterviewQuestion> sheet,
+            List<InterviewQuestion> questions) {
+        List<Object> rows = new ArrayList<>();
+        for (int i = 0; i < sheet.size(); i++) {
+            rows.add(new SheetInput(i + 1, sheet.get(i).getSection(), sheet.get(i).getContent()));
+        }
+        Map<Long, String> criterionNames = criteria.stream()
+                .collect(Collectors.toMap(EvalCriterion::getId, EvalCriterion::getName));
+        List<Object> extracted = new ArrayList<>();
+        for (int i = 0; i < questions.size(); i++) {
+            InterviewQuestion q = questions.get(i);
+            extracted.add(new ExtractedInput((long) (i + 1),
+                    q.getQuestionType() == null ? null : q.getQuestionType().name(), q.getContent(),
+                    criterionNames.get(q.getCriterionId()), q.getPriority()));
+        }
+        String user = "<sheet>\n" + toJson(rows) + "\n</sheet>\n\n<new_questions>\n" + toJson(extracted) + "\n</new_questions>";
+        return aiClient.call(AiPurpose.QUESTION_PLACE, candidate.getId(), promptLoader.load("place"), user,
+                PlaceResult.class, r -> r.validate(sheet.size(), questions.size()));
+    }
+
     /** 근거 없음(NONE) 행은 빼고 보낸다. 번호는 전체 목록 순번 그대로 */
     private List<Object> evidenceInput(List<Evidence> evidences) {
         List<Object> list = new ArrayList<>();
@@ -170,5 +195,8 @@ public class QuestionService {
     }
 
     record ExtractedInput(Long question_id, String question_type, String content, String criterion, Integer priority) {
+    }
+
+    record SheetInput(int no, String section, String question) {
     }
 }

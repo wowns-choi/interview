@@ -2,8 +2,10 @@ package com.example.interview.service;
 
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 
 import org.springframework.stereotype.Service;
@@ -11,6 +13,7 @@ import org.springframework.transaction.support.TransactionTemplate;
 
 import com.example.interview.ai.dto.ArrangeResult;
 import com.example.interview.ai.dto.EvidenceResult;
+import com.example.interview.ai.dto.PlaceResult;
 import com.example.interview.ai.dto.QuestionResult;
 import com.example.interview.domain.Candidate;
 import com.example.interview.domain.CandidateStatus;
@@ -179,7 +182,15 @@ public class AnalysisService {
             }
             merged = assembler.assemble(candidateId, sections, templates, pool, arrangement);
         } else {
-            merged = assembler.insert(sheet, pool);
+            // 어디에 넣을지는 GPT가 질문지 흐름을 보고 정한다. 실패하면 같은 평가 기준 질문 옆에 넣는다
+            Map<Integer, Integer> after = new HashMap<>();
+            try {
+                PlaceResult placed = questionService.place(candidate, criteria(candidate), sheet, pool);
+                placed.getPlacements().forEach(p -> after.put(p.getQuestionId().intValue() - 1, p.getAfter()));
+            } catch (RuntimeException e) {
+                log.warn("질문지에 넣을 자리 정하기 실패, 평가 기준으로 넣음 candidateId={}: {}", candidateId, e.getMessage());
+            }
+            merged = assembler.insert(sheet, pool, after);
         }
 
         transactionTemplate.executeWithoutResult(status -> {

@@ -53,6 +53,20 @@ public class ResultReport {
         return RequirementFit.of(position, careerEval, getCareerGauge());
     }
 
+    /** 경력 카드: 포지션 관련 경력 vs 공고 경력 */
+    public CompareLine getCareerLine() {
+        return CompareLine.career(getCareerGauge(), profile == null ? null : profile.getTotalCareer(),
+                position.getRequiredExperience(), getFit().getCareer());
+    }
+
+    /** 학력 카드: 최종 학력 vs 공고 학력, 학과 조건이 있으면 전공 줄까지. 조건은 검사 때 저장한 것을 먼저 쓴다 */
+    public List<CompareLine> getEducationLines() {
+        boolean saved = careerEval != null && (careerEval.getRequiredEducation() != null || careerEval.getRequiredMajor() != null);
+        return CompareLine.education(careerEval, profile,
+                saved ? careerEval.getRequiredEducation() : position.getRequiredEducation(),
+                saved ? careerEval.getRequiredMajor() : position.getRequiredMajor(), getFit().getEducation());
+    }
+
     public long getDirectCount() {
         return countMatch(EvidenceType.DIRECT);
     }

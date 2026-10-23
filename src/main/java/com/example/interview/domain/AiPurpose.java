@@ -12,6 +12,8 @@ public enum AiPurpose {
     REPORT_INFO,
     /** 보고서 질문 정렬 (사용자가 2026-10-23 뺐다. 예전 로그 행에만 남는다) */
     REPORT_SORT,
+    /** 질문지에 넣기: 새 질문을 이미 있는 질문지의 어디에 넣을지 */
+    QUESTION_PLACE,
     /** 예전 학력·타임라인 한 번 호출. ai_call_log의 예전 행만 쓴다 */
     CAREER_EVAL
 }

@@ -1,6 +1,8 @@
 <%@ page pageEncoding="UTF-8" %>
-<%-- 포지션 고르기 (만들기는 평가 기준 추출 탭에서만). pickBase: 고르면 갈 주소 --%>
-<div class="pick">
+<%-- 포지션 고르기 (만들기는 평가 기준 추출 탭에서만). pickBase: 고르면 갈 주소.
+     적합도 검사에서는 그 오른쪽에 지원자 고르기와 새 지원자 버튼 --%>
+<c:set var="onFit" value="${pickBase == '/fit'}"/>
+<div class="pick${onFit ? ' pick-row' : ''}">
   <label class="pick-select">
     <span>포지션</span>
     <select data-nav>
@@ -9,17 +11,21 @@
       </c:forEach>
     </select>
   </label>
-  <c:if test="${pickBase != '/ranking' and not empty criteria}">
-  <div class="pick-crit">
-    <span class="pick-label">평가 기준</span>
-    <ul>
-      <c:forEach var="c" items="${criteria}"><li title="<c:out value='${c.description}'/>"><c:out value="${c.name}"/></li></c:forEach>
-    </ul>
-  </div>
+  <c:if test="${onFit}">
+  <c:if test="${not empty candidates}">
+  <label class="pick-select pick-cand">
+    <span>지원자 ${fn:length(candidates)}명</span>
+    <select data-nav id="cand-list" data-url="<c:url value='/positions/${position.id}/candidates'/>"
+            data-current="${empty r ? '' : r.candidate.id}" data-current-status="${empty r ? '' : r.candidate.status}">
+      <%@ include file="cand-options.jspf" %>
+    </select>
+  </label>
+  </c:if>
+  <a class="btn pick-new${empty r ? ' is-active' : ''}" href="<c:url value='/fit?position=${position.id}'/>"><svg class="i"><use href="#i-plus"/></svg>새 지원자</a>
   </c:if>
 </div>
-<%-- 적합도 검사에서 아래로 내리면 포지션과 평가 기준을 위에 붙여 둔다 --%>
-<c:if test="${pickBase == '/fit'}">
+<%-- 적합도 검사에서 아래로 내리면 포지션과 지원자를 위에 붙여 둔다 --%>
+<c:if test="${onFit}">
 <div class="pick-bar" id="pick-bar" hidden>
   <div class="pick-bar-in">
     <select class="pick-bar-select" data-nav aria-label="포지션">
@@ -27,13 +33,10 @@
         <option value="<c:url value='${pickBase}?position=${p.id}'/>" ${p.id == position.id ? 'selected' : ''}><c:out value="${p.title}"/></option>
       </c:forEach>
     </select>
-    <c:if test="${not empty criteria}">
-    <div class="pick-crit">
-      <span class="pick-label">평가 기준</span>
-      <ul>
-        <c:forEach var="c" items="${criteria}"><li title="<c:out value='${c.description}'/>"><c:out value="${c.name}"/></li></c:forEach>
-      </ul>
-    </div>
+    <c:if test="${not empty candidates}">
+    <select class="pick-bar-select" data-nav data-cand-copy aria-label="지원자">
+      <%@ include file="cand-options.jspf" %>
+    </select>
     </c:if>
   </div>
 </div>

@@ -109,6 +109,38 @@ class QuestionSheetAssemblerTest {
         assertThat(noAnchor).extracting(InterviewQuestion::getSection).containsExactly("오프닝", "추가 질문");
     }
 
+    @Test
+    void placesNewQuestionsWhereTheAiSaidAndFallsBackForTheRest() {
+        InterviewQuestion intro = sheetRow("오프닝", QuestionOrigin.COMMON_ORIGINAL, null, 1);
+        InterviewQuestion cache = sheetRow("캐시", QuestionOrigin.CUSTOM, 10L, 2);
+        InterviewQuestion close = sheetRow("마무리", QuestionOrigin.COMMON_ORIGINAL, null, 3);
+        InterviewQuestion a = question(QuestionType.EXPERIENCE, "Kafka 해보셨나요?", 20L, null);
+        InterviewQuestion b = question(QuestionType.EXPERIENCE, "Kafka 장애는?", 20L, null);
+        InterviewQuestion c = question(QuestionType.DEPTH, "캐시 무효화는?", 10L, 1L);
+
+        // a, b는 1번(오프닝) 뒤에 순서대로, c는 자리가 없어 같은 평가 기준(캐시) 뒤에
+        List<InterviewQuestion> sheet = assembler.insert(List.of(intro, cache, close), List.of(a, b, c),
+                java.util.Map.of(0, 1, 1, 1));
+
+        assertThat(sheet).containsExactly(intro, a, b, cache, c, close);
+        assertThat(sheet).extracting(InterviewQuestion::getSection).containsExactly("오프닝", "오프닝", "오프닝", "캐시", "캐시", "마무리");
+    }
+
+    @Test
+    void placeValidationDropsBadNumbers() {
+        com.example.interview.ai.dto.PlaceResult r = new com.example.interview.ai.dto.PlaceResult();
+        r.setPlacements(new java.util.ArrayList<>(List.of(placement(1L, 2), placement(1L, 3), placement(2L, 9), placement(5L, 1))));
+        r.validate(3, 2);
+        assertThat(r.getPlacements()).extracting(com.example.interview.ai.dto.PlaceResult.Placement::getQuestionId).containsExactly(1L);
+    }
+
+    private static com.example.interview.ai.dto.PlaceResult.Placement placement(Long id, int after) {
+        com.example.interview.ai.dto.PlaceResult.Placement p = new com.example.interview.ai.dto.PlaceResult.Placement();
+        p.setQuestionId(id);
+        p.setAfter(after);
+        return p;
+    }
+
     private static InterviewQuestion sheetRow(String section, QuestionOrigin origin, Long criterionId, int order) {
         InterviewQuestion q = new InterviewQuestion();
         q.setSection(section);

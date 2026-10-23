@@ -1,0 +1,14 @@
+<%@ page pageEncoding="UTF-8" %>
+<%-- 지원자 고르기의 항목: 이름만 --%>
+<c:if test="${empty r}"><option value="" disabled selected>지원자 선택</option></c:if>
+<c:forEach var="row" items="${candidates}">
+  <c:choose>
+    <c:when test="${row.inProgress}"><c:set var="tail" value="${row.statusLabel}"/></c:when>
+    <c:when test="${row.state == 'RANKED' or row.state == 'EXCLUDED'}"><c:set var="tail" value="${row.score.totalText} / ${row.score.max}"/></c:when>
+    <c:when test="${row.state == 'STALE'}"><c:set var="tail" value="재검사 필요"/></c:when>
+    <c:when test="${row.status == 'FAILED'}"><c:set var="tail" value="실패"/></c:when>
+    <c:otherwise><c:set var="tail" value="${row.statusLabel}"/></c:otherwise>
+  </c:choose>
+  <option value="<c:url value='/results/${row.candidateId}'/>" data-in-progress="${row.inProgress}" data-tail="${tail}"
+          ${not empty r and r.candidate.id == row.candidateId ? 'selected' : ''}><c:out value="${row.displayName}"/></option>
+</c:forEach>

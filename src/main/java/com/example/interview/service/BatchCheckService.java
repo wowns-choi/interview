@@ -51,9 +51,9 @@ public class BatchCheckService {
     /**
      * 지원자별 파일 묶음을 모두 읽고(하나라도 못 읽으면 아무것도 만들지 않는다) 대기 중인 지원자를 만든 뒤 차례로 돌린다.
      *
-     * @return 검사를 시작한 지원자 수
+     * @return 검사를 시작한 지원자 id (올린 순서)
      */
-    public int start(Long positionId, List<List<MultipartFile>> applicants) {
+    public List<Long> start(Long positionId, List<List<MultipartFile>> applicants) {
         if (positionService.criteria(positionId).isEmpty()) {
             throw new BusinessException("평가 기준이 없습니다. 평가 기준을 먼저 추출하세요.");
         }
@@ -68,12 +68,14 @@ public class BatchCheckService {
         for (List<MultipartFile> files : chosen) {
             texts.add(extractionService.combine(files));
         }
+        List<Long> ids = new ArrayList<>();
         for (int i = 0; i < chosen.size(); i++) {
             Long id = candidateService.createQueued(positionId, ExtractionService.baseName(chosen.get(i).get(0)));
             String text = texts.get(i);
+            ids.add(id);
             worker.submit(() -> process(positionId, id, text));
         }
-        return chosen.size();
+        return ids;
     }
 
     private void process(Long positionId, Long candidateId, String text) {
@@ -89,7 +91,7 @@ public class BatchCheckService {
         } catch (RuntimeException e) {
             log.warn("다수 검사: 개인정보 가리기 실패 candidateId={}: {}", candidateId, e.getMessage());
             candidateMapper.updateStatus(candidateId, CandidateStatus.FAILED,
-                    "개인정보를 가리지 못했습니다. 포지션 적합도 검사(1인)로 다시 올려 주세요. " + e.getMessage());
+                    "개인정보를 가리지 못했습니다. 이력서를 다시 올려 주세요. " + e.getMessage());
             return;
         }
         try {

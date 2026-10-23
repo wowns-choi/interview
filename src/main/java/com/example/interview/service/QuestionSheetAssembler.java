@@ -2,6 +2,7 @@ package com.example.interview.service;
 
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.IdentityHashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -72,8 +73,31 @@ public class QuestionSheetAssembler {
      * 그것도 없으면 맨 끝 "추가 질문" 섹션.
      */
     public List<InterviewQuestion> insert(List<InterviewQuestion> sheet, List<InterviewQuestion> questions) {
+        return insert(sheet, questions, Map.of());
+    }
+
+    /**
+     * AI가 정한 자리(새 질문 순번 0부터 → 질문지 번호 1부터, 그 질문 바로 뒤)에 넣는다. 같은 자리에 여럿이면 새 질문 순서대로.
+     * 자리가 없는 질문은 같은 평가 기준 질문 뒤에 넣는다. 기존 질문의 순서·섹션·답변은 그대로다.
+     */
+    public List<InterviewQuestion> insert(List<InterviewQuestion> sheet, List<InterviewQuestion> questions,
+            Map<Integer, Integer> afterBySheetNo) {
         List<InterviewQuestion> merged = new ArrayList<>(sheet);
-        fillMissingQuestions(merged, questions, new HashMap<>(), ADDED_SECTION);
+        Map<InterviewQuestion, InterviewQuestion> lastAfter = new IdentityHashMap<>();
+        Map<Integer, InterviewQuestion> placed = new HashMap<>();
+        for (int i = 0; i < questions.size(); i++) {
+            Integer after = afterBySheetNo.get(i);
+            if (after == null || after < 1 || after > sheet.size()) {
+                continue;
+            }
+            InterviewQuestion anchor = sheet.get(after - 1);
+            InterviewQuestion previous = lastAfter.getOrDefault(anchor, anchor);
+            InterviewQuestion q = place(questions.get(i), anchor.getSection());
+            merged.add(indexOf(merged, previous) + 1, q);
+            lastAfter.put(anchor, q);
+            placed.put(i, q);
+        }
+        fillMissingQuestions(merged, questions, placed, ADDED_SECTION);
         return renumber(merged);
     }
 

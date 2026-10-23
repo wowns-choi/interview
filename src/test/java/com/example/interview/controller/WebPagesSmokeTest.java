@@ -117,11 +117,9 @@ class WebPagesSmokeTest {
                 .doesNotContain("필수", "우대", "type=\"file\" id=\"resume\"", "<dt>연봉</dt>");
         // 적합도 검사: 포지션은 고르기만, 평가항목은 읽기 전용
         String fitPage = get("/fit?position=" + positionId).body();
-        assertThat(fitPage).contains("type=\"file\" id=\"resume\"", "data-nav", "selected", "class=\"pick-crit\"", "대용량 트래픽 처리 경험", "포지션 적합도 검사 (1인)")
-                .doesNotContain("평가 기준 추가", "js-crit-edit");
-        assertThat(get("/fit").body()).contains("type=\"file\" id=\"resume\"");
-        assertThat(get("/fit?position=" + positionId + "&mode=batch").body()).contains("name=\"applicant-1\"", "name=\"applicant-3\"", "지원자 추가",
-                "개인정보 가리기 및 포지션 적합도 검사 일괄 진행", "포지션 적합도 검사 (1인)", "포지션 적합도 검사 (다수)").doesNotContain("id=\"resume\"");
+        assertThat(fitPage).contains("name=\"applicant-1\"", "data-nav", "selected", "새 지원자", "지원자 추가", "포지션 적합도 검사</button>")
+                .doesNotContain("평가 기준 추가", "js-crit-edit", "class=\"pick-crit\"", "(1인)", "(다수)", "id=\"resume\"");
+        assertThat(get("/fit").body()).contains("name=\"applicant-1\"");
         HttpResponse<String> crit = json("POST", "/positions/" + positionId + "/criteria",
                 "{\"name\":\"Kotlin 경험\"}");
         assertThat(crit.statusCode()).isEqualTo(200);
@@ -147,14 +145,15 @@ class WebPagesSmokeTest {
         // ② 적합도 검사 → ③ 면접 질문
         Long id = extractionService.uploadResume(positionId, List.of(ExtractionFlowIntegrationTest.pdf()));
         String review = get("/results/" + id).body();
-        // 가리기 직후에는 가린 본문만, 인적사항·경력·학력·연봉·타임라인은 적합도 검사 뒤에
-        assertThat(review).contains("id=\"mask-view\"", "name=\"maskedText\"", "[전화번호]", "[A사] 백엔드팀", "&lt;script&gt;", "적합도 검사</button>", "[교육]")
-                .doesNotContain("class=\"profile\"", "가나커머스", "가나정보교육원", "<h3>타임라인</h3>",
+        // 가린 본문은 보여 주지 않는다. 인적사항·경력·학력·타임라인은 적합도 검사 뒤에
+        assertThat(candidateService.get(id).getMaskedText()).contains("[전화번호]", "[A사] 백엔드팀", "[교육]").doesNotContain("010-1111-2222");
+        assertThat(review).contains(">검사</button>")
+                .doesNotContain("id=\"mask-view\"", "name=\"maskedText\"", "class=\"profile\"", "가나커머스", "가나정보교육원", "<h3>타임라인</h3>",
                         "<script>alert(1)</script>", "010-1111-2222", "부분 충족");
         assertThat(get("/ranking?position=" + positionId).body()).contains("검사 전", "검토 중", "홍길동").doesNotContain("class=\"rk-no\">1<");
         assertThat(get("/positions/" + positionId + "/candidates").body()).contains("\"name\":\"홍길동\"", "\"label\":\"검토 중\"", "\"inProgress\":false");
         // 지원자 이름 바꾸기 (목록의 연필)
-        assertThat(review).contains("id=\"cand-rename\"", "data-cand-name", "id=\"mask-edit\"");
+        assertThat(review).contains("id=\"cand-rename\"", "data-cand-name");
         HttpResponse<String> renamedCand = json("PATCH", "/results/" + id, "{\"name\":\"  1번 지원자 \"}");
         assertThat(renamedCand.statusCode()).isEqualTo(200);
         assertThat(renamedCand.body()).contains("1번 지원자");
@@ -165,17 +164,17 @@ class WebPagesSmokeTest {
         assertThat(post("/results/" + id + "/check", "maskedText=" + URLEncoder.encode(reviewed, StandardCharsets.UTF_8), false)
                 .statusCode()).isEqualTo(302);
         String checked = get("/results/" + id).body();
-        // 검사 직후 한 번만 도장 애니메이션, 가린 본문은 결과 위에 그대로
-        assertThat(checked).contains("class=\"profile is-stamping\"", "id=\"mask-view\"", "다시 검사</button>").doesNotContain("/review\"");
+        // 검사 직후 한 번만 도장 애니메이션
+        assertThat(checked).contains("class=\"profile is-stamping\"", "다시 검사</button>").doesNotContain("/review\"", "id=\"mask-view\"");
         assertThat(get("/results/" + id).body()).contains("class=\"profile\"").doesNotContain("is-stamping");
-        assertThat(checked).contains("가나커머스", "class=\"gauge\"", "공고 경력 3년 이상",
-                "<h3>타임라인</h3>", "is-career", "title=\"가나커머스 · 백엔드팀 · 2021.03 ~ 2024.02\"", "title=\"이력서상 기록 없음 · 2020.07 ~ 2021.02 (8개월)\"")
-                .doesNotContain("공고까지", "없는항목", "<h3>연봉", "5,000만원", "<h3>교육</h3>");
-        assertThat(checked).contains("홍길동", "부분 충족", "총 2년 11개월", "포지션 관련 2년 6개월", "title=\"백엔드 업무 기간\"",
-                "class=\"gauge-total\" style=\"width: 97%\"", "class=\"gauge-fill\" style=\"width: 83%\"", "<span class=\"stamp is-unmet\">미충족</span>","일 100만 건 주문 데이터 배치 처리 개선", "원문에서 찾지 못한",
+        assertThat(checked).contains("가나커머스", "class=\"cmp-sign\"", "공고", "id=\"dlg-career\"", "data-dialog=\"dlg-career\"",
+                "<h3>타임라인</h3>", "class=\"is-career\"", "2021.03 ~ 2024.02", "이력서상 기록 없음 <small>8개월</small>", "2020.07 ~ 2021.02")
+                .doesNotContain("class=\"gauge\"", "공고까지", "없는항목", "<h3>연봉", "5,000만원", "<h3>교육</h3>");
+        assertThat(checked).contains("홍길동", "부분 충족", "총 경력 2년 11개월", "포지션 관련 2년 6개월", "title=\"백엔드 업무 기간\"",
+                "<span class=\"stamp stamp-lg is-unmet\">미충족</span>","일 100만 건 주문 데이터 배치 처리 개선", "원문에서 찾지 못한",
                 "질문 추출</button>", "name=\"types\" value=\"EXPERIENCE\" checked", "class=\"print-head\"").doesNotContain("<script>alert(1)</script>", "id=\"iq-board\"");
         // 점수: 근거 직접 1·없음 0·없음 0 (경력·학력은 점수에 넣지 않는다)
-        assertThat(checked).contains("class=\"score-pill\"", "1<small> / 3점</small>", " · 1 / 3</option>");
+        assertThat(checked).contains("class=\"score-pill\"", "1<small> / 3점</small>").doesNotContain(" · 1 / 3</option>");
         String ranking = get("/ranking?position=" + positionId).body();
         assertThat(ranking).contains("data-rk-filter=\"engineer\"", "data-rk-filter=\"sqld\"", "data-rk-filter=\"interviewed\"", "data-rk-filter=\"passed\"", "class=\"rk-no\">1<", "href=\"/results/" + id + "\"", "rk-score\">1<small> / 3</small>", "rk-sq ev-NONE\"", "rk-sq ev-DIRECT\"",
                         "rk-cond is-unmet\">미충족<", "rk-cond is-met\">충족<")
@@ -193,7 +192,7 @@ class WebPagesSmokeTest {
         assertThat(result.statusCode()).isEqualTo(200);
         String body = result.body();
         assertThat(body).contains("100만 건 배치 처리 시간을 어떻게 측정하셨나요?", "병목은 어디였나요?", "답변 기록", "data-qtab=\"record\"", ">타이핑<", "면접 기록 만들기",
-                "질문 추가", "kind kind-verify\">거짓말 판독기<", "AI 의견 참고", "AI 의견 받기</button>", "id=\"must-check\"", "js-q-must", "id=\"iv-bar\"", "면접봤어요", "data-decision=\"PASS\"").doesNotContain("추출한 질문 <b>");
+                "질문 추가", "kind kind-verify\">거짓말 판독기<", "AI 의견 참고", "AI 의견 받기</button>", "id=\"must-check\"", "js-q-must", "id=\"iv-bar\"", "면접 본 날짜", "data-decision=\"PASS\"").doesNotContain("추출한 질문 <b>");
 
         HttpResponse<String> addedQ = json("POST", "/results/" + id + "/questions", "{\"section\":\"기술 검증\",\"content\":\"추가 질문\"}");
         assertThat(addedQ.statusCode()).isEqualTo(200);

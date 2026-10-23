@@ -103,6 +103,18 @@
     sel.addEventListener('refit', fit); // 고른 항목의 글자가 바뀌었을 때
   });
 
+  // ── 상세보기 창: data-dialog로 열고, 닫기 버튼이나 바깥을 누르면 닫는다 ──
+  document.addEventListener('click', function (e) {
+    var open = e.target.closest('[data-dialog]');
+    if (open) {
+      var dlg = document.getElementById(open.getAttribute('data-dialog'));
+      if (dlg && dlg.showModal) dlg.showModal();
+      return;
+    }
+    if (e.target.closest('dialog [data-close]')) { e.target.closest('dialog').close(); return; }
+    if (e.target.tagName === 'DIALOG') e.target.close(); // 바깥(배경) 누름
+  });
+
   // ── 표의 행 전체 클릭 ──
   document.querySelectorAll('tr[data-href]').forEach(function (tr) {
     tr.addEventListener('click', function (e) {
@@ -169,16 +181,55 @@
     applyFilters();
   }
 
-  // ── 이력서 드롭존 (1인은 하나, 다수는 지원자마다 하나) ──
+  // ── 이력서 드롭존 (지원자마다 하나): 고르거나 놓을 때마다 쌓이고, 파일마다 뺄 수 있다 ──
   var DZ_TEXT = '이력서·포트폴리오를 끌어다 놓거나 클릭';
+  function setFiles(dz, files) {
+    dz._files = files;
+    var dt = new DataTransfer();
+    files.forEach(function (f) { dt.items.add(f); });
+    dz.querySelector('input[type=file]').files = dt.files;
+    showFiles(dz);
+  }
   function showFiles(dz) {
-    var input = dz.querySelector('input[type=file]');
-    var names = Array.prototype.map.call(input.files || [], function (f) { return f.name; });
-    dz.classList.toggle('has-file', names.length > 0);
-    dz.querySelector('.dz-text').textContent = names.length ? names.join(', ') : DZ_TEXT;
+    var files = dz._files || [];
+    dz.classList.toggle('has-file', files.length > 0);
+    dz.querySelector('.dz-text').textContent = files.length ? '파일 더 넣기' : DZ_TEXT;
+    var list = dz.querySelector('.dz-files');
+    if (!list) {
+      list = document.createElement('ul');
+      list.className = 'dz-files';
+      dz.appendChild(list);
+    }
+    list.replaceChildren.apply(list, files.map(function (f, i) {
+      var li = document.createElement('li');
+      var name = document.createElement('span');
+      name.textContent = f.name;
+      var x = document.createElement('button');
+      x.type = 'button';
+      x.className = 'dz-x';
+      x.title = '빼기';
+      x.textContent = '×';
+      x.addEventListener('click', function (e) {
+        e.preventDefault();
+        e.stopPropagation();
+        setFiles(dz, files.filter(function (g, j) { return j !== i; }));
+      });
+      li.append(name, x);
+      return li;
+    }));
+    list.hidden = !files.length;
   }
   function bindDropzone(dz) {
-    dz.querySelector('input[type=file]').addEventListener('change', function () { showFiles(dz); });
+    var input = dz.querySelector('input[type=file]');
+    dz._files = [];
+    input.addEventListener('change', function () {
+      var all = (dz._files || []).slice();
+      Array.prototype.forEach.call(input.files, function (f) {
+        var dup = all.some(function (g) { return g.name === f.name && g.size === f.size && g.lastModified === f.lastModified; });
+        if (!dup) all.push(f);
+      });
+      setFiles(dz, all);
+    });
     ['dragenter', 'dragover'].forEach(function (t) {
       dz.addEventListener(t, function () { dz.classList.add('is-over'); });
     });
@@ -189,11 +240,11 @@
   }
   document.querySelectorAll('.dropzone').forEach(bindDropzone);
 
-  // ── 포지션 적합도 검사(다수): 지원자 칸 추가·빼기. "지원자 추가"에 파일을 여러 개 놓으면 파일마다 한 칸 ──
+  // ── 포지션 적합도 검사: 지원자 칸 추가·빼기 (파일은 칸에만 놓는다) ──
   var bzGrid = document.getElementById('bz-grid');
   if (bzGrid) {
     var bzNext = bzGrid.querySelectorAll('.bz').length + 1;
-    var addZone = function (file) {
+    var addZone = function () {
       var zone = bzGrid.querySelector('.bz').cloneNode(true);
       var dz = zone.querySelector('.dropzone');
       var input = dz.querySelector('input[type=file]');
@@ -201,11 +252,6 @@
       input.name = 'applicant-' + bzNext;
       zone.querySelector('.bz-no').textContent = '지원자 ' + bzNext;
       bzNext++;
-      if (file) {
-        var dt = new DataTransfer();
-        dt.items.add(file);
-        input.files = dt.files;
-      }
       bzGrid.appendChild(zone);
       bindDropzone(dz);
       relabel();
@@ -216,26 +262,10 @@
       bzGrid.querySelectorAll('.bz-no').forEach(function (el, i) { el.textContent = '지원자 ' + (i + 1); });
     };
     var addBtn = document.getElementById('bz-add');
-    addBtn.addEventListener('click', function () { addZone(null); });
-    ['dragenter', 'dragover'].forEach(function (t) {
-      addBtn.addEventListener(t, function (e) { e.preventDefault(); addBtn.classList.add('is-over'); });
-    });
-    addBtn.addEventListener('dragleave', function () { addBtn.classList.remove('is-over'); });
-    addBtn.addEventListener('drop', function (e) {
-      e.preventDefault();
-      addBtn.classList.remove('is-over');
-      var files = e.dataTransfer.files;
-      // 비어 있는 칸부터 채우고, 모자라면 칸을 늘린다
-      var empty = Array.prototype.filter.call(bzGrid.querySelectorAll('.bz input[type=file]'), function (i) { return !i.files.length; });
-      Array.prototype.forEach.call(files, function (f) {
-        var input = empty.shift();
-        if (!input) { addZone(f); return; }
-        var dt = new DataTransfer();
-        dt.items.add(f);
-        input.files = dt.files;
-        showFiles(input.closest('.dropzone'));
-      });
-    });
+    addBtn.addEventListener('click', function () { addZone(); });
+    // 버튼에 파일을 놓아도 받지 않는다 (브라우저가 파일을 여는 것만 막는다)
+    addBtn.addEventListener('dragover', function (e) { e.preventDefault(); e.dataTransfer.dropEffect = 'none'; });
+    addBtn.addEventListener('drop', function (e) { e.preventDefault(); });
     bzGrid.addEventListener('click', function (e) {
       var del = e.target.closest('.bz-del');
       if (!del) return;
@@ -244,8 +274,7 @@
         zone.remove();
         relabel();
       } else {
-        zone.querySelector('input[type=file]').value = '';
-        showFiles(zone.querySelector('.dropzone'));
+        setFiles(zone.querySelector('.dropzone'), []);
       }
     });
     document.getElementById('batch-form').addEventListener('submit', function (e) {
@@ -265,12 +294,17 @@
     var current = candList.getAttribute('data-current');
     var currentStatus = candList.getAttribute('data-current-status');
     var base = candList.getAttribute('data-url').replace(/\/positions\/\d+\/candidates$/, '');
+    // 위쪽 고정 줄에도 같은 지원자 고르기가 있다
+    var lists = [candList].concat(Array.prototype.slice.call(document.querySelectorAll('select[data-cand-copy]')));
     var render = function (rows) {
+      lists.forEach(function (list) { renderList(list, rows); });
+      candList.closest('label').querySelector('span').textContent = '지원자 ' + rows.length + '명';
+    };
+    var renderList = function (candList, rows) {
       if (document.activeElement === candList) return; // 펼쳐 보는 중에는 그대로 둔다
       var placeholder = candList.querySelector('option[value=""]');
       candList.innerHTML = '';
       if (placeholder) candList.appendChild(placeholder);
-      candList.closest('.side-select').querySelector('span').textContent = '지원자 ' + rows.length + '명';
       rows.forEach(function (row) {
         var tail = row.inProgress ? row.label
           : (row.state === 'RANKED' || row.state === 'EXCLUDED') ? row.score + ' / ' + row.max
@@ -279,7 +313,7 @@
         var o = document.createElement('option');
         o.value = base + '/results/' + row.id;
         o.setAttribute('data-tail', tail);
-        o.textContent = row.name + ' · ' + tail;
+        o.textContent = row.name;
         o.selected = String(row.id) === current;
         candList.appendChild(o);
       });
@@ -292,7 +326,14 @@
           render(rows);
           var mine = rows.filter(function (r) { return String(r.id) === current; })[0];
           // 보고 있는 지원자의 단계가 바뀌면 화면을 새로 연다
-          if (mine && mine.status !== currentStatus) { location.reload(); return; }
+          if (mine && mine.status !== currentStatus) {
+            // 검사가 끝나 결과가 처음 나오면 다시 연 화면에서 결과를 차례로 보여 준다
+            if (!mine.inProgress && mine.status !== 'FAILED') {
+              try { sessionStorage.setItem('reveal', current); } catch (err) { /* 연출만 빠진다 */ }
+            }
+            location.reload();
+            return;
+          }
           if (rows.some(function (r) { return r.inProgress; })) setTimeout(poll, 3000);
         })
         .catch(function () { setTimeout(poll, 6000); });
@@ -300,20 +341,61 @@
     setTimeout(poll, 3000);
   }
 
-  // ── 면접 기록: 바꾸면 바로 저장한다. 날짜나 합격·불합격을 고르면 "면접봤어요"도 체크된다 ──
+  // ── 검사 결과가 처음 나올 때의 연출 (다시 검사 직후, 또는 진행 중이던 검사가 끝나 화면을 다시 열었을 때) ──
+  var detail = document.querySelector('.detail');
+  if (detail) {
+    var revealId = null;
+    try { revealId = sessionStorage.getItem('reveal'); sessionStorage.removeItem('reveal'); } catch (err) { /* 무시 */ }
+    var shown = candList && revealId && revealId === candList.getAttribute('data-current');
+    var root = document.documentElement;
+    var reveal = shown || detail.hasAttribute('data-reveal');
+    if (!reveal) root.classList.remove('revealing');
+    if (reveal) {
+      Array.prototype.forEach.call(detail.children, function (el, i) { el.style.setProperty('--i', i); });
+      detail.querySelectorAll('.ev').forEach(function (el, j) { el.style.setProperty('--j', j); });
+      var profile = detail.querySelector('.profile');
+      if (profile) profile.classList.add('is-stamping');
+      detail.classList.add('reveal');
+      root.classList.remove('revealing'); // 같은 순간에 풀어야 카드들이 처음 상태(투명)에서 시작한다
+      // 점수는 0부터 0.5씩 올라간다
+      var pill = detail.querySelector('.score-pill');
+      var num = pill && pill.firstChild && pill.firstChild.nodeType === 3 ? pill.firstChild : null;
+      var target = num ? parseFloat(num.nodeValue) : NaN;
+      if (!isNaN(target) && !window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+        var start = null;
+        var duration = 1300;
+        var tick = function (t) {
+          if (start === null) start = t;
+          var p = Math.min(1, (t - start) / duration);
+          var v = Math.round(target * (1 - Math.pow(1 - p, 3)) * 2) / 2;
+          num.nodeValue = String(v);
+          if (p < 1) requestAnimationFrame(tick); else pill.classList.add('is-done');
+        };
+        num.nodeValue = '0';
+        setTimeout(function () { requestAnimationFrame(tick); }, 250);
+      }
+    }
+  }
+
+  // ── 면접 기록: 바꾸면 바로 저장한다. 면접 본 날짜가 있으면(또는 합격·불합격을 고르면) 면접 본 것이다.
+  //    날짜 칸은 면접 질문지 제목 줄에 있고 질문지가 부분 갱신되면 새로 그려지므로 이벤트는 문서에서 받는다 ──
   var iv = document.getElementById('iv-bar');
   if (iv) {
-    var ivDone = document.getElementById('iv-done');
-    var ivDate = document.getElementById('iv-date');
-    var ivState = document.getElementById('iv-state');
     var ivButtons = iv.querySelectorAll('[data-decision]');
+    var dateValue = function () {
+      var el = document.getElementById('iv-date');
+      return el ? el.value : (iv.getAttribute('data-date') || '');
+    };
+    // 날짜 없이 "면접봤어요"만 체크해 둔 예전 기록은 날짜를 고치기 전까지 그대로 둔다
+    var legacy = iv.getAttribute('data-interviewed') === 'true' && !dateValue();
     var decision = function () {
       var on = iv.querySelector('[data-decision].is-on');
       return on ? on.getAttribute('data-decision') : '';
     };
     var show = function (d) {
-      ivDone.checked = d.interviewed;
-      ivDate.value = d.date;
+      iv.setAttribute('data-date', d.date);
+      var el = document.getElementById('iv-date');
+      if (el) el.value = d.date;
       ivButtons.forEach(function (b) {
         var on = b.getAttribute('data-decision') === d.decision;
         b.classList.toggle('is-on', on);
@@ -323,10 +405,11 @@
       var report = document.getElementById('iv-report');
       if (report) report.hidden = d.decision !== 'PASS';
     };
-    var ivSave = function () {
-      var before = { interviewed: ivDone.checked, date: ivDate.value, decision: decision() };
-      ivState.textContent = '저장 중';
-      ivState.classList.remove('err');
+    var ivSave = function (stateId) {
+      var state = document.getElementById(stateId);
+      var before = { interviewed: legacy || !!dateValue() || !!decision(), date: dateValue(), decision: decision() };
+      state.textContent = '저장 중';
+      state.classList.remove('err');
       fetch(iv.getAttribute('data-url'), {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'fetch' },
@@ -335,25 +418,25 @@
         return res.ok ? res.json() : res.text().then(function (t) { throw new Error(t); });
       }).then(function (saved) {
         show(saved);
-        ivState.textContent = '저장됨';
+        state.textContent = '저장됨';
       }).catch(function (e) {
-        ivState.textContent = e.message || '저장하지 못했습니다';
-        ivState.classList.add('err');
+        state.textContent = e.message || '저장하지 못했습니다';
+        state.classList.add('err');
       });
     };
-    ivDone.addEventListener('change', function () {
-      // 면접을 안 본 것으로 되돌리면 날짜와 결과도 지운다
-      if (!ivDone.checked) show({ interviewed: false, date: '', decision: '' });
-      ivSave();
+    document.addEventListener('change', function (e) {
+      if (e.target.id !== 'iv-date') return;
+      e.target.classList.remove('is-missing');
+      legacy = false;
+      ivSave('iv-date-state');
     });
-    ivDate.addEventListener('change', ivSave);
     ivButtons.forEach(function (b) {
       b.addEventListener('click', function () {
         var on = !b.classList.contains('is-on');
         ivButtons.forEach(function (x) { x.classList.remove('is-on'); x.setAttribute('aria-pressed', false); });
         b.classList.toggle('is-on', on);
         b.setAttribute('aria-pressed', on);
-        ivSave();
+        ivSave('iv-state');
       });
     });
   }
@@ -479,4 +562,15 @@
     }
   });
 
+})();
+
+// 평가 기준 카드: 검사 전 카드는 펼치지 않고, 인쇄할 때는 모두 펼친다
+(function () {
+  document.addEventListener('click', function (e) {
+    var head = e.target.closest('details.ev[data-static] > summary');
+    if (head) e.preventDefault();
+  });
+  window.addEventListener('beforeprint', function () {
+    document.querySelectorAll('details.ev:not([data-static])').forEach(function (d) { d.open = true; });
+  });
 })();
