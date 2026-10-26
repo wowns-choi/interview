@@ -2,6 +2,7 @@ package com.example.interview.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.assertj.core.api.Assertions.tuple;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
@@ -121,6 +122,12 @@ class CriteriaFlowIntegrationTest {
         assertThat(p.getJdText()).startsWith("직접 쓴 설명").contains("[posting.pdf]", "large scale traffic",
                 "[우대.txt]", "우대사항: Kafka");
         assertThat(positionService.imageIds(id)).isEmpty();
+        // 원본 파일은 올린 이름 그대로 다시 내려받는다
+        assertThat(positionService.files(id)).extracting("fileName", "contentType")
+                .containsExactly(tuple("posting.pdf", "application/pdf"), tuple("우대.txt", "text/plain"));
+        Long txtId = positionService.files(id).get(1).getId();
+        assertThat(positionService.file(id, txtId).getFileData()).isEqualTo("우대사항: Kafka".getBytes("MS949"));
+        assertThatThrownBy(() -> positionService.file(id + 1000, txtId)).isInstanceOf(NotFoundException.class);
     }
 
     @Test
@@ -131,6 +138,7 @@ class CriteriaFlowIntegrationTest {
 
         assertThat(positionService.imageIds(id)).hasSize(1);
         assertThat(positionService.image(id, positionService.imageIds(id).get(0)).getContentType()).isEqualTo("image/png");
+        assertThat(positionService.files(id)).extracting("fileName").containsExactly("scan.pdf");
     }
 
     @Test

@@ -190,3 +190,43 @@
     }
   });
 })();
+
+// 합격 여부: 누르면 지원자 기록에 바로 저장 (다시 누르면 비움). 보고서 JSON이 아니라 지원자 값이다
+(function () {
+  var box = document.getElementById('rp-result');
+  if (!box) return;
+  var state = document.getElementById('rp-state');
+  var buttons = box.querySelectorAll('[data-decision]');
+  function show(decision) {
+    buttons.forEach(function (b) {
+      var on = b.getAttribute('data-decision') === decision;
+      b.classList.toggle('is-on', on);
+      b.setAttribute('aria-pressed', on);
+    });
+  }
+  buttons.forEach(function (b) {
+    b.addEventListener('click', function () {
+      var decision = b.classList.contains('is-on') ? '' : b.getAttribute('data-decision');
+      var before = box.querySelector('.is-on');
+      show(decision);
+      state.textContent = '저장 중';
+      state.classList.remove('err');
+      fetch(box.getAttribute('data-url'), {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'fetch' },
+        body: JSON.stringify({ interviewed: box.getAttribute('data-interviewed') === 'true',
+          date: box.getAttribute('data-date'), decision: decision })
+      }).then(function (res) {
+        return res.ok ? res.json() : res.text().then(function (t) { throw new Error(t); });
+      }).then(function (saved) {
+        box.setAttribute('data-interviewed', saved.interviewed);
+        show(saved.decision);
+        state.textContent = '저장됨';
+      }).catch(function (e) {
+        show(before ? before.getAttribute('data-decision') : '');
+        state.textContent = e.message || '저장하지 못했습니다';
+        state.classList.add('err');
+      });
+    });
+  });
+})();

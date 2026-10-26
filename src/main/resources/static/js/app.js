@@ -103,7 +103,7 @@
     sel.addEventListener('refit', fit); // 고른 항목의 글자가 바뀌었을 때
   });
 
-  // ── 상세보기 창: data-dialog로 열고, 닫기 버튼이나 바깥을 누르면 닫는다 ──
+  // ── 자세히 보기 창: data-dialog(카드 전체)로 열고, 닫기 버튼이나 바깥을 누르면 닫는다 ──
   document.addEventListener('click', function (e) {
     var open = e.target.closest('[data-dialog]');
     if (open) {
@@ -113,6 +113,9 @@
     }
     if (e.target.closest('dialog [data-close]')) { e.target.closest('dialog').close(); return; }
     if (e.target.tagName === 'DIALOG') e.target.close(); // 바깥(배경) 누름
+  });
+  document.addEventListener('keydown', function (e) {
+    if (e.key === 'Enter' && e.target.matches('div[data-dialog]')) e.target.click();
   });
 
   // ── 표의 행 전체 클릭 ──
@@ -401,9 +404,6 @@
         b.classList.toggle('is-on', on);
         b.setAttribute('aria-pressed', on);
       });
-      // 보고서 버튼은 합격일 때만
-      var report = document.getElementById('iv-report');
-      if (report) report.hidden = d.decision !== 'PASS';
     };
     var ivSave = function (stateId) {
       var state = document.getElementById(stateId);

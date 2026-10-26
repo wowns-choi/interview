@@ -1,11 +1,16 @@
 package com.example.interview.service;
 
+import java.io.IOException;
 import java.time.LocalDate;
+import java.util.List;
 
 import org.springframework.stereotype.Service;
+import org.springframework.web.multipart.MultipartFile;
 
 import com.example.interview.domain.Candidate;
+import com.example.interview.domain.CandidateFile;
 import com.example.interview.domain.CandidateStatus;
+import com.example.interview.mapper.CandidateFileMapper;
 import com.example.interview.mapper.CandidateMapper;
 
 import lombok.RequiredArgsConstructor;
@@ -15,6 +20,7 @@ import lombok.RequiredArgsConstructor;
 public class CandidateService {
 
     private final CandidateMapper candidateMapper;
+    private final CandidateFileMapper fileMapper;
 
     public Candidate get(Long id) {
         Candidate c = candidateMapper.findById(id);
@@ -32,6 +38,53 @@ public class CandidateService {
         c.setStatus(CandidateStatus.QUEUED);
         candidateMapper.insert(c);
         return c.getId();
+    }
+
+    /** 올린 원본 파일을 그대로 남긴다 (다시 내려받기용, AI에는 보내지 않는다) */
+    public void saveFiles(Long candidateId, List<MultipartFile> files) {
+        int order = 1;
+        for (MultipartFile f : files) {
+            CandidateFile file = new CandidateFile();
+            file.setCandidateId(candidateId);
+            file.setFileName(PositionService.fileName(f.getOriginalFilename() == null ? "" : f.getOriginalFilename()));
+            file.setContentType(contentType(file.getFileName()));
+            try {
+                file.setFileData(f.getBytes());
+            } catch (IOException e) {
+                throw new BusinessException("파일을 읽지 못했습니다: " + file.getFileName());
+            }
+            file.setSortOrder(order++);
+            fileMapper.insert(file);
+        }
+    }
+
+    /** 원본 파일 목록 (바이트 없이) */
+    public List<CandidateFile> files(Long candidateId) {
+        return fileMapper.findByCandidateId(candidateId);
+    }
+
+    public CandidateFile file(Long candidateId, Long fileId) {
+        CandidateFile file = fileMapper.findById(fileId);
+        if (file == null || !file.getCandidateId().equals(candidateId)) {
+            throw new NotFoundException("파일을 찾을 수 없습니다: " + fileId);
+        }
+        return file;
+    }
+
+    /** 브라우저가 준 형식 대신 확장자로 정한다. 모르는 형식은 그냥 바이트로 내려준다 */
+    static String contentType(String fileName) {
+        String lower = fileName.toLowerCase();
+        String ext = lower.substring(lower.lastIndexOf('.') + 1);
+        return switch (ext) {
+            case "pdf" -> "application/pdf";
+            case "doc" -> "application/msword";
+            case "docx" -> "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
+            case "ppt" -> "application/vnd.ms-powerpoint";
+            case "pptx" -> "application/vnd.openxmlformats-officedocument.presentationml.presentation";
+            case "hwp" -> "application/x-hwp";
+            case "hwpx" -> "application/hwp+zip";
+            default -> "application/octet-stream";
+        };
     }
 
     /**

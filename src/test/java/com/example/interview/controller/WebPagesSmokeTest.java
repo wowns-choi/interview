@@ -117,7 +117,7 @@ class WebPagesSmokeTest {
                 .doesNotContain("필수", "우대", "type=\"file\" id=\"resume\"", "<dt>연봉</dt>");
         // 적합도 검사: 포지션은 고르기만, 평가항목은 읽기 전용
         String fitPage = get("/fit?position=" + positionId).body();
-        assertThat(fitPage).contains("name=\"applicant-1\"", "data-nav", "selected", "새 지원자", "지원자 추가", "포지션 적합도 검사</button>")
+        assertThat(fitPage).contains("name=\"applicant-1\"", "data-nav", "selected", "class=\"pick-new is-active\"", "지원자 추가", "포지션 적합도 검사</button>")
                 .doesNotContain("평가 기준 추가", "js-crit-edit", "class=\"pick-crit\"", "(1인)", "(다수)", "id=\"resume\"");
         assertThat(get("/fit").body()).contains("name=\"applicant-1\"");
         HttpResponse<String> crit = json("POST", "/positions/" + positionId + "/criteria",
@@ -219,7 +219,7 @@ class WebPagesSmokeTest {
         assertThat(post("/results/" + id + "/report", "", false).statusCode()).isEqualTo(302);
         assertThat(get("/results/" + id).body()).contains("href=\"/results/" + id + "/report\"");
         assertThat(get("/results/" + id + "/report").body()).contains("면접 결과 보고서", "value=\"2026-10-20\"", "측정은 nGrinder로 했다고 답함",
-                "파견 가능 여부", "희망연봉", "class=\"rp-box is-on\">합격<", "면접관 추가", "data-f=\"position\"");
+                "파견 가능 여부", "희망연봉", "class=\"rp-box is-on\" data-decision=\"PASS\"", "면접관 추가", "data-f=\"position\"");
         assertThat(json("PUT", "/results/" + id + "/report", "{\"reportDate\":\"2026-10-23\",\"qaSource\":\"SHEET\","
                 + "\"info\":[{\"label\":\"성명\",\"value\":\"<b>x</b>\"}],\"qa\":[{\"kind\":\"CANDIDATE\",\"question\":\"복지는요?\",\"answer\":\"안내함\"}],"
                 + "\"opinions\":[{\"team\":\"플랫폼팀\",\"name\":\"김면접\",\"content\":\"기술 깊이가 좋음\"}]}").statusCode()).isEqualTo(204);

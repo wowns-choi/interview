@@ -49,6 +49,14 @@
         </div>
       </c:if>
     </header>
+    <c:if test="${not empty position and not empty files}">
+      <ul class="file-chips">
+        <c:forEach var="pf" items="${files}">
+          <li><a class="file-chip" href="<c:url value='/positions/${position.id}/files/${pf.id}'/>" download title="내려받기">
+            <svg class="i"><use href="#${fn:startsWith(pf.contentType, 'image/') ? 'i-image' : 'i-file'}"/></svg><span><c:out value="${pf.fileName}"/></span></a></li>
+        </c:forEach>
+      </ul>
+    </c:if>
 
     <c:choose>
       <c:when test="${empty position}">
@@ -71,14 +79,6 @@
             <h3 class="col-label">공고</h3>
             <c:if test="${not empty position.jdText}">
               <div class="posting"><c:out value="${position.jdText}"/></div>
-            </c:if>
-            <c:if test="${not empty imageIds}">
-              <ul class="img-list">
-                <c:forEach var="imgId" items="${imageIds}">
-                  <li><a href="<c:url value='/positions/${position.id}/images/${imgId}'/>" target="_blank" rel="noopener">
-                    <img src="<c:url value='/positions/${position.id}/images/${imgId}'/>" alt="포지션 이미지"></a></li>
-                </c:forEach>
-              </ul>
             </c:if>
           </section>
           <section class="pos-col">

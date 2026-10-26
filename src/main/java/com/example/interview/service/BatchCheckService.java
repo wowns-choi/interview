@@ -20,7 +20,8 @@ import lombok.extern.slf4j.Slf4j;
 /**
  * 포지션 적합도 검사(다수): 지원자마다 개인정보 가리기 → 적합도 검사를 한 명씩 차례로 서버 뒤에서 돌린다.
  * 사람이 가린 글을 검토하는 단계는 없다 (사용자 결정). 가리고 남은 주민번호·전화번호·이메일 모양이 있으면 그 지원자는 실패로 멈춘다.
- * 원문은 DB에 넣지 않고 메모리에만 두므로, 서버가 다시 켜지면 끝나지 못한 지원자는 실패로 바꾼다.
+ * 올린 원본 파일은 다시 내려받을 수 있게 그대로 저장한다 (사용자 결정, 2026-10-26). 뽑은 원문 글은
+ * DB에 넣지 않고 메모리에만 두므로, 서버가 다시 켜지면 끝나지 못한 지원자는 실패로 바꾼다.
  */
 @Slf4j
 @Service
@@ -71,6 +72,7 @@ public class BatchCheckService {
         List<Long> ids = new ArrayList<>();
         for (int i = 0; i < chosen.size(); i++) {
             Long id = candidateService.createQueued(positionId, ExtractionService.baseName(chosen.get(i).get(0)));
+            candidateService.saveFiles(id, chosen.get(i));
             String text = texts.get(i);
             ids.add(id);
             worker.submit(() -> process(positionId, id, text));

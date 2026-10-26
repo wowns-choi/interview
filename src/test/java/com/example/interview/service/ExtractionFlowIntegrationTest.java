@@ -507,6 +507,12 @@ public class ExtractionFlowIntegrationTest {
         // 빈 칸은 건너뛰고, 한 칸에 여러 파일이면 한 사람
         List<Long> started = batchCheckService.start(positionId, List.of(List.of(pdf()), List.of(), List.of(pdf(), pdf())));
         assertThat(started).hasSize(2);
+        // 원본 파일은 올린 그대로 다시 내려받을 수 있다
+        assertThat(candidateService.files(started.get(1))).extracting("fileName", "contentType")
+                .containsExactly(tuple("resume.pdf", "application/pdf"), tuple("resume.pdf", "application/pdf"));
+        Long fileId = candidateService.files(started.get(0)).get(0).getId();
+        assertThat(candidateService.file(started.get(0), fileId).getFileData()).containsExactly(1, 2, 3);
+        assertThatThrownBy(() -> candidateService.file(started.get(1), fileId)).isInstanceOf(NotFoundException.class);
         batchCheckService.awaitIdle();
 
         List<com.example.interview.web.dto.RankingRow> rows = rankingService.rank(positionId);

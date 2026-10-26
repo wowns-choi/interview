@@ -74,19 +74,18 @@
 <c:set var="renameBtn"><c:if test="${not busy}"><button type="button" class="icon-btn" id="cand-rename" title="이름 바꾸기"><svg class="i"><use href="#i-pencil"/></svg></button></c:if></c:set>
 <%-- 면접 기록: 면접관이 직접 체크한다 (AI는 합격·불합격을 정하지 않는다) --%>
 <div class="iv-bar" id="iv-bar" data-url="<c:url value='/results/${r.candidate.id}/interview'/>" data-interviewed="${r.candidate.interviewed}" data-date="${r.candidate.interviewDate}">
-  <span class="iv-result-label">결과</span>
   <div class="iv-decision" role="group" aria-label="합격 여부">
     <button type="button" class="iv-pass${r.candidate.decision == 'PASS' ? ' is-on' : ''}" data-decision="PASS" aria-pressed="${r.candidate.decision == 'PASS'}">합격</button>
     <button type="button" class="iv-fail${r.candidate.decision == 'FAIL' ? ' is-on' : ''}" data-decision="FAIL" aria-pressed="${r.candidate.decision == 'FAIL'}">불합격</button>
   </div>
-  <%-- 보고서는 합격으로 기록한 지원자만 --%>
+  <%-- 보고서는 합격 여부와 상관없이 만들 수 있다 --%>
   <c:choose>
     <c:when test="${hasReport}">
-      <a class="btn btn-primary btn-sm iv-report" id="iv-report" href="<c:url value='/results/${r.candidate.id}/report'/>" ${r.candidate.decision == 'PASS' ? '' : 'hidden'}>보고서</a>
+      <a class="btn btn-primary btn-sm iv-report" id="iv-report" href="<c:url value='/results/${r.candidate.id}/report'/>">보고서</a>
     </c:when>
     <c:otherwise>
       <form class="iv-report" id="iv-report" method="post" action="<c:url value='/results/${r.candidate.id}/report'/>"
-            data-busy="보고서를 만드는 중" data-busy-sub="면접 질문지와 녹음본에서 지원자 정보를 찾고 있습니다" ${r.candidate.decision == 'PASS' ? '' : 'hidden'}>
+            data-busy="보고서를 만드는 중" data-busy-sub="면접 질문지와 녹음본에서 지원자 정보를 찾고 있습니다">
         <button type="submit" class="btn btn-primary btn-sm">보고서</button>
       </form>
     </c:otherwise>
@@ -106,6 +105,15 @@
   </div>
   </c:if>
 </div>
+<%-- 지원자가 낸 원본 파일 (가리지 않은 원본) --%>
+<c:if test="${not empty candFiles}">
+<ul class="file-chips cand-files">
+  <c:forEach var="cf" items="${candFiles}">
+    <li><a class="file-chip" href="<c:url value='/results/${r.candidate.id}/files/${cf.id}'/>" download title="내려받기">
+      <svg class="i"><use href="#i-file"/></svg><span><c:out value="${cf.fileName}"/></span></a></li>
+  </c:forEach>
+</ul>
+</c:if>
 <c:if test="${busy or empty r.candidate.maskedText or (st == 'FAILED' and not r.fitChecked) or not showProfile}">
 <section class="stage" id="fit">
   <header class="stage-head">
@@ -151,28 +159,20 @@
                     </div>
                   </div>
                 </div>
-                <c:if test="${pf.personFilled}">
+                <c:if test="${not empty pf.phone or not empty pf.email or not empty pf.address}">
                 <dl class="pf-info">
                   <c:if test="${not empty pf.phone}"><dt>전화번호</dt><dd><c:out value="${pf.phone}"/></dd></c:if>
                   <c:if test="${not empty pf.email}"><dt>이메일</dt><dd><c:out value="${pf.email}"/></dd></c:if>
                   <c:if test="${not empty pf.address}"><dt>주소</dt><dd><c:out value="${pf.address}"/></dd></c:if>
-                  <c:if test="${not empty pf.link}"><dt>포트폴리오</dt><dd>
-                    <c:choose>
-                      <c:when test="${fn:startsWith(pf.link, 'http://') or fn:startsWith(pf.link, 'https://')}">
-                        <a href="<c:out value='${pf.link}'/>" target="_blank" rel="noopener noreferrer"><c:out value="${pf.link}"/></a>
-                      </c:when>
-                      <c:otherwise><c:out value="${pf.link}"/></c:otherwise>
-                    </c:choose>
-                  </dd></c:if>
                 </dl>
                 </c:if>
               </div>
 
-            <%-- 경력 · 학력 · 자격증: 충족 여부가 먼저 보이고, 자세한 내용은 상세보기에서 --%>
+            <%-- 경력 · 학력 · 자격증: 충족 여부가 먼저 보이고, 카드를 누르면 자세한 내용 --%>
             <c:set var="gauge" value="${r.careerGauge}"/>
             <c:set var="certs" value="${cev.certificates}"/>
             <div class="pf-checks">
-              <div class="pf-check">
+              <div class="pf-check"<c:if test="${not empty pf.careers}"> data-dialog="dlg-career" tabindex="0" role="button" aria-label="경력 자세히"</c:if>>
                 <div class="pf-check-head">
                   <h3>경력</h3>
                   <c:choose>
@@ -185,10 +185,9 @@
                 <div class="cmps">
 <%@ include file="common/compare-line.jspf" %>
                 </div>
-                <c:if test="${not empty pf.careers}"><button type="button" class="pf-more" data-dialog="dlg-career">상세보기</button></c:if>
               </div>
 
-              <div class="pf-check">
+              <div class="pf-check"<c:if test="${not empty pf.education}"> data-dialog="dlg-education" tabindex="0" role="button" aria-label="학력 자세히"</c:if>>
                 <div class="pf-check-head">
                   <h3>학력</h3>
                   <c:choose>
@@ -203,7 +202,6 @@
 <%@ include file="common/compare-line.jspf" %>
                   </c:forEach>
                 </div>
-                <c:if test="${not empty pf.education}"><button type="button" class="pf-more" data-dialog="dlg-education">상세보기</button></c:if>
               </div>
 
               <%-- 자격증: 근거 분석 호출(GPT)이 읽은 것. 있는지만 --%>

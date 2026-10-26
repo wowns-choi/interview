@@ -22,9 +22,11 @@ import com.example.interview.domain.CriterionCategory;
 import com.example.interview.domain.CriterionSource;
 import com.example.interview.domain.EvalCriterion;
 import com.example.interview.domain.Position;
+import com.example.interview.domain.PositionFile;
 import com.example.interview.domain.PositionImage;
 import com.example.interview.domain.PositionStatus;
 import com.example.interview.mapper.EvalCriterionMapper;
+import com.example.interview.mapper.PositionFileMapper;
 import com.example.interview.mapper.PositionImageMapper;
 import com.example.interview.mapper.PositionMapper;
 import com.example.interview.resume.PdfTextExtractor;
@@ -44,6 +46,7 @@ public class PositionService {
 
     private final PositionMapper positionMapper;
     private final PositionImageMapper imageMapper;
+    private final PositionFileMapper fileMapper;
     private final EvalCriterionMapper criterionMapper;
     private final AiClient aiClient;
     private final PromptLoader promptLoader;
@@ -72,7 +75,8 @@ public class PositionService {
      */
     public Long create(String jdText, List<MultipartFile> files) {
         StringBuilder sb = new StringBuilder(jdText == null ? "" : jdText.strip());
-        List<PositionImage> images = readFiles(files, sb);
+        List<PositionFile> originals = new ArrayList<>();
+        List<PositionImage> images = readFiles(files, sb, originals);
         String text = sb.toString().strip();
         if (text.isEmpty() && images.isEmpty()) {
             throw new BusinessException("포지션 설명이나 파일을 넣어 주세요.");
@@ -87,6 +91,10 @@ public class PositionService {
                 image.setPositionId(p.getId());
                 imageMapper.insert(image);
             }
+            for (PositionFile file : originals) {
+                file.setPositionId(p.getId());
+                fileMapper.insert(file);
+            }
             return p.getId();
         });
     }
@@ -97,6 +105,19 @@ public class PositionService {
 
     public List<Long> imageIds(Long positionId) {
         return imageMapper.findIdsByPositionId(positionId);
+    }
+
+    /** 올린 원본 파일 목록 (바이트 없이) */
+    public List<PositionFile> files(Long positionId) {
+        return fileMapper.findByPositionId(positionId);
+    }
+
+    public PositionFile file(Long positionId, Long fileId) {
+        PositionFile file = fileMapper.findById(fileId);
+        if (file == null || !file.getPositionId().equals(positionId)) {
+            throw new NotFoundException("파일을 찾을 수 없습니다: " + fileId);
+        }
+        return file;
     }
 
     public PositionImage image(Long positionId, Long imageId) {
@@ -231,8 +252,9 @@ public class PositionService {
     /**
      * 첨부 파일을 읽는다. 이미지는 그대로 AI에 보내고, PDF·텍스트 파일은 글자를 뽑아 text 뒤에 붙인다.
      * 글자가 거의 없는 스캔 PDF는 페이지를 이미지로 그려 남은 이미지 자리만큼 보낸다.
+     * 원본은 다시 내려받을 수 있게 originals 에 담는다.
      */
-    private List<PositionImage> readFiles(List<MultipartFile> files, StringBuilder text) {
+    private List<PositionImage> readFiles(List<MultipartFile> files, StringBuilder text, List<PositionFile> originals) {
         List<PositionImage> images = new ArrayList<>();
         if (files == null) {
             return images;
@@ -250,6 +272,7 @@ public class PositionService {
                     throw new BusinessException("이미지는 5MB 이하여야 합니다: " + name);
                 }
                 addImage(images, imageType, data, name);
+                addOriginal(originals, name, imageType, data);
             } else if (isPdf(data)) {
                 String pdfText;
                 try {
@@ -260,19 +283,37 @@ public class PositionService {
                             throw new BusinessException("이미지는 " + IMAGE_MAX_COUNT + "장까지 넣을 수 있습니다: " + name);
                         }
                         pages.forEach(page -> addImage(images, "image/png", page, name));
+                        addOriginal(originals, name, "application/pdf", data);
                         continue;
                     }
                 } catch (ResumeProcessingException e) {
                     throw new BusinessException(e.getMessage() + " (" + name + ")");
                 }
                 appendFile(text, name, pdfText);
+                addOriginal(originals, name, "application/pdf", data);
             } else if (isTextFile(name)) {
                 appendFile(text, name, decodeText(data));
+                addOriginal(originals, name, name.toLowerCase().endsWith(".md") ? "text/markdown" : "text/plain", data);
             } else {
                 throw new BusinessException("PDF, TXT, MD, 이미지 파일만 넣을 수 있습니다: " + name);
             }
         }
         return images;
+    }
+
+    private static void addOriginal(List<PositionFile> originals, String name, String type, byte[] data) {
+        PositionFile file = new PositionFile();
+        file.setFileName(fileName(name));
+        file.setContentType(type);
+        file.setFileData(data);
+        file.setSortOrder(originals.size() + 1);
+        originals.add(file);
+    }
+
+    /** 브라우저가 경로까지 붙여 보내는 경우가 있어 마지막 이름만 남긴다 */
+    static String fileName(String name) {
+        String base = name.substring(Math.max(name.lastIndexOf('/'), name.lastIndexOf('\\')) + 1).strip();
+        return truncate(base.isEmpty() ? "파일" : base, 255);
     }
 
     private static void addImage(List<PositionImage> images, String type, byte[] data, String name) {

@@ -1,5 +1,6 @@
 package com.example.interview.controller;
 
+import java.nio.charset.StandardCharsets;
 import java.time.LocalDate;
 import java.time.format.DateTimeParseException;
 import java.util.ArrayList;
@@ -9,6 +10,8 @@ import java.util.List;
 import java.util.Map;
 
 import org.springframework.http.CacheControl;
+import org.springframework.http.ContentDisposition;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Controller;
@@ -30,6 +33,8 @@ import com.example.interview.ai.AiCallException;
 import com.example.interview.domain.Candidate;
 import com.example.interview.domain.EvalCriterion;
 import com.example.interview.domain.Position;
+import com.example.interview.domain.CandidateFile;
+import com.example.interview.domain.PositionFile;
 import com.example.interview.domain.PositionImage;
 import com.example.interview.domain.QuestionType;
 import com.example.interview.resume.ResumeProcessingException;
@@ -127,6 +132,22 @@ public class ExtractController {
                 .body(image.getImageData());
     }
 
+    @GetMapping("/positions/{id}/files/{fileId}")
+    public ResponseEntity<byte[]> file(@PathVariable Long id, @PathVariable Long fileId) {
+        PositionFile file = positionService.file(id, fileId);
+        return download(file.getFileName(), file.getContentType(), file.getFileData());
+    }
+
+    /** 올린 이름 그대로 내려받게 한다 */
+    private static ResponseEntity<byte[]> download(String name, String contentType, byte[] data) {
+        return ResponseEntity.ok()
+                .contentType(MediaType.parseMediaType(contentType))
+                .header(HttpHeaders.CONTENT_DISPOSITION, ContentDisposition.attachment()
+                        .filename(name, StandardCharsets.UTF_8).build().toString())
+                .header("X-Content-Type-Options", "nosniff")
+                .body(data);
+    }
+
     @PatchMapping("/positions/{id}")
     @ResponseBody
     public Map<String, String> renamePosition(@PathVariable Long id, @RequestBody Map<String, String> body) {
@@ -216,8 +237,15 @@ public class ExtractController {
         model.addAttribute("r", r);
         model.addAttribute("record", InterviewRecordService.parse(r.getCandidate().getRecordJson()));
         model.addAttribute("hasReport", r.getCandidate().getReportJson() != null);
+        model.addAttribute("candFiles", candidateService.files(id));
         addFit(model, r.getPosition().getId());
         return "fit";
+    }
+
+    @GetMapping("/results/{id}/files/{fileId}")
+    public ResponseEntity<byte[]> candidateFile(@PathVariable Long id, @PathVariable Long fileId) {
+        CandidateFile file = candidateService.file(id, fileId);
+        return download(file.getFileName(), file.getContentType(), file.getFileData());
     }
 
     @PostMapping("/results/{id}/check")
@@ -396,7 +424,7 @@ public class ExtractController {
         model.addAttribute("position", position);
         model.addAttribute("conds", ConditionForm.of(position));
         model.addAttribute("criteria", positionService.criteria(positionId));
-        model.addAttribute("imageIds", positionService.imageIds(positionId));
+        model.addAttribute("files", positionService.files(positionId));
     }
 
     private void extractCriteria(Long positionId, RedirectAttributes ra) {

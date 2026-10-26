@@ -101,9 +101,11 @@
 
   <section class="rp-sec">
     <div class="rp-h"><h2><span class="rp-h-no">4</span>합격 여부</h2></div>
-    <div class="rp-result">
-      <span class="rp-box${candidate.decision == 'PASS' ? ' is-on' : ''}">합격</span>
-      <span class="rp-box${candidate.decision == 'FAIL' ? ' is-on' : ''}">불합격</span>
+    <%-- 지원자의 합격 여부를 그대로 고친다 (적합도 검사 화면의 결과와 같은 값) --%>
+    <div class="rp-result" id="rp-result" data-url="<c:url value='/results/${candidate.id}/interview'/>"
+         data-interviewed="${candidate.interviewed}" data-date="${candidate.interviewDate}">
+      <button type="button" class="rp-box${candidate.decision == 'PASS' ? ' is-on' : ''}" data-decision="PASS" aria-pressed="${candidate.decision == 'PASS'}">합격</button>
+      <button type="button" class="rp-box${candidate.decision == 'FAIL' ? ' is-on' : ''}" data-decision="FAIL" aria-pressed="${candidate.decision == 'FAIL'}">불합격</button>
     </div>
   </section>
 </article>

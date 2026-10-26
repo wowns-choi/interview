@@ -1,8 +1,8 @@
 <%@ page pageEncoding="UTF-8" %>
 <%-- 포지션 고르기 (만들기는 평가 기준 추출 탭에서만). pickBase: 고르면 갈 주소.
-     적합도 검사에서는 그 오른쪽에 지원자 고르기와 새 지원자 버튼 --%>
+     적합도 검사에서는 그 오른쪽에 지원자 고르기, 바로 옆에 지원자 추가 버튼 --%>
 <c:set var="onFit" value="${pickBase == '/fit'}"/>
-<div class="pick${onFit ? ' pick-row' : ''}">
+<div class="pick pick-row">
   <label class="pick-select">
     <span>포지션</span>
     <select data-nav>
@@ -12,6 +12,8 @@
     </select>
   </label>
   <c:if test="${onFit}">
+  <c:set var="newHref"><c:url value='/fit?position=${position.id}'/></c:set>
+  <div class="pick-cand-wrap">
   <c:if test="${not empty candidates}">
   <label class="pick-select pick-cand">
     <span>지원자 ${fn:length(candidates)}명</span>
@@ -21,7 +23,8 @@
     </select>
   </label>
   </c:if>
-  <a class="btn pick-new${empty r ? ' is-active' : ''}" href="<c:url value='/fit?position=${position.id}'/>"><svg class="i"><use href="#i-plus"/></svg>새 지원자</a>
+  <a class="pick-new${empty r ? ' is-active' : ''}" href="${newHref}"><svg class="i"><use href="#i-plus"/></svg>${empty candidates ? '지원자 추가' : '추가'}</a>
+  </div>
   </c:if>
 </div>
 <%-- 적합도 검사에서 아래로 내리면 포지션과 지원자를 위에 붙여 둔다 --%>
@@ -38,6 +41,7 @@
       <%@ include file="cand-options.jspf" %>
     </select>
     </c:if>
+    <a class="pick-bar-new" href="${newHref}" title="지원자 추가" aria-label="지원자 추가"><svg class="i"><use href="#i-plus"/></svg></a>
   </div>
 </div>
 </c:if>

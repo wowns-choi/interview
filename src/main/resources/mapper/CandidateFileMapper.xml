@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.example.interview.mapper.CandidateFileMapper">
+
+    <insert id="insert" useGeneratedKeys="true" keyProperty="id" keyColumn="id">
+        INSERT INTO candidate_file (candidate_id, file_name, content_type, file_data, sort_order)
+        VALUES (#{candidateId}, #{fileName}, #{contentType}, #{fileData}, #{sortOrder})
+    </insert>
+
+    <select id="findByCandidateId" resultType="com.example.interview.domain.CandidateFile">
+        SELECT id, candidate_id, file_name, content_type, sort_order
+        FROM candidate_file WHERE candidate_id = #{candidateId} ORDER BY sort_order, id
+    </select>
+
+    <select id="findById" resultType="com.example.interview.domain.CandidateFile">
+        SELECT * FROM candidate_file WHERE id = #{id}
+    </select>
+</mapper>

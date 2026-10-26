@@ -63,3 +63,16 @@ WHERE NOT EXISTS (SELECT 1 FROM question_template)
 
 INSERT INTO app_setting (setting_key, setting_value)
 SELECT 'seeded', 'Y' WHERE NOT EXISTS (SELECT 1 FROM app_setting WHERE setting_key = 'seeded');
+
+-- 4. 원본 파일을 저장하기 전에 만든 포지션: 남아 있는 이미지를 내려받을 파일로 옮긴다 (한 번만)
+INSERT INTO position_file (position_id, file_name, content_type, file_data, sort_order)
+SELECT i.position_id,
+       '공고 이미지 ' || CAST(i.sort_order AS VARCHAR(10)) || CASE i.content_type
+           WHEN 'image/jpeg' THEN '.jpg' WHEN 'image/webp' THEN '.webp' WHEN 'image/gif' THEN '.gif' ELSE '.png' END,
+       i.content_type, i.image_data, i.sort_order
+FROM position_image i
+WHERE NOT EXISTS (SELECT 1 FROM app_setting WHERE setting_key = 'position_files')
+  AND NOT EXISTS (SELECT 1 FROM position_file f WHERE f.position_id = i.position_id);
+
+INSERT INTO app_setting (setting_key, setting_value)
+SELECT 'position_files', 'Y' WHERE NOT EXISTS (SELECT 1 FROM app_setting WHERE setting_key = 'position_files');
