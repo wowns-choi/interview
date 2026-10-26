@@ -248,6 +248,17 @@ public class ExtractController {
         return download(file.getFileName(), file.getContentType(), file.getFileData());
     }
 
+    /** 저장해 둔 원본 파일로 가리기부터 다시 */
+    @PostMapping("/results/{id}/restart")
+    public String restart(@PathVariable Long id, RedirectAttributes ra) {
+        try {
+            batchCheckService.restart(id);
+        } catch (BusinessException e) {
+            ra.addFlashAttribute("error", e.getMessage());
+        }
+        return "redirect:/results/" + id;
+    }
+
     @PostMapping("/results/{id}/check")
     public String checkFit(@PathVariable Long id, @RequestParam(required = false) String maskedText,
             RedirectAttributes ra) {

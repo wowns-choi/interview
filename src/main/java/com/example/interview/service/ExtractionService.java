@@ -1,6 +1,7 @@
 package com.example.interview.service;
 
 import java.io.IOException;
+import java.util.ArrayList;
 import java.util.Collection;
 import java.util.HashSet;
 import java.util.List;
@@ -17,6 +18,7 @@ import org.springframework.web.multipart.MultipartFile;
 import com.example.interview.ai.dto.CareerEvalResult;
 import com.example.interview.ai.dto.EvidenceResult;
 import com.example.interview.domain.Candidate;
+import com.example.interview.domain.CandidateFile;
 import com.example.interview.domain.CandidateStatus;
 import com.example.interview.domain.InterviewQuestion;
 import com.example.interview.domain.QuestionOrigin;
@@ -279,10 +281,23 @@ public class ExtractionService {
     String combine(List<MultipartFile> files) {
         // 형식을 먼저 모두 확인해, 뒤 파일이 잘못돼도 앞 파일을 읽느라 시간을 쓰지 않게 한다
         files.forEach(f -> DocumentTextExtractor.kindOf(f.getOriginalFilename()));
+        List<CandidateFile> read = new ArrayList<>();
+        for (MultipartFile f : files) {
+            CandidateFile c = new CandidateFile();
+            c.setFileName(f.getOriginalFilename());
+            c.setFileData(read(f));
+            read.add(c);
+        }
+        return combineStored(read);
+    }
+
+    /** 저장해 둔 원본 파일(다시 검사)이나 막 올린 파일을 읽어 합친다 */
+    String combineStored(List<CandidateFile> files) {
+        files.forEach(f -> DocumentTextExtractor.kindOf(f.getFileName()));
         StringBuilder sb = new StringBuilder();
         for (int i = 0; i < files.size(); i++) {
-            MultipartFile file = files.get(i);
-            DocumentTextExtractor.Extracted doc = documentTextExtractor.extract(file.getOriginalFilename(), read(file));
+            CandidateFile file = files.get(i);
+            DocumentTextExtractor.Extracted doc = documentTextExtractor.extract(file.getFileName(), file.getFileData());
             if (files.size() > 1) {
                 sb.append("[첨부 ").append(i + 1).append(" (").append(doc.kind()).append(")]\n");
             }

@@ -541,8 +541,19 @@ public class ExtractionFlowIntegrationTest {
         Candidate c = candidateService.get(rankingService.rank(positionId).get(0).getCandidateId());
         assertThat(c.getStatus()).isEqualTo(CandidateStatus.FAILED);
         assertThat(c.getMaskedText()).isNull();
-        assertThat(c.getErrorMessage()).contains("다시 올려");
+        assertThat(c.getErrorMessage()).contains("개인정보를 가리지 못했습니다");
         verify(aiClient, never()).call(eq(AiPurpose.EVIDENCE), anyLong(), anyString(), anyString(), any(), any());
+
+        // 저장해 둔 원본 파일로 가리기부터 다시 검사한다
+        stubPii(aiClient, pii(PiiResult.Type.APPLICANT_NAME, "홍길동"), pii(PiiResult.Type.PHONE, "010-1111-2222"));
+        batchCheckService.restart(c.getId());
+        batchCheckService.awaitIdle();
+        Candidate again = candidateService.get(c.getId());
+        assertThat(again.getMaskedText()).contains("[전화번호]").doesNotContain("010-1111-2222");
+        verify(aiClient).call(eq(AiPurpose.EVIDENCE), eq(c.getId()), anyString(), anyString(), any(), any());
+
+        Long other = candidateService.createQueued(positionId, "파일 없음");
+        assertThatThrownBy(() -> batchCheckService.restart(other)).isInstanceOf(BusinessException.class);
     }
 
     @Test

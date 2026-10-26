@@ -99,6 +99,12 @@
     <button type="submit" class="btn btn-sm ${r.fitChecked ? 'btn-ghost' : 'btn-primary'}">${r.fitChecked ? '다시 검사' : '검사'}</button>
   </form>
   </c:if>
+  <%-- 가리기 전에 멈췄거나 실패: 저장해 둔 원본으로 처음부터 --%>
+  <c:if test="${empty r.candidate.maskedText and not empty candFiles}">
+  <form method="post" action="<c:url value='/results/${r.candidate.id}/restart'/>">
+    <button type="submit" class="btn btn-sm btn-primary">다시 검사</button>
+  </form>
+  </c:if>
   <form method="post" action="<c:url value='/results/${r.candidate.id}/delete'/>" data-confirm="이 지원자의 검사 결과와 질문지를 삭제할까요?">
     <button type="submit" class="btn btn-ghost btn-sm btn-danger-text">삭제</button>
   </form>
@@ -174,11 +180,11 @@
             <div class="pf-checks">
               <div class="pf-check"<c:if test="${not empty pf.careers}"> data-dialog="dlg-career" tabindex="0" role="button" aria-label="경력 자세히"</c:if>>
                 <div class="pf-check-head">
-                  <h3>경력</h3>
                   <c:choose>
-                    <c:when test="${not empty fit.career}"><span class="stamp stamp-lg ${fit.career ? 'is-met' : 'is-unmet'}">${fit.career ? '충족' : '미충족'}</span></c:when>
-                    <c:when test="${empty position.requiredExperience}"><span class="verdict-none">조건 없음</span></c:when>
-                    <c:otherwise><span class="verdict-none">판단 못 함</span></c:otherwise>
+                    <c:when test="${not empty fit.career}"><c:set var="markLabel" value="경력"/><c:set var="markKind" value="${fit.career ? 'met' : 'unmet'}"/><c:set var="markText" value="${fit.career ? '충족' : '미충족'}"/>
+<%@ include file="common/verdict-mark.jspf" %>
+                    </c:when>
+                    <c:otherwise><h3>경력</h3><span class="verdict-none">${empty position.requiredExperience ? '조건 없음' : '판단 못 함'}</span></c:otherwise>
                   </c:choose>
                 </div>
                 <c:set var="ln" value="${r.careerLine}"/><c:set var="lnTitle" value="${cev.relevantReason}"/>
@@ -189,11 +195,11 @@
 
               <div class="pf-check"<c:if test="${not empty pf.education}"> data-dialog="dlg-education" tabindex="0" role="button" aria-label="학력 자세히"</c:if>>
                 <div class="pf-check-head">
-                  <h3>학력</h3>
                   <c:choose>
-                    <c:when test="${not empty fit.education}"><span class="stamp stamp-lg ${fit.education ? 'is-met' : 'is-unmet'}">${fit.education ? '충족' : '미충족'}</span></c:when>
-                    <c:when test="${empty position.requiredEducation and empty position.requiredMajor}"><span class="verdict-none">조건 없음</span></c:when>
-                    <c:otherwise><span class="verdict-none">판단 못 함</span></c:otherwise>
+                    <c:when test="${not empty fit.education}"><c:set var="markLabel" value="학력"/><c:set var="markKind" value="${fit.education ? 'met' : 'unmet'}"/><c:set var="markText" value="${fit.education ? '충족' : '미충족'}"/>
+<%@ include file="common/verdict-mark.jspf" %>
+                    </c:when>
+                    <c:otherwise><h3>학력</h3><span class="verdict-none">${empty position.requiredEducation and empty position.requiredMajor ? '조건 없음' : '판단 못 함'}</span></c:otherwise>
                   </c:choose>
                 </div>
                 <c:set var="lnTitle" value="${cev.educationReason}"/>
@@ -204,9 +210,18 @@
                 </div>
               </div>
 
-              <%-- 자격증: 근거 분석 호출(GPT)이 읽은 것. 있는지만 --%>
+              <%-- 자격증: 근거 분석 호출(GPT)이 읽은 것. 둘 다 있으면 동그라미, 하나면 세모, 없으면 X --%>
               <div class="pf-check">
-                <div class="pf-check-head"><h3>자격증</h3></div>
+                <div class="pf-check-head">
+                  <c:choose>
+                    <c:when test="${not empty certs}">
+                      <c:set var="certCount" value="${(certs.infoEngineer ? 1 : 0) + (certs.sqld ? 1 : 0)}"/>
+                      <c:set var="markLabel" value="자격증"/><c:set var="markKind" value="${certCount == 2 ? 'met' : certCount == 1 ? 'part' : 'unmet'}"/><c:set var="markText" value="${certCount == 2 ? '둘 다 있음' : certCount == 1 ? '하나 있음' : '없음'}"/>
+<%@ include file="common/verdict-mark.jspf" %>
+                    </c:when>
+                    <c:otherwise><h3>자격증</h3></c:otherwise>
+                  </c:choose>
+                </div>
                 <c:choose>
                   <c:when test="${empty certs}"><p class="pf-sub">다시 검사하면 표시됩니다</p></c:when>
                   <c:otherwise>

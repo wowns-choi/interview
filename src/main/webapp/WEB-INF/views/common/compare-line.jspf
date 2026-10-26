@@ -10,5 +10,4 @@
     <strong><c:out value="${empty ln.required ? '조건 없음' : ln.required}"/></strong>
     <small><c:out value="${ln.requiredCaption}"/></small>
   </div>
-  <c:if test="${not empty ln.note}"><p class="cmp-note"><c:out value="${ln.note}"/></p></c:if>
 </div>

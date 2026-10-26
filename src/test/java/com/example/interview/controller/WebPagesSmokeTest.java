@@ -171,7 +171,7 @@ class WebPagesSmokeTest {
                 "<h3>타임라인</h3>", "class=\"is-career\"", "2021.03 ~ 2024.02", "이력서상 기록 없음 <small>8개월</small>", "2020.07 ~ 2021.02")
                 .doesNotContain("class=\"gauge\"", "공고까지", "없는항목", "<h3>연봉", "5,000만원", "<h3>교육</h3>");
         assertThat(checked).contains("홍길동", "부분 충족", "총 경력 2년 11개월", "포지션 관련 2년 6개월", "title=\"백엔드 업무 기간\"",
-                "<span class=\"stamp stamp-lg is-unmet\">미충족</span>","일 100만 건 주문 데이터 배치 처리 개선", "원문에서 찾지 못한",
+                "<h3 class=\"vmark is-unmet\">", "<span class=\"sr-only\">미충족</span>","일 100만 건 주문 데이터 배치 처리 개선", "원문에서 찾지 못한",
                 "질문 추출</button>", "name=\"types\" value=\"EXPERIENCE\" checked", "class=\"print-head\"").doesNotContain("<script>alert(1)</script>", "id=\"iq-board\"");
         // 점수: 근거 직접 1·없음 0·없음 0 (경력·학력은 점수에 넣지 않는다)
         assertThat(checked).contains("class=\"score-pill\"", "1<small> / 3점</small>").doesNotContain(" · 1 / 3</option>");

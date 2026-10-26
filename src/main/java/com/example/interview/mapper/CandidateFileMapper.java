@@ -13,5 +13,8 @@ public interface CandidateFileMapper {
     /** 화면 표시용: 바이트 없이 */
     List<CandidateFile> findByCandidateId(Long candidateId);
 
+    /** 다시 검사용: 바이트까지 */
+    List<CandidateFile> findWithDataByCandidateId(Long candidateId);
+
     CandidateFile findById(Long id);
 }

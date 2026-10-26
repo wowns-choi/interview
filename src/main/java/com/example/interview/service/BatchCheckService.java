@@ -11,8 +11,11 @@ import org.springframework.context.event.EventListener;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
 
+import com.example.interview.domain.Candidate;
+import com.example.interview.domain.CandidateFile;
 import com.example.interview.domain.CandidateStatus;
 import com.example.interview.mapper.CandidateMapper;
+import com.example.interview.resume.ResumeProcessingException;
 
 import jakarta.annotation.PreDestroy;
 import lombok.extern.slf4j.Slf4j;
@@ -27,7 +30,7 @@ import lombok.extern.slf4j.Slf4j;
 @Service
 public class BatchCheckService {
 
-    static final String INTERRUPTED = "서버가 다시 시작되어 검사가 중단됐습니다. 다시 올려 주세요.";
+    static final String INTERRUPTED = "서버가 다시 시작되어 검사가 중단됐습니다.";
 
     private final ExtractionService extractionService;
     private final CandidateService candidateService;
@@ -80,6 +83,31 @@ public class BatchCheckService {
         return ids;
     }
 
+    /**
+     * 저장해 둔 원본 파일로 가리기부터 다시 한다 (가리기 전에 멈췄거나 실패한 지원자).
+     * 파일을 못 읽으면 상태를 바꾸지 않고 알린다.
+     */
+    public void restart(Long candidateId) {
+        Candidate c = candidateService.get(candidateId);
+        if (c.getStatus() == CandidateStatus.QUEUED || c.getStatus() == CandidateStatus.MASKING
+                || c.getStatus() == CandidateStatus.ANALYZING) {
+            throw new BusinessException("이미 검사 중입니다.");
+        }
+        List<CandidateFile> files = candidateService.storedFiles(candidateId);
+        if (files.isEmpty()) {
+            throw new BusinessException("저장된 이력서 파일이 없습니다. 이력서를 다시 올려 주세요.");
+        }
+        String text;
+        try {
+            text = extractionService.combineStored(files);
+        } catch (ResumeProcessingException e) {
+            throw new BusinessException(e.getMessage());
+        }
+        candidateMapper.updateStatus(candidateId, CandidateStatus.QUEUED, null);
+        Long positionId = c.getPositionId();
+        worker.submit(() -> process(positionId, candidateId, text));
+    }
+
     private void process(Long positionId, Long candidateId, String text) {
         if (candidateMapper.findById(candidateId) == null) {
             return; // 기다리는 동안 삭제됨
@@ -93,7 +121,7 @@ public class BatchCheckService {
         } catch (RuntimeException e) {
             log.warn("다수 검사: 개인정보 가리기 실패 candidateId={}: {}", candidateId, e.getMessage());
             candidateMapper.updateStatus(candidateId, CandidateStatus.FAILED,
-                    "개인정보를 가리지 못했습니다. 이력서를 다시 올려 주세요. " + e.getMessage());
+                    "개인정보를 가리지 못했습니다. " + e.getMessage());
             return;
         }
         try {

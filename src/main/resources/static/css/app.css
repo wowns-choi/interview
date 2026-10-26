@@ -543,7 +543,8 @@ textarea.inline-edit { resize: none; overflow: hidden; }
 
 /* 경력 · 학력 · 자격증: 판정이 먼저, 그 아래 두 줄 */
 .pf-checks { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
-.pf-check { display: flex; flex-direction: column; gap: 14px; padding: 18px 22px; border-radius: 14px; background: var(--surface); border: 1px solid var(--border); }
+.pf-check { display: grid; grid-template-columns: 92px minmax(0, 1fr); align-items: stretch; border-radius: 14px; background: var(--surface); border: 1px solid var(--border); }
+.pf-check > :last-child { align-self: center; padding: 16px 18px; }
 /* 눌러서 자세히 보는 카드: 올리면 살짝 어두워지고 가운데 돋보기 */
 .pf-check[data-dialog] { position: relative; cursor: pointer; outline: none; }
 .pf-check[data-dialog]::after {
@@ -554,8 +555,14 @@ textarea.inline-edit { resize: none; overflow: hidden; }
     rgba(29, 28, 26, .07);
 }
 .pf-check[data-dialog]:hover::after, .pf-check[data-dialog]:focus-visible::after { opacity: 1; }
-.pf-check-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
-.pf-check-head h3 { font-size: 17px; font-weight: 800; }
+/* 왼쪽 칸: 무엇에 관한 카드인지 색으로 바로 보이게 (타임라인 종류 색과 같은 계열) */
+.pf-check-head { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px; padding: 18px 8px; border-radius: 13px 0 0 13px; background: var(--kind-bg, var(--chip)); color: var(--kind-ink, var(--text)); }
+.pf-check:nth-child(1) { --kind-bg: #e9eef2; --kind-ink: #26343f; }
+.pf-check:nth-child(2) { --kind-bg: #e9f0eb; --kind-ink: #2b3f31; }
+.pf-check:nth-child(3) { --kind-bg: #f5efe2; --kind-ink: #4f3d17; }
+.pf-check-head .verdict-none { padding: 3px 9px; font-size: 12.5px; white-space: nowrap; }
+@media print { .pf-check-head { -webkit-print-color-adjust: exact; print-color-adjust: exact; } }
+.pf-check-head h3 { color: inherit; font-size: 17px; font-weight: 800; }
 .stamp.stamp-lg { height: 34px; padding: 0 16px 0 7px; font-size: 16px; }
 .stamp.stamp-lg::before { width: 21px; height: 21px; background-size: 12px; }
 .verdict-none { padding: 5px 12px; border-radius: 999px; background: var(--chip); color: var(--muted); font-size: 14px; font-weight: 700; }
@@ -567,17 +574,16 @@ textarea.inline-edit { resize: none; overflow: hidden; }
 
 /* 경력·학력 비교 줄: 지원자 값 · 기호 · 공고 요구 */
 .cmps { display: flex; flex-direction: column; gap: 12px; }
-.cmp { --sign: var(--faint); display: grid; grid-template-columns: minmax(0, 1.5fr) 40px minmax(0, 1fr); align-items: center; }
+.cmp { --sign: var(--faint); display: grid; grid-template-columns: minmax(0, auto) 34px minmax(0, auto); justify-content: space-between; align-items: center; }
 .cmp.is-met { --sign: var(--accent); }
 .cmp.is-unmet { --sign: var(--data); }
 .cmp + .cmp { padding-top: 12px; border-top: 1px solid var(--border); }
 .cmp-side { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
-.cmp-side strong { color: var(--text); font-size: 19px; font-weight: 800; line-height: 1.3; overflow-wrap: anywhere; }
+.cmp-side strong { color: var(--text); font-size: 18px; font-weight: 800; line-height: 1.3; word-break: keep-all; overflow-wrap: anywhere; }
 .cmp-side small { color: var(--faint); font-size: 12.5px; font-weight: 600; }
 .cmp-side.is-req { align-items: flex-end; text-align: right; }
 .cmp-side.is-req strong { color: var(--muted); font-size: 15.5px; font-weight: 700; }
 .cmp-sign { color: var(--sign); font-size: 24px; font-weight: 800; text-align: center; }
-.cmp-note { grid-column: 1 / -1; margin: 6px 0 0; color: var(--sign); font-size: 13.5px; font-weight: 700; }
 
 
 /* 상세보기 창 */
@@ -639,6 +645,28 @@ textarea.inline-edit { resize: none; overflow: hidden; }
   --stamp: #2f5fae; --stamp-tint: #e9eff9;
   --stamp-icon: var(--icon-x);
 }
+/* 경력·학력 판정: 제목에 손으로 긋듯 그린다. 충족 = 빨간 동그라미, 미충족 = 파란 X */
+.sr-only { position: absolute; width: 1px; height: 1px; margin: -1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+.vmark { position: relative; display: inline-block; color: inherit; font-size: 17px; font-weight: 800; }
+.vmark-ink { position: absolute; inset: -11px -17px -10px -15px; width: calc(100% + 32px); height: calc(100% + 21px); overflow: visible; pointer-events: none; }
+.vmark-ink path {
+  fill: none; stroke: var(--ink); stroke-width: 2.6px; stroke-linecap: round; stroke-linejoin: round; vector-effect: non-scaling-stroke;
+  stroke-dasharray: 1; stroke-dashoffset: 1; animation: vmark-draw .75s cubic-bezier(.6, .1, .3, 1) var(--mark-delay, .2s) forwards;
+}
+.vmark.is-met { --ink: #c73a2e; }
+.vmark.is-part { --ink: #d19a1c; }
+.vmark.is-part .vmark-ink { inset: -24px -19px -10px -19px; width: calc(100% + 38px); height: calc(100% + 34px); }
+.vmark.is-unmet { --ink: #2f5fae; }
+.vmark.is-unmet .vmark-ink path { animation-duration: .38s; }
+.vmark.is-unmet .vmark-ink .vmark-2 { animation-delay: calc(var(--mark-delay, .2s) + .44s); }
+.pf-check:nth-child(2) .vmark { --mark-delay: .5s; }
+.pf-check:nth-child(3) .vmark { --mark-delay: .8s; }
+.reveal .pf-check:nth-child(1) .vmark { --mark-delay: 1s; }
+.reveal .pf-check:nth-child(2) .vmark { --mark-delay: 1.3s; }
+.reveal .pf-check:nth-child(3) .vmark { --mark-delay: 1.6s; }
+@keyframes vmark-draw { to { stroke-dashoffset: 0; } }
+@media (prefers-reduced-motion: reduce) { .vmark-ink path { animation: none; stroke-dashoffset: 0; } }
+@media print { .vmark-ink path { animation: none; stroke-dashoffset: 0; } }
 .is-stamping .pf-card:nth-child(1) { --stamp-delay: .25s; }
 .is-stamping .pf-card:nth-child(2) { --stamp-delay: .55s; }
 .is-stamping .pf-card:nth-child(3) { --stamp-delay: .85s; }

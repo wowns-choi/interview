@@ -63,6 +63,11 @@ public class CandidateService {
         return fileMapper.findByCandidateId(candidateId);
     }
 
+    /** 다시 검사용: 원본 파일을 바이트까지 */
+    public List<CandidateFile> storedFiles(Long candidateId) {
+        return fileMapper.findWithDataByCandidateId(candidateId);
+    }
+
     public CandidateFile file(Long candidateId, Long fileId) {
         CandidateFile file = fileMapper.findById(fileId);
         if (file == null || !file.getCandidateId().equals(candidateId)) {

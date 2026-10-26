@@ -1,0 +1,4 @@
+<%@ page pageEncoding="UTF-8" %>
+<%-- 카드 제목에 손으로 긋듯 그리는 표시: met = 빨간 동그라미, part = 노란 세모, unmet = 파란 X.
+     markLabel: 제목, markKind: met | part | unmet, markText: 화면 읽기용 글 --%>
+<h3 class="vmark is-${markKind}"><c:out value="${markLabel}"/><svg class="vmark-ink" viewBox="0 0 100 60" preserveAspectRatio="none" aria-hidden="true"><c:choose><c:when test="${markKind == 'met'}"><path pathLength="1" d="M78 9C62 1 24 2 11 17C-1 31 16 53 50 54C83 55 99 41 93 24C89 13 74 6 56 7"/></c:when><c:when test="${markKind == 'part'}"><path pathLength="1" d="M50 3C39 21 25 39 9 57C37 56 65 56 92 56C79 39 64 21 50 3C48 6 46 9 44 12"/></c:when><c:otherwise><path pathLength="1" d="M14 8C35 23 60 39 86 53"/><path class="vmark-2" pathLength="1" d="M85 7C62 22 38 38 15 53"/></c:otherwise></c:choose></svg><span class="sr-only"><c:out value="${markText}"/></span></h3>
