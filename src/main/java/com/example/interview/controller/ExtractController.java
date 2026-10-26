@@ -66,6 +66,7 @@ import lombok.extern.slf4j.Slf4j;
 public class ExtractController {
 
     private static final int LIST_SIZE = 1000;
+    private static final int SIDE_PAGE = 30;
 
     private final PositionService positionService;
     private final ExtractionService extractionService;
@@ -82,8 +83,24 @@ public class ExtractController {
 
     @GetMapping("/positions")
     public String newPosition(Model model) {
-        model.addAttribute("positions", positionService.recent(LIST_SIZE));
+        addSide(model, positionService.recent(SIDE_PAGE));
         return "positions";
+    }
+
+    /** 꽉 찬 페이지로 끝나면 더 있을 수 있으니 이어 불러올 자리를 준다 */
+    private void addSide(Model model, List<PositionSummary> side) {
+        model.addAttribute("positions", side);
+        model.addAttribute("sidePage", SIDE_PAGE);
+        if (!side.isEmpty() && side.size() % SIDE_PAGE == 0) {
+            model.addAttribute("sideNext", side.size());
+        }
+    }
+
+    /** 왼쪽 포지션 목록 이어서 불러오기 (스크롤 끝) */
+    @GetMapping("/positions/more")
+    public String morePositions(@RequestParam(defaultValue = "0") int offset, Model model) {
+        model.addAttribute("positions", positionService.recent(SIDE_PAGE, offset));
+        return "positions-more";
     }
 
     @PostMapping("/positions")
@@ -103,7 +120,7 @@ public class ExtractController {
 
     @GetMapping("/positions/{id}")
     public String position(@PathVariable Long id, Model model) {
-        model.addAttribute("positions", positionService.recent(LIST_SIZE));
+        addSide(model, positionService.recentUntil(SIDE_PAGE, id));
         addPosition(model, id);
         return "positions";
     }
@@ -402,6 +419,8 @@ public class ExtractController {
             List<RankingRow> rows = rankingService.rank(id);
             model.addAttribute("rows", rows);
             model.addAttribute("excludedCount", rows.stream().filter(r -> "EXCLUDED".equals(r.getState())).count());
+            model.addAttribute("uncheckedCount", rows.stream().filter(r -> "UNCHECKED".equals(r.getState())).count());
+            model.addAttribute("staleCount", rows.stream().filter(r -> "STALE".equals(r.getState())).count());
         }
         return "ranking";
     }

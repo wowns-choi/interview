@@ -62,7 +62,26 @@ public class PositionService {
     }
 
     public List<PositionSummary> recent(int limit) {
-        return positionMapper.findRecent(limit);
+        return positionMapper.findRecent(limit, 0);
+    }
+
+    public List<PositionSummary> recent(int limit, int offset) {
+        return positionMapper.findRecent(limit, Math.max(0, offset));
+    }
+
+    /** 왼쪽 목록 첫 화면: pageSize개씩, 고른 포지션이 들어가는 페이지까지 */
+    public List<PositionSummary> recentUntil(int pageSize, Long id) {
+        List<PositionSummary> page = recent(pageSize);
+        if (id == null || page.stream().anyMatch(p -> p.getId().equals(id))) {
+            return page;
+        }
+        List<PositionSummary> all = recent(1000);
+        for (int i = 0; i < all.size(); i++) {
+            if (all.get(i).getId().equals(id)) {
+                return all.subList(0, Math.min(all.size(), (i / pageSize + 1) * pageSize));
+            }
+        }
+        return page;
     }
 
     /** 제목은 우선 정보글 첫 줄로 두고, 평가항목 추출 때 AI가 준 제목으로 바꾼다. */

@@ -13,7 +13,7 @@ import com.example.interview.web.dto.PositionSummary;
 public interface PositionMapper {
     Position findById(Long id);
 
-    List<PositionSummary> findRecent(int limit);
+    List<PositionSummary> findRecent(@Param("limit") int limit, @Param("offset") int offset);
 
     void insert(Position position);
 

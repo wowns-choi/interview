@@ -16,7 +16,8 @@
   <div class="pick-cand-wrap">
   <c:if test="${not empty candidates}">
   <label class="pick-select pick-cand">
-    <span>지원자 ${fn:length(candidates)}명</span>
+    <c:set var="busyCount" value="${0}"/><c:forEach var="row" items="${candidates}"><c:if test="${row.inProgress}"><c:set var="busyCount" value="${busyCount + 1}"/></c:if></c:forEach>
+    <span>지원자 ${fn:length(candidates)}명<em class="pick-busy"${busyCount == 0 ? ' hidden' : ''}> · ${busyCount}명 진행 중</em></span>
     <select data-nav id="cand-list" data-url="<c:url value='/positions/${position.id}/candidates'/>"
             data-current="${empty r ? '' : r.candidate.id}" data-current-status="${empty r ? '' : r.candidate.status}">
       <%@ include file="cand-options.jspf" %>

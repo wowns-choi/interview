@@ -1,4 +1,11 @@
 (function () {
+  // ── 상단 탭: 눌러서 옮길 때만 밑줄 전환을 켠다 (header.jspf의 pageswap·pagereveal이 본다) ──
+  document.addEventListener('click', function (e) {
+    var tab = e.target.closest('.tabs .tab');
+    if (!tab || e.ctrlKey || e.metaKey || e.shiftKey || e.button !== 0) return;
+    try { sessionStorage.setItem('tabNav', '1'); } catch (err) { /* 전환만 빠진다 */ }
+  });
+
   // ── 폼 제출: data-confirm 확인, data-busy 진행 중 표시 ──
   document.addEventListener('submit', function (e) {
     var form = e.target;
@@ -103,12 +110,34 @@
     sel.addEventListener('refit', fit); // 고른 항목의 글자가 바뀌었을 때
   });
 
+  // 가린 이력서: [이름]·[A사] 같은 가린 자리를 꼬리표로 (처음 열 때 한 번)
+  var MASK_LABEL = /\[(?:이름|전화번호|이메일|주민번호|링크|생년월일|주소|개인정보|회사|[A-Z]사|연봉|경력|학교|학력|교육|자격증)\]/g;
+  function markMasked(box) {
+    if (!box || box.hasAttribute('data-marked')) return;
+    box.setAttribute('data-marked', '');
+    var text = box.textContent, last = 0, m;
+    box.textContent = '';
+    MASK_LABEL.lastIndex = 0;
+    while ((m = MASK_LABEL.exec(text))) {
+      box.appendChild(document.createTextNode(text.slice(last, m.index)));
+      var tag = document.createElement('span');
+      tag.className = 'mask-tag';
+      tag.textContent = m[0]; // 대괄호째 둬야 복사해도 [이름]으로 남는다
+      box.appendChild(tag);
+      last = m.index + m[0].length;
+    }
+    box.appendChild(document.createTextNode(text.slice(last)));
+  }
+
   // ── 자세히 보기 창: data-dialog(카드 전체)로 열고, 닫기 버튼이나 바깥을 누르면 닫는다 ──
   document.addEventListener('click', function (e) {
     var open = e.target.closest('[data-dialog]');
     if (open) {
       var dlg = document.getElementById(open.getAttribute('data-dialog'));
-      if (dlg && dlg.showModal) dlg.showModal();
+      if (dlg && dlg.showModal) {
+        markMasked(dlg.querySelector('[data-masked]'));
+        dlg.showModal();
+      }
       return;
     }
     if (e.target.closest('dialog [data-close]')) { e.target.closest('dialog').close(); return; }
@@ -151,7 +180,7 @@
     document.querySelectorAll('[data-rk-fold]').forEach(function (fold) {
       fold.addEventListener('click', function () {
         var open = fold.classList.toggle('is-open');
-        document.querySelectorAll('.rk-row.is-EXCLUDED').forEach(function (tr) { tr.hidden = !open; });
+        document.querySelectorAll('.rk-row.is-' + fold.getAttribute('data-rk-fold')).forEach(function (tr) { tr.hidden = !open; });
       });
     });
     // 면접 본 사람만·합격한 사람만: 화면에서만 거른다 (고른 것은 브라우저에 기억)
@@ -175,6 +204,63 @@
         }
         g.classList.toggle('is-filtered', !left);
       });
+      rkPage = 0;
+      pageRanked();
+    };
+    // 순위 줄은 RK_PAGE명씩 페이지로 나눈다 (거른 뒤에 센다, 거르면 1페이지로)
+    var RK_PAGE = 10, rkPage = 0, rkPager = null;
+    var pageRanked = function () {
+      var all = document.querySelectorAll('.rk-row.is-RANKED');
+      var rows = Array.prototype.filter.call(all, function (tr) { return !tr.classList.contains('is-filtered'); });
+      var pages = Math.ceil(rows.length / RK_PAGE);
+      if (rkPage >= pages) rkPage = Math.max(0, pages - 1);
+      all.forEach(function (tr) { tr.classList.remove('is-paged'); });
+      rows.forEach(function (tr, i) {
+        if (Math.floor(i / RK_PAGE) !== rkPage) tr.classList.add('is-paged');
+      });
+      if (pages <= 1) { if (rkPager) rkPager.hidden = true; return; }
+      if (!rkPager) {
+        rkPager = document.createElement('tr');
+        rkPager.className = 'rk-pager';
+        var td = document.createElement('td');
+        td.colSpan = document.querySelector('.rk thead tr').children.length;
+        rkPager.appendChild(td);
+        td.addEventListener('click', function (e) {
+          var b = e.target.closest('button[data-page]');
+          if (!b || b.disabled) return;
+          rkPage = +b.getAttribute('data-page');
+          pageRanked();
+          document.querySelector('.rk').scrollIntoView({ block: 'start' });
+        });
+      }
+      var td2 = rkPager.firstChild;
+      td2.textContent = '';
+      var add = function (label, page, cls, current) {
+        var b = document.createElement('button');
+        b.type = 'button';
+        b.className = 'rk-page' + (cls ? ' ' + cls : '') + (current ? ' is-current' : '');
+        b.textContent = label;
+        b.setAttribute('data-page', page);
+        if (current) b.setAttribute('aria-current', 'page');
+        if (page < 0 || page >= pages) b.disabled = true;
+        td2.appendChild(b);
+      };
+      add('‹', rkPage - 1, 'rk-page-step');
+      // 페이지가 많으면 처음·끝·지금 앞뒤 둘만, 사이는 …
+      var gap = false;
+      for (var p = 0; p < pages; p++) {
+        if (pages > 9 && p > 0 && p < pages - 1 && Math.abs(p - rkPage) > 2) {
+          if (!gap) { var s = document.createElement('span'); s.className = 'rk-page-gap'; s.textContent = '…'; td2.appendChild(s); }
+          gap = true;
+          continue;
+        }
+        gap = false;
+        add(String(p + 1), p, '', p === rkPage);
+      }
+      add('›', rkPage + 1, 'rk-page-step');
+      rkPager.hidden = false;
+      var last = rows[rows.length - 1];
+      last.parentNode.insertBefore(rkPager, last.nextSibling);
     };
     try {
       var saved = JSON.parse(localStorage.getItem('rkFilters') || '{}');
@@ -182,6 +268,31 @@
     } catch (e) { /* 저장소를 못 쓰면 끈 채로 */ }
     filters.forEach(function (f) { f.addEventListener('change', applyFilters); });
     applyFilters();
+  }
+
+  // ── 평가 기준 추출 왼쪽 포지션 목록: 끝까지 내리면 다음 묶음을 이어 붙인다 ──
+  var sideList = document.getElementById('side-list');
+  if (sideList && sideList.getAttribute('data-next')) {
+    var sideBusy = false;
+    var sidePage = +sideList.getAttribute('data-page');
+    var sideMore = function () {
+      var next = sideList.getAttribute('data-next');
+      if (sideBusy || !next || sideList.scrollTop + sideList.clientHeight < sideList.scrollHeight - 80) return;
+      sideBusy = true;
+      fetch(sideList.getAttribute('data-more') + '?offset=' + next, { headers: { 'X-Requested-With': 'fetch' } })
+        .then(function (res) { if (!res.ok) throw new Error(); return res.text(); })
+        .then(function (html) {
+          var box = document.createElement('ul');
+          box.innerHTML = html;
+          var items = box.querySelectorAll('li.side-pos');
+          items.forEach(function (li) { sideList.appendChild(li); });
+          if (items.length < sidePage) sideList.removeAttribute('data-next');
+          else sideList.setAttribute('data-next', +next + items.length);
+        })
+        .catch(function () { /* 다음에 다시 내리면 또 시도 */ })
+        .then(function () { sideBusy = false; });
+    };
+    sideList.addEventListener('scroll', sideMore, { passive: true });
   }
 
   // ── 이력서 드롭존 (지원자마다 하나): 고르거나 놓을 때마다 쌓이고, 파일마다 뺄 수 있다 ──
@@ -301,7 +412,12 @@
     var lists = [candList].concat(Array.prototype.slice.call(document.querySelectorAll('select[data-cand-copy]')));
     var render = function (rows) {
       lists.forEach(function (list) { renderList(list, rows); });
-      candList.closest('label').querySelector('span').textContent = '지원자 ' + rows.length + '명';
+      var busy = rows.filter(function (r) { return r.inProgress; }).length;
+      var head = candList.closest('label').querySelector('span');
+      head.firstChild.nodeValue = '지원자 ' + rows.length + '명';
+      var em = head.querySelector('.pick-busy');
+      em.hidden = !busy;
+      em.textContent = ' · ' + busy + '명 진행 중';
     };
     var renderList = function (candList, rows) {
       if (document.activeElement === candList) return; // 펼쳐 보는 중에는 그대로 둔다
@@ -316,6 +432,10 @@
         var o = document.createElement('option');
         o.value = base + '/results/' + row.id;
         o.setAttribute('data-tail', tail);
+        if (row.inProgress || row.status === 'FAILED') {
+          o.setAttribute('data-mark', row.inProgress ? row.label : '실패');
+          o.setAttribute('data-mark-kind', row.inProgress ? 'progress' : 'failed');
+        }
         o.textContent = row.name;
         o.selected = String(row.id) === current;
         candList.appendChild(o);

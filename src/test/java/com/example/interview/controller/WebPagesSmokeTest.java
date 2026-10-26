@@ -131,6 +131,10 @@ class WebPagesSmokeTest {
         assertThat(json("PATCH", "/positions/" + (positionId + 999) + "/criteria/" + critId, "{\"name\":\"x\"}").statusCode())
                 .isEqualTo(404);
         assertThat(get("/positions").body()).contains("class=\"side-item \"", "백엔드 개발자 (Java)", "평가 기준 3");
+        // 왼쪽 목록 이어 불러오기: 한 페이지가 안 차면 더 부르지 않고, 이어 부르기는 같은 줄을 준다
+        assertThat(get("/positions").body()).contains("id=\"side-list\"", "data-next=\"\"");
+        assertThat(get("/positions/more?offset=0").body()).contains("class=\"side-pos\"", "백엔드 개발자 (Java)");
+        assertThat(get("/positions/more?offset=30").body()).doesNotContain("side-pos");
         // 경력·학력 조건 칸 (값을 바꾸면 뒤의 점수 확인이 달라지므로 화면과 없는 포지션만 본다)
         assertThat(get("/positions/" + positionId).body()).contains("id=\"conds\"", "data-key=\"requiredEducation\"", "id=\"conds-edit\"", "data-exp-kind=");
         assertThat(json("PATCH", "/positions/" + (positionId + 999) + "/conditions", "{\"requiredExperience\":\"x\"}").statusCode()).isEqualTo(404);
@@ -145,12 +149,13 @@ class WebPagesSmokeTest {
         // ② 적합도 검사 → ③ 면접 질문
         Long id = extractionService.uploadResume(positionId, List.of(ExtractionFlowIntegrationTest.pdf()));
         String review = get("/results/" + id).body();
-        // 가린 본문은 보여 주지 않는다. 인적사항·경력·학력·타임라인은 적합도 검사 뒤에
+        // 가린 본문은 화면에 펼치지 않고 「가린 이력서」 창에만 둔다. 인적사항·경력·학력·타임라인은 적합도 검사 뒤에
+        assertThat(review).contains("data-dialog=\"dlg-masked\"", "id=\"dlg-masked\"", "[A사] 백엔드팀").doesNotContain("010-1111-2222");
         assertThat(candidateService.get(id).getMaskedText()).contains("[전화번호]", "[A사] 백엔드팀", "[교육]").doesNotContain("010-1111-2222");
         assertThat(review).contains(">검사</button>")
                 .doesNotContain("id=\"mask-view\"", "name=\"maskedText\"", "class=\"profile\"", "가나커머스", "가나정보교육원", "<h3>타임라인</h3>",
                         "<script>alert(1)</script>", "010-1111-2222", "부분 충족");
-        assertThat(get("/ranking?position=" + positionId).body()).contains("검사 전", "검토 중", "홍길동").doesNotContain("class=\"rk-no\">1<");
+        assertThat(get("/ranking?position=" + positionId).body()).contains("검사 전 1명", "data-rk-fold=\"UNCHECKED\"", "검토 중", "홍길동").doesNotContain("class=\"rk-no\">1<");
         assertThat(get("/positions/" + positionId + "/candidates").body()).contains("\"name\":\"홍길동\"", "\"label\":\"검토 중\"", "\"inProgress\":false");
         // 지원자 이름 바꾸기 (목록의 연필)
         assertThat(review).contains("id=\"cand-rename\"", "data-cand-name");

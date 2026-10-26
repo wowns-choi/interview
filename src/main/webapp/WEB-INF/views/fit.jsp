@@ -111,14 +111,23 @@
   </div>
   </c:if>
 </div>
-<%-- 지원자가 낸 원본 파일 (가리지 않은 원본) --%>
-<c:if test="${not empty candFiles}">
+<%-- 가린 이력서(외부 AI가 본 글) 보기와 지원자가 낸 원본 파일 (가리지 않은 원본) --%>
+<c:if test="${not empty candFiles or not empty r.candidate.maskedText}">
 <ul class="file-chips cand-files">
+  <c:if test="${not empty r.candidate.maskedText}">
+    <li><button type="button" class="file-chip is-masked" data-dialog="dlg-masked"><svg class="i"><use href="#i-eye"/></svg><span>가린 이력서</span></button></li>
+  </c:if>
   <c:forEach var="cf" items="${candFiles}">
     <li><a class="file-chip" href="<c:url value='/results/${r.candidate.id}/files/${cf.id}'/>" download title="내려받기">
       <svg class="i"><use href="#i-file"/></svg><span><c:out value="${cf.fileName}"/></span></a></li>
   </c:forEach>
 </ul>
+<c:if test="${not empty r.candidate.maskedText}">
+<dialog class="pf-dialog masked-dialog" id="dlg-masked">
+  <header><h3>가린 이력서</h3><button type="button" class="icon-btn" data-close title="닫기"><svg class="i"><use href="#i-x"/></svg></button></header>
+  <div class="masked-doc" data-masked><c:out value="${r.candidate.maskedText}"/></div>
+</dialog>
+</c:if>
 </c:if>
 <c:if test="${busy or empty r.candidate.maskedText or (st == 'FAILED' and not r.fitChecked) or not showProfile}">
 <section class="stage" id="fit">

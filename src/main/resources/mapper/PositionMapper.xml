@@ -12,7 +12,7 @@
                (SELECT COUNT(*) FROM candidate d WHERE d.position_id = p.id) AS candidate_count
         FROM position p
         ORDER BY p.created_at DESC, p.id DESC
-        LIMIT #{limit}
+        LIMIT #{limit} OFFSET #{offset}
     </select>
 
     <insert id="insert" useGeneratedKeys="true" keyProperty="id" keyColumn="id">

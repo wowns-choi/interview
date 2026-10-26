@@ -58,9 +58,17 @@ public class ReportService {
         Position position = positionService.get(candidate.getPositionId());
         List<EvalCriterion> criteria = positionService.criteria(position.getId());
         List<Evidence> evidences = evidenceMapper.findByCandidateId(candidateId);
-        // 가장 비슷한 원문을 저장하기 전에 검사한 근거는 여기서 찾아 보여 준다 (저장은 하지 않는다)
-        evidences.stream().filter(e -> !"Y".equals(e.getVerifiedYn()) && e.getQuote() != null && e.getClosestQuote() == null)
-                .forEach(e -> e.setClosestQuote(quoteVerifier.closest(e.getQuote(), candidate.getMaskedText())));
+        // 못 찾은 인용은 지금 규칙으로 다시 대조하고 ("…"로 줄인 인용은 2026-10-26부터 통과),
+        // 그래도 없으면 가장 비슷한 원문을 저장하기 전에 검사한 근거는 여기서 찾아 보여 준다 (저장은 하지 않는다)
+        evidences.stream().filter(e -> !"Y".equals(e.getVerifiedYn()) && e.getQuote() != null)
+                .forEach(e -> {
+                    if (quoteVerifier.verify(e.getQuote(), candidate.getMaskedText())) {
+                        e.setVerifiedYn("Y");
+                        e.setClosestQuote(null);
+                    } else if (e.getClosestQuote() == null) {
+                        e.setClosestQuote(quoteVerifier.closest(e.getQuote(), candidate.getMaskedText()));
+                    }
+                });
 
         List<InterviewQuestion> questions = questionMapper.findByCandidateId(candidateId);
         Map<Long, String> criterionNames = criteria.stream()

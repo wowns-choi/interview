@@ -53,15 +53,15 @@
               <c:if test="${row.state != 'RANKED' and (st.first or rows[st.index - 1].state != row.state)}">
                 <c:choose>
                   <c:when test="${row.state == 'EXCLUDED'}">
-                    <tr class="rk-group rk-fold" data-rk-fold><td colspan="${5 + fn:length(criteria)}">제외됨 ${excludedCount}명<span class="rk-fold-mark">›</span></td></tr>
+                    <tr class="rk-group rk-fold" data-rk-fold="EXCLUDED"><td colspan="${5 + fn:length(criteria)}">제외됨 ${excludedCount}명<span class="rk-fold-mark">›</span></td></tr>
                   </c:when>
                   <c:otherwise>
-                    <tr class="rk-group"><td colspan="${5 + fn:length(criteria)}">${row.state == 'STALE' ? '재검사 필요' : '검사 전'}</td></tr>
+                    <c:choose><c:when test="${row.state == 'STALE'}"><tr class="rk-group rk-fold" data-rk-fold="STALE"><td colspan="${5 + fn:length(criteria)}">재검사 필요 ${staleCount}명<span class="rk-fold-mark">›</span></td></tr></c:when><c:otherwise><tr class="rk-group rk-fold" data-rk-fold="UNCHECKED"><td colspan="${5 + fn:length(criteria)}">검사 전 ${uncheckedCount}명<span class="rk-fold-mark">›</span></td></tr></c:otherwise></c:choose>
                   </c:otherwise>
                 </c:choose>
               </c:if>
               <c:set var="s" value="${row.score}"/>
-              <tr class="rk-row is-${row.state}"${row.state == 'EXCLUDED' ? ' hidden' : ''} data-interviewed="${row.interviewed}" data-decision="${row.decision}" data-engineer="${row.infoEngineer}" data-sqld="${row.sqld}" data-href="<c:url value='/results/${row.candidateId}'/>">
+              <tr class="rk-row is-${row.state}"${row.state != 'RANKED' ? ' hidden' : ''} data-interviewed="${row.interviewed}" data-decision="${row.decision}" data-engineer="${row.infoEngineer}" data-sqld="${row.sqld}" data-href="<c:url value='/results/${row.candidateId}'/>">
                 <td class="rk-no">${empty row.rank ? '' : row.rank}</td>
                 <td class="rk-name"><a href="<c:url value='/results/${row.candidateId}'/>"><c:out value="${row.displayName}"/></a><c:if test="${not empty row.exclusion}"><small class="rk-why">${row.exclusion}</small></c:if><c:if test="${row.infoEngineer}"><span class="rk-cert">정보처리기사</span></c:if><c:if test="${row.sqld}"><span class="rk-cert">SQLD</span></c:if><c:if test="${row.interviewed}"><span class="rk-iv">면접<c:if test="${not empty row.interviewDate}"> ${row.interviewDate.monthValue}.${row.interviewDate.dayOfMonth}</c:if></span></c:if><c:if test="${not empty row.decision}"><span class="rk-dec is-${row.decision}">${row.decision == 'PASS' ? '합격' : '불합격'}</span></c:if></td>
                 <c:choose>

@@ -1,0 +1,9 @@
+<%@ page pageEncoding="UTF-8" %>
+<%-- 평가 기준 추출 왼쪽 목록의 포지션 한 줄 (p) --%>
+        <li class="side-pos">
+          <a class="side-item ${not empty position and position.id == p.id ? 'active' : ''}" href="<c:url value='/positions/${p.id}'/>">
+            <strong><c:out value="${p.title}"/></strong>
+            <small>${fn:substring(fn:replace(p.createdAt, '-', '.'), 5, 10)} · 평가 기준 ${p.criteriaCount} · 지원자 ${p.candidateCount}</small>
+          </a>
+          <button type="button" class="icon-btn side-rename" title="이름 바꾸기"><svg class="i"><use href="#i-pencil"/></svg></button>
+        </li>

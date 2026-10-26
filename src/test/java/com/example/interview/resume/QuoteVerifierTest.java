@@ -68,4 +68,15 @@ class QuoteVerifierTest {
         assertThat(new QuoteVerifier().verify("카프카에 이벤트 발행하는 것을", text)).isTrue();
         assertThat(new QuoteVerifier().verify("카프카에 이 벤트 발행", "카프카에이벤트발행")).isTrue();
     }
+
+    @Test
+    void ellipsisJoinedQuotePassesWhenEveryPieceIsInOrder() {
+        String text = "자기소개 저는 구조를 이해하는 걸 좋아했고, 현재 회사에서는 자사 서비스를 운영하며 직접 경험하고 있습니다.";
+        assertThat(verifier.verify("자기소개...현재 회사에서는 자사 서비스를 운영하며", text)).isTrue();
+        assertThat(verifier.verify("자기소개 … 직접 경험하고 있습니다.", text)).isTrue();
+        // 조각 하나라도 없거나 순서가 다르면 못 찾은 것
+        assertThat(verifier.verify("자기소개...Kafka 운영", text)).isFalse();
+        assertThat(verifier.verify("현재 회사에서는...자기소개", text)).isFalse();
+        assertThat(verifier.verify("...", text)).isFalse();
+    }
 }

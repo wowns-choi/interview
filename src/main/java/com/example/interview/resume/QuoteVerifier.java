@@ -10,13 +10,33 @@ public class QuoteVerifier {
     static final double MIN_SIMILARITY = 0.5;
     /** 너무 긴 인용은 앞부분만으로 찾는다 (계산량: 인용 글자 수 × 원문 글자 수) */
     private static final int MAX_QUOTE_CHARS = 600;
+    /** 줄임표: "…" 또는 점 두 개 이상 */
+    private static final String ELLIPSIS = "…|\\.{2,}";
 
+    /**
+     * 인용이 원문에 있으면 true. AI가 "…"·"..."으로 줄여 이은 인용은 조각마다 원문에 그 순서대로 있으면 true
+     * (줄 앞 칸 제목과 뒤 문장을 이어 붙여도 지어낸 글은 아니다, user 2026-10-26).
+     */
     public boolean verify(String quote, String maskedText) {
         if (quote == null || maskedText == null) {
             return false;
         }
-        String q = normalize(quote);
-        return !q.isEmpty() && normalize(maskedText).contains(q);
+        String text = normalize(maskedText);
+        int from = 0;
+        boolean any = false;
+        for (String part : quote.split(ELLIPSIS)) {
+            String q = normalize(part);
+            if (q.isEmpty()) {
+                continue;
+            }
+            int at = text.indexOf(q, from);
+            if (at < 0) {
+                return false;
+            }
+            from = at + q.length();
+            any = true;
+        }
+        return any;
     }
 
     /**

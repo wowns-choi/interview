@@ -4,22 +4,14 @@
 <c:set var="activeTab" value="positions"/>
 <%@ include file="common/header.jspf" %>
 
-<div class="split" id="ws"
+<div class="split pos-split" id="ws"
      data-position-base="<c:if test='${not empty position}'><c:url value='/positions/${position.id}'/></c:if>"
      data-result-base="">
 
   <aside class="side">
     <a class="side-new ${empty position ? 'active' : ''}" href="<c:url value='/positions'/>"><svg class="i"><use href="#i-plus"/></svg>새 포지션</a>
-    <ul class="side-list">
-      <c:forEach var="p" items="${positions}">
-        <li class="side-pos">
-          <a class="side-item ${not empty position and position.id == p.id ? 'active' : ''}" href="<c:url value='/positions/${p.id}'/>">
-            <strong><c:out value="${p.title}"/></strong>
-            <small>${fn:substring(fn:replace(p.createdAt, '-', '.'), 5, 10)} · 평가 기준 ${p.criteriaCount} · 지원자 ${p.candidateCount}</small>
-          </a>
-          <button type="button" class="icon-btn side-rename" title="이름 바꾸기"><svg class="i"><use href="#i-pencil"/></svg></button>
-        </li>
-      </c:forEach>
+    <ul class="side-list" id="side-list" data-more="<c:url value='/positions/more'/>" data-page="${sidePage}" data-next="${sideNext}">
+      <c:forEach var="p" items="${positions}"><%@ include file="common/side-pos.jspf" %></c:forEach>
     </ul>
   </aside>
 
