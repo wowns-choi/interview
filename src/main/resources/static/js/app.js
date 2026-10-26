@@ -588,8 +588,13 @@
       var target = document.getElementById(a.getAttribute('href').slice(1));
       if (target) links.push({ a: a, target: target }); else a.hidden = true;
     });
+    // 목차로 고른 영역은 사용자가 직접 스크롤할 때까지 그대로 표시한다 (맨 아래라 더 못 내려가도)
+    var chosen = null;
+    var unchoose = function () { if (chosen) { chosen = null; mark(); } };
     var mark = function () {
-      var line = 140 + (pickBar ? pickBar.offsetHeight : 0);
+      if (chosen) { links.forEach(function (l) { l.a.classList.toggle('active', l === chosen); }); return; }
+      // 목차로 옮기면 영역 위가 scroll-padding-top(상단 바·고정 줄 아래)에 멈춘다. 그보다 조금 아래까지를 지금 영역으로 본다
+      var line = (parseFloat(getComputedStyle(document.documentElement).scrollPaddingTop) || 150) + 24;
       var current = links[0];
       links.forEach(function (l) { if (l.target.getBoundingClientRect().top <= line) current = l; });
       // 맨 아래까지 내리면 마지막 항목
@@ -598,10 +603,15 @@
     };
     if (links.length) {
       window.addEventListener('scroll', mark, { passive: true });
+      ['wheel', 'touchstart', 'keydown', 'mousedown'].forEach(function (t) {
+        window.addEventListener(t, function (e) { if (!(e.target.closest && e.target.closest('#toc'))) unchoose(); }, { passive: true });
+      });
       // 목차를 누르면 부드럽게 옮긴다 (새로 연 페이지가 #위치로 갈 때는 바로 간다)
       links.forEach(function (l) {
         l.a.addEventListener('click', function (e) {
           e.preventDefault();
+          chosen = l;
+          mark();
           l.target.scrollIntoView({ behavior: 'smooth', block: 'start' });
           history.replaceState(null, '', l.a.getAttribute('href'));
         });

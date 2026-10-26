@@ -29,8 +29,8 @@
 <c:set var="pickBase" value="/fit"/>
 <%@ include file="common/position-pick.jspf" %>
 
-<div class="split fit-split${empty r ? ' is-single' : ''}">
-  <c:if test="${not empty r}">
+<div class="split fit-split${empty r or not r.fitChecked ? ' is-single' : ''}">
+  <c:if test="${not empty r and r.fitChecked}">
   <aside class="side">
     <nav class="toc" id="toc">
       <a href="#sec-profile">개인정보</a>
@@ -366,14 +366,9 @@
         </section>
         </c:if>
 
-<%-- 면접 질문지: 타이핑(질문 추출 → 질문지, 면접관이 적는 답변) / 녹음본(녹음본으로 만든 질문-답변).
+<%-- 면접 질문지 (적합도 검사가 끝나야 나온다, 그 전엔 자리도 없다): 타이핑(질문 추출 → 질문지, 면접관이 적는 답변) / 녹음본(녹음본으로 만든 질문-답변).
      질문 추출은 타이핑 질문지에만 넣으므로 타이핑 탭 안에 둔다 --%>
 <c:set var="qOpen" value="${r.fitChecked}"/>
-<c:if test="${not qOpen}">
-<section class="stage is-locked" id="questions">
-  <header class="stage-head"><h2>면접 질문지</h2></header>
-</section>
-</c:if>
 <c:if test="${qOpen}">
 <section class="stage" id="questions">
   <header class="stage-head">
