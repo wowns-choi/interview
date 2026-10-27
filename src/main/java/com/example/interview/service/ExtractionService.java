@@ -126,7 +126,8 @@ public class ExtractionService {
 
     /**
      * 외부 AI를 세 번 동시에 부른다: 가린 글로 근거와 총 경력·관련 경력(EVIDENCE),
-     * 학교 목록으로 학력(EDUCATION_EVAL), 이름표·기간 목록으로 타임라인(TIMELINE). 한쪽이 실패해도 나머지는 저장한다.
+     * 학교 목록으로 학력(EDUCATION_EVAL), 이름표·기간 목록으로 타임라인(TIMELINE). 근거 분석이 끝나면 그 경력 개월로
+     * 경력 조건 충족(CAREER_MEETS)을 묻는다. 한쪽이 실패해도 나머지는 저장한다.
      */
     public void checkFit(Long candidateId) {
         runAi(candidateId, () -> {
@@ -136,10 +137,14 @@ public class ExtractionService {
             CompletableFuture<List<CareerEvalResult.Period>> timeline =
                     async(() -> careerEvalService.timeline(candidate));
             EvidenceResult.Career career = null;
+            CareerEvalResult careerMeets = null;
             try {
                 career = analysisService.analyzeEvidence(candidateId);
+                // 경력 조건 판단은 근거 분석이 센 관련 경력이 있어야 해서 그 뒤에 묻는다
+                careerMeets = careerEvalService.careerMeets(candidate, career.getRelevantMonths(), career.getTotalMonths(),
+                        career.getRelevantReason());
             } finally {
-                careerEvalService.save(candidate, education.join(), timeline.join(), career);
+                careerEvalService.save(candidate, education.join(), timeline.join(), career, careerMeets);
             }
         });
     }

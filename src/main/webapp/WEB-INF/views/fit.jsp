@@ -197,7 +197,7 @@
                     <c:otherwise><h3>경력</h3><span class="verdict-none">${empty position.requiredExperience ? '조건 없음' : '판단 못 함'}</span></c:otherwise>
                   </c:choose>
                 </div>
-                <c:set var="ln" value="${r.careerLine}"/><c:set var="lnTitle" value="${cev.relevantReason}"/>
+                <c:set var="ln" value="${r.careerLine}"/><c:set var="lnTitle" value="${not empty cev.careerReason ? cev.careerReason : cev.relevantReason}"/>
                 <div class="cmps">
 <%@ include file="common/compare-line.jspf" %>
                 </div>
@@ -268,47 +268,51 @@
 
             <%-- 상세보기 창 --%>
             <c:if test="${not empty r.relevantCareers}">
-              <dialog class="pf-dialog" id="dlg-career">
-                <header><h3>경력 상세</h3><button type="button" class="icon-btn" data-close title="닫기"><svg class="i"><use href="#i-x"/></svg></button></header>
-                <c:if test="${not empty gauge and not empty gauge.relevantMonths}"><p class="pf-dialog-sum">포지션 관련 <c:out value="${gauge.relevantText}"/></p></c:if>
-                <ul class="pf-list">
+              <dialog class="pf-dialog pf-detail is-career" id="dlg-career">
+                <header class="pd-head">
+                  <div>
+                    <h3>경력 상세</h3>
+                    <c:if test="${not empty gauge and not empty gauge.relevantMonths}"><p class="pd-sum"><strong><c:out value="${gauge.relevantText}"/></strong> 포지션 관련</p></c:if>
+                  </div>
+                  <button type="button" class="icon-btn" data-close title="닫기"><svg class="i"><use href="#i-x"/></svg></button>
+                </header>
+                <ol class="pd-list">
                   <c:forEach var="cr" items="${r.relevantCareers}">
+                    <c:set var="crDuration" value="${not empty cr.duration ? cr.duration : (empty cev ? '' : cev.durationOf(cr.alias))}"/>
                     <li>
-                      <div class="pf-item-main">
+                      <span class="pd-when"><c:out value="${cr.period}"/></span>
+                      <div class="pd-main">
                         <strong><c:out value="${cr.company}"/></strong>
                         <c:if test="${not empty cr.department or not empty cr.position}">
-                          <span class="pf-sub"><c:out value="${cr.department}"/><c:if test="${not empty cr.department and not empty cr.position}"> · </c:if><c:out value="${cr.position}"/></span>
-                        </c:if>
-                        <c:set var="crDuration" value="${not empty cr.duration ? cr.duration : (empty cev ? '' : cev.durationOf(cr.alias))}"/>
-                        <c:if test="${not empty cr.period or not empty crDuration}">
-                          <span class="pf-when"><c:out value="${cr.period}"/><c:if test="${not empty crDuration}"> <em><c:out value="${crDuration}"/></em></c:if></span>
+                          <span class="pd-sub"><c:out value="${cr.department}"/><c:if test="${not empty cr.department and not empty cr.position}"> · </c:if><c:out value="${cr.position}"/></span>
                         </c:if>
                       </div>
+                      <c:if test="${not empty crDuration}"><span class="pd-tag"><c:out value="${crDuration}"/></span></c:if>
                     </li>
                   </c:forEach>
-                </ul>
+                </ol>
               </dialog>
             </c:if>
             <c:if test="${not empty r.schools}">
-              <dialog class="pf-dialog" id="dlg-education">
-                <header><h3>학력 상세</h3><button type="button" class="icon-btn" data-close title="닫기"><svg class="i"><use href="#i-x"/></svg></button></header>
-                <ul class="pf-list">
+              <dialog class="pf-dialog pf-detail is-school" id="dlg-education">
+                <header class="pd-head">
+                  <div><h3>학력 상세</h3></div>
+                  <button type="button" class="icon-btn" data-close title="닫기"><svg class="i"><use href="#i-x"/></svg></button>
+                </header>
+                <ol class="pd-list">
                   <c:forEach var="ed" items="${r.schools}">
                     <li>
-                      <div class="pf-item-main">
+                      <span class="pd-when"><c:out value="${ed.period}"/></span>
+                      <div class="pd-main">
                         <strong><c:out value="${ed.school}"/></strong>
-                        <c:if test="${not empty ed.major}"><span class="pf-sub"><c:out value="${ed.major}"/></span></c:if>
-                        <c:if test="${not empty ed.period}"><span class="pf-when"><c:out value="${ed.period}"/></span></c:if>
+                        <c:if test="${not empty ed.major or not empty ed.gpa}">
+                          <span class="pd-sub"><c:out value="${ed.major}"/><c:if test="${not empty ed.major and not empty ed.gpa}"> · </c:if><c:if test="${not empty ed.gpa}">학점 <c:out value="${ed.gpa}"/></c:if></span>
+                        </c:if>
                       </div>
-                      <c:if test="${not empty ed.status or not empty ed.gpa}">
-                        <div class="pf-item-side">
-                          <c:if test="${not empty ed.status}"><span class="pf-badge"><c:out value="${ed.status}"/></span></c:if>
-                          <c:if test="${not empty ed.gpa}"><span class="pf-pill">학점 <c:out value="${ed.gpa}"/></span></c:if>
-                        </div>
-                      </c:if>
+                      <c:if test="${not empty ed.status}"><span class="pd-tag"><c:out value="${ed.status}"/></span></c:if>
                     </li>
                   </c:forEach>
-                </ul>
+                </ol>
               </dialog>
             </c:if>
           </div>

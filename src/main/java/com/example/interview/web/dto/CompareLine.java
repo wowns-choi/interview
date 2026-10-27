@@ -2,6 +2,7 @@ package com.example.interview.web.dto;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 import com.example.interview.ai.dto.CareerEvalResult;
@@ -29,6 +30,27 @@ public class CompareLine {
     Boolean met;
     /** 미충족일 때 차이. 예: "9개월 부족" */
     String note;
+
+    /** 끝에 붙은 괄호: "학력무관(예정자 가능)". "대졸(4년제) 이상"처럼 괄호 뒤에 글이 있으면 나누지 않는다 */
+    private static final Pattern TRAILING_NOTE = Pattern.compile("(.+?)\\s*\\(([^()]+)\\)\\s*");
+
+    /** 공고 요구에서 끝 괄호 앞 본문 ("학력무관"). 괄호 안은 작은 줄로 따로 쓴다 */
+    public String getRequiredMain() {
+        if (required == null) {
+            return null;
+        }
+        Matcher m = TRAILING_NOTE.matcher(required);
+        return m.matches() ? m.group(1).strip() : required;
+    }
+
+    /** 공고 요구의 끝 괄호 안 ("예정자 가능"). 없으면 빈 문자열 */
+    public String getRequiredNote() {
+        if (required == null) {
+            return "";
+        }
+        Matcher m = TRAILING_NOTE.matcher(required);
+        return m.matches() ? m.group(2).strip() : "";
+    }
 
     /** 경력: 포지션 관련 경력(없으면 총 경력) vs 공고 경력 */
     public static CompareLine career(CareerGauge gauge, String fallback, String required, Boolean met) {

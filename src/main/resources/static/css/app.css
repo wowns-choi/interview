@@ -595,6 +595,7 @@ textarea.inline-edit { resize: none; overflow: hidden; }
 .cmp-side small { color: var(--faint); font-size: 12.5px; font-weight: 600; }
 .cmp-side.is-req { align-items: flex-end; text-align: right; }
 .cmp-side.is-req strong { color: var(--muted); font-size: 15.5px; font-weight: 700; }
+.cmp-note { color: var(--muted); font-size: 13px; font-weight: 600; word-break: keep-all; }
 .cmp-sign { color: var(--sign); font-size: 24px; font-weight: 800; text-align: center; }
 
 
@@ -605,6 +606,25 @@ textarea.inline-edit { resize: none; overflow: hidden; }
 .pf-dialog h3 { font-size: 18px; font-weight: 800; }
 .pf-dialog-sum { margin: 0 0 14px; padding: 10px 14px; border-radius: 10px; background: var(--surface-2); color: var(--text-2); font-size: 14.5px; }
 .pf-dialog .pf-list li + li { padding-top: 10px; border-top: 1px solid var(--chip); }
+/* 경력·학력 상세: 카드 제목 칸과 같은 색 머리, 세로 줄로 이은 목록 */
+.pf-detail { width: min(620px, calc(100vw - 32px)); padding: 0; overflow: hidden; }
+.pf-detail.is-career { --kind-bg: #e9eef2; --kind-ink: #26343f; --kind-line: #c9d4dc; }
+.pf-detail.is-school { --kind-bg: #e9f0eb; --kind-ink: #2b3f31; --kind-line: #c6d6ca; }
+.pf-detail .pd-head { align-items: flex-start; margin: 0; padding: 22px 22px 22px 28px; background: var(--kind-bg); color: var(--kind-ink); }
+.pf-detail .pd-head h3 { color: inherit; font-size: 17px; }
+.pf-detail .pd-head .icon-btn { color: inherit; margin: -4px -4px 0 0; }
+.pd-sum { margin: 10px 0 0; font-size: 14px; font-weight: 600; opacity: .8; }
+.pd-sum strong { margin-right: 4px; font-size: 26px; font-weight: 800; letter-spacing: -.02em; opacity: 1; font-variant-numeric: tabular-nums; }
+.pd-list { list-style: none; margin: 0; padding: 14px 28px 24px; max-height: min(480px, calc(100vh - 220px)); overflow-y: auto; }
+.pd-list li { position: relative; display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; column-gap: 14px; padding: 16px 0 16px 26px; }
+.pd-list li::before { content: ""; position: absolute; left: 0; top: 21px; width: 11px; height: 11px; border-radius: 50%; border: 2.5px solid var(--kind-ink); background: var(--surface); box-sizing: border-box; }
+.pd-list li:not(:last-child)::after { content: ""; position: absolute; left: 4.5px; top: 35px; bottom: -18px; width: 2px; border-radius: 1px; background: var(--kind-line); }
+.pd-when { grid-column: 1 / -1; color: var(--muted); font-size: 13.5px; font-weight: 600; font-variant-numeric: tabular-nums; }
+.pd-when:empty { display: none; }
+.pd-main { display: grid; gap: 2px; min-width: 0; margin-top: 3px; }
+.pd-main strong { font-size: 17px; font-weight: 700; }
+.pd-sub { color: var(--text-2); font-size: 14.5px; }
+.pd-tag { padding: 4px 11px; border-radius: 999px; background: var(--kind-bg); color: var(--kind-ink); font-size: 13.5px; font-weight: 700; white-space: nowrap; }
 
 /* 타임라인: 시작 순서대로 한 줄씩 */
 .tl-card .pf-card-head h3 { color: var(--text); font-size: 17px; font-weight: 800; }

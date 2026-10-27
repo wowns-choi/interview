@@ -28,4 +28,17 @@ class RequirementFitTest {
         assertThat(RequirementFit.education(eval)).isNull();
         assertThat(RequirementFit.education(null)).isNull();
     }
+
+    @Test
+    void careerUsesAiVerdictOnlyForTheSameRequirement() {
+        CareerEvalResult eval = new CareerEvalResult();
+        eval.setCareerMeets("MET");
+        eval.setCareerRequirement("신입·경력 3년 ↓");
+        CareerGauge over = new CareerGauge(48, 36, 48);
+        assertThat(RequirementFit.career("신입·경력 3년 ↓", over, eval)).as("외부 AI 판단이 코드 비교보다 먼저").isTrue();
+        assertThat(RequirementFit.career("경력 5년 이상", over, eval)).as("조건이 바뀌면 코드로").isFalse();
+        eval.setCareerMeets("UNKNOWN");
+        assertThat(RequirementFit.career("신입·경력 3년 ↓", over, eval)).isNull();
+        assertThat(RequirementFit.career("신입·경력 3년 ↓", over, null)).isFalse();
+    }
 }

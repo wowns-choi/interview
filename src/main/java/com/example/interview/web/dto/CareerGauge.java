@@ -19,7 +19,7 @@ public class CareerGauge {
 
     private static final Pattern YEARS = Pattern.compile("(\\d+(?:\\.\\d+)?)\\s*(?:[~～-]\\s*\\d+(?:\\.\\d+)?\\s*)?년");
     private static final Pattern MONTHS = Pattern.compile("(\\d+)\\s*개월");
-    private static final Pattern AT_MOST = Pattern.compile("이하|미만|까지");
+    private static final Pattern AT_MOST = Pattern.compile("이하|미만|까지|↓|⬇");
     private static final Pattern RANGE = Pattern.compile("(\\d+(?:\\.\\d+)?)\\s*[~～-]\\s*(\\d+(?:\\.\\d+)?)\\s*년");
 
     int actualMonths;

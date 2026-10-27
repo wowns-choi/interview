@@ -35,6 +35,17 @@ public class CareerEvalResult {
     @JsonProperty("relevant_reason")
     private String relevantReason;
 
+    /** 경력 조건 충족: MET, NOT_MET, UNKNOWN. 외부 AI가 관련 경력 개월과 공고 경력 조건으로 판단한다 (CAREER_MEETS, user 2026-10-27). 그 전에 검사했으면 null */
+    @JsonProperty("career_meets")
+    private String careerMeets;
+
+    @JsonProperty("career_reason")
+    private String careerReason;
+
+    /** 판단에 쓴 공고 경력 조건. 포지션 조건이 바뀌었으면 이 판단은 쓰지 않는다 */
+    @JsonProperty("career_requirement")
+    private String careerRequirement;
+
     /** 예: "4년제 대학교 졸업". 학력 정보가 없으면 빈 문자열 */
     @JsonProperty("final_education")
     private String finalEducation;
@@ -137,6 +148,18 @@ public class CareerEvalResult {
         return perCompany.stream()
                 .filter(c -> c.getCompany() != null && c.getMonths() != null && c.getMonths() > 0 && bare(c.getCompany()).equals(key))
                 .findFirst().map(c -> CareerGauge.format(c.getMonths())).orElse("");
+    }
+
+    /**
+     * 지금 공고 경력 조건에 대한 외부 AI 판단 (MET, NOT_MET, UNKNOWN).
+     * 판단이 없거나 다른 조건으로 한 판단이면 null (그때는 코드로 비교한다)
+     */
+    public String careerVerdict(String required) {
+        if (careerMeets == null || careerRequirement == null
+                || !careerRequirement.strip().equals(required == null ? "" : required.strip())) {
+            return null;
+        }
+        return careerMeets;
     }
 
     private static String bare(String s) {

@@ -9,7 +9,7 @@ import lombok.Value;
 
 /**
  * 공고 조건 충족 도장. true = 충족, false = 미충족, null = 판단할 수 없음(도장 없음).
- * 경력은 코드로 비교하고, 학력은 적합도 검사 때 외부 AI가 판단한 값을 쓴다.
+ * 경력·학력 모두 적합도 검사 때 외부 AI가 판단한 값을 쓴다 (경력은 user 2026-10-27부터).
  */
 @Value
 public class RequirementFit {
@@ -20,7 +20,20 @@ public class RequirementFit {
     Boolean education;
 
     public static RequirementFit of(Position position, CareerEvalResult eval, CareerGauge gauge) {
-        return new RequirementFit(career(position.getRequiredExperience(), gauge), education(eval));
+        return new RequirementFit(career(position.getRequiredExperience(), gauge, eval), education(eval));
+    }
+
+    /** 외부 AI가 지금 공고 조건으로 판단했으면 그 값, 아니면(이 기능 전 검사, 조건을 고친 직후) 코드로 비교 */
+    static Boolean career(String required, CareerGauge gauge, CareerEvalResult eval) {
+        String verdict = eval == null || required == null || required.isBlank() ? null : eval.careerVerdict(required);
+        if (verdict == null) {
+            return career(required, gauge);
+        }
+        return switch (verdict) {
+            case "MET" -> Boolean.TRUE;
+            case "NOT_MET" -> Boolean.FALSE;
+            default -> null;
+        };
     }
 
     static Boolean career(String required, CareerGauge gauge) {

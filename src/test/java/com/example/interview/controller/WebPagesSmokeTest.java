@@ -175,7 +175,7 @@ class WebPagesSmokeTest {
         assertThat(checked).contains("가나커머스", "class=\"cmp-sign\"", "공고", "id=\"dlg-career\"", "data-dialog=\"dlg-career\"",
                 "<h3>타임라인</h3>", "class=\"is-career\"", "2021.03 ~ 2024.02", "이력서상 기록 없음 <small>8개월</small>", "2020.07 ~ 2021.02")
                 .doesNotContain("class=\"gauge\"", "공고까지", "없는항목", "<h3>연봉", "5,000만원", "<h3>교육</h3>");
-        assertThat(checked).contains("홍길동", "부분 충족", "포지션 관련 2년 6개월", "title=\"백엔드 업무 기간\"",
+        assertThat(checked).contains("홍길동", "부분 충족", "<strong>2년 6개월</strong> 포지션 관련", "title=\"3년 이상 조건에 관련 경력 30개월로 6개월 모자람\"",
                 "<h3 class=\"vmark is-unmet\">", "<span class=\"sr-only\">미충족</span>","일 100만 건 주문 데이터 배치 처리 개선", "원문에서 찾지 못한",
                 "id=\"dlg-extract\"", "class=\"qx-empty\"", "name=\"type\" value=\"해본 적 있어?\"", "class=\"print-head\"",
                 // 추출 전에도 공통 질문은 질문지로 보인다

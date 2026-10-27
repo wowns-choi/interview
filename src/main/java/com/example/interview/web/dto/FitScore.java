@@ -37,7 +37,16 @@ public class FitScore {
         List<Item> items = criteria.stream()
                 .map(c -> new Item(c.getCriterion().getName(), c.isChecked() ? c.getMatch() : null))
                 .toList();
-        return new FitScore(career(position.getRequiredExperience(), gauge), education(eval), items);
+        return new FitScore(career(position.getRequiredExperience(), gauge, eval), education(eval), items);
+    }
+
+    /** 외부 AI가 지금 공고 조건으로 판단했으면 그 값(판단 못 함은 0), 아니면 코드로 비교 */
+    static int career(String required, CareerGauge gauge, CareerEvalResult eval) {
+        String verdict = eval == null || required == null || required.isBlank() ? null : eval.careerVerdict(required);
+        if (verdict == null) {
+            return career(required, gauge);
+        }
+        return "MET".equals(verdict) ? 1 : 0;
     }
 
     static int career(String required, CareerGauge gauge) {

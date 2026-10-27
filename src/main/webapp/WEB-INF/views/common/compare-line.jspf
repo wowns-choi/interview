@@ -7,7 +7,8 @@
   </div>
   <span class="cmp-sign">${empty ln.sign ? '' : ln.sign}</span>
   <div class="cmp-side is-req">
-    <strong><c:out value="${empty ln.required ? '조건 없음' : ln.required}"/></strong>
+    <strong><c:out value="${empty ln.required ? '조건 없음' : ln.requiredMain}"/></strong>
+    <c:if test="${not empty ln.requiredNote}"><span class="cmp-note"><c:out value="${ln.requiredNote}"/></span></c:if>
     <small><c:out value="${ln.requiredCaption}"/></small>
   </div>
 </div>

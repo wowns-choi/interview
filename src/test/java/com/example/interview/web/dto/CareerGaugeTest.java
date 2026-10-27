@@ -89,4 +89,13 @@ class CareerGaugeTest {
         c.setDuration(duration);
         return c;
     }
+
+    @Test
+    void downArrowIsAnUpperBound() {
+        assertThat(CareerGauge.maxMonths("신입·경력 3년 ↓")).isEqualTo(36);
+        assertThat(CareerGauge.minMonths("신입·경력 3년 ↓")).isNull();
+        assertThat(CareerGauge.meets("신입·경력 3년 ↓", 27)).isTrue();
+        assertThat(CareerGauge.meets("신입·경력 3년 ↓", 40)).isFalse();
+        assertThat(CareerGauge.minMonths("경력 5년 ↑")).isEqualTo(60);
+    }
 }

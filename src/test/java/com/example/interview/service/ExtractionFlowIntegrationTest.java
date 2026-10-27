@@ -28,6 +28,7 @@ import com.example.interview.ai.dto.ArrangeResult;
 import com.example.interview.ai.dto.InterviewRecordResult;
 import com.example.interview.ai.dto.ReportInfoResult;
 import com.example.interview.ai.dto.CareerEvalResult;
+import com.example.interview.ai.dto.CareerMeetsResult;
 import com.example.interview.ai.dto.CriteriaResult;
 import com.example.interview.ai.dto.EvidenceResult;
 import com.example.interview.ai.dto.OpinionResult;
@@ -700,6 +701,20 @@ public class ExtractionFlowIntegrationTest {
                     tr.setTimeline(List.of(period("A사", "2021-03", "2024-02"), period("교육1", "2020-01", "2020-06"),
                             period("없는항목", "2019-01", "2019-02")));
                     return tr;
+                });
+
+        when(aiClient.call(eq(AiPurpose.CAREER_MEETS), anyLong(), anyString(), anyString(),
+                eq(CareerMeetsResult.class), any())).thenAnswer(inv -> {
+                    String content = inv.getArgument(3);
+                    if (content.contains("가나커머스") || content.contains("<resume>")
+                            || !content.contains("<experience_requirement>경력 3년 이상</experience_requirement>")
+                            || !content.contains("relevant_months: 30")) {
+                        throw new IllegalStateException("경력 판단 호출에는 공고 경력 조건과 경력 개월만 보낸다: " + content);
+                    }
+                    CareerMeetsResult m = new CareerMeetsResult();
+                    m.setCareerMeets("NOT_MET");
+                    m.setCareerReason("3년 이상 조건에 관련 경력 30개월로 6개월 모자람");
+                    return m;
                 });
 
         when(aiClient.call(eq(AiPurpose.EVIDENCE), anyLong(), anyString(), anyString(),

@@ -14,6 +14,8 @@ public enum AiPurpose {
     REPORT_SORT,
     /** 질문지에 넣기: 새 질문을 이미 있는 질문지의 어디에 넣을지 */
     QUESTION_PLACE,
+    /** 관련 경력 개월과 공고 경력 조건으로 경력 조건 충족 판단 (이력서는 보내지 않는다) */
+    CAREER_MEETS,
     /** 예전 학력·타임라인 한 번 호출. ai_call_log의 예전 행만 쓴다 */
     CAREER_EVAL
 }

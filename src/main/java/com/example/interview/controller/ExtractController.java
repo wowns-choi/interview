@@ -42,6 +42,7 @@ import com.example.interview.resume.ResumeProcessingException;
 import com.example.interview.service.BatchCheckService;
 import com.example.interview.service.BusinessException;
 import com.example.interview.service.CandidateService;
+import com.example.interview.service.CareerEvalService;
 import com.example.interview.service.CustomQuestionTypeService;
 import com.example.interview.service.ExtractionService;
 import com.example.interview.service.InterviewRecordService;
@@ -78,6 +79,7 @@ public class ExtractController {
     private final BatchCheckService batchCheckService;
     private final CandidateService candidateService;
     private final CustomQuestionTypeService customQuestionTypeService;
+    private final CareerEvalService careerEvalService;
 
     @GetMapping({"/", "/extract"})
     public String home() {
@@ -177,8 +179,13 @@ public class ExtractController {
     @PatchMapping("/positions/{id}/conditions")
     @ResponseBody
     public ResponseEntity<Void> updateConditions(@PathVariable Long id, @RequestBody Map<String, String> body) {
+        String before = positionService.get(id).getRequiredExperience();
         positionService.updateConditions(id, body.get("requiredExperience"), body.get("requiredEducation"),
                 body.get("requiredMajor"));
+        // 경력 조건이 바뀌면 검사를 마친 지원자의 경력 판단을 뒤에서 다시 묻는다 (이력서는 보내지 않는다)
+        if (!java.util.Objects.equals(before, positionService.get(id).getRequiredExperience())) {
+            careerEvalService.rejudgeCareer(id);
+        }
         return ResponseEntity.noContent().build();
     }
 
