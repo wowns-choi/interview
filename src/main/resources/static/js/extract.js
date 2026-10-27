@@ -96,6 +96,7 @@
   initCriteria();
   initQuestions();
   initExtractDialog();
+  initReview();
   // 질문 추출·합치기·면접 기록 뒤에는 그 영역만 새로 받아 오므로 다시 붙인다
   document.addEventListener('partial', function (e) {
     if (e.detail.some(function (el) { return el.id === 'questions'; })) {
@@ -134,6 +135,141 @@
       pool.classList.remove('is-new');
       fresh.forEach(function (li) { li.classList.remove('is-arriving'); li.style.removeProperty('--i'); });
     }, 1400 + fresh.length * 90);
+  }
+
+  // ── 개인정보 엄격 보호 모드: 가린 이력서 확인. 드래그해서 가리기(같은 글자 모두), 직접 고치기, 되돌리기 ──
+  function initReview() {
+    var src = document.getElementById('masked-text');
+    var view = document.getElementById('mask-view');
+    if (!src || !view) return;
+    var undoBtn = document.getElementById('mask-undo');
+    var LABEL = /\[(?:이름|전화번호|이메일|주민번호|링크|생년월일|주소|개인정보|학교|회사\d*|[A-Z]사|연봉|경력|학력|교육|자격증)\]/g;
+    var NEW_LABEL = '[개인정보]';
+    var history = [];
+    var maskBtn = document.createElement('button');
+    maskBtn.type = 'button';
+    maskBtn.className = 'mask-float';
+    maskBtn.textContent = '가리기';
+    maskBtn.hidden = true;
+    document.body.appendChild(maskBtn);
+
+    src.hidden = true;
+    view.hidden = false;
+    render();
+
+    function segments(text) {
+      var out = [], last = 0, m;
+      LABEL.lastIndex = 0;
+      while ((m = LABEL.exec(text))) {
+        if (m.index > last) out.push({ mask: false, v: text.slice(last, m.index) });
+        out.push({ mask: true, v: m[0] });
+        last = m.index + m[0].length;
+      }
+      if (last < text.length) out.push({ mask: false, v: text.slice(last) });
+      return out;
+    }
+
+    function join(segs) {
+      return segs.map(function (s) { return s.v; }).join('');
+    }
+
+    function render() {
+      view.textContent = '';
+      segments(src.value).forEach(function (s) {
+        if (!s.mask) {
+          view.appendChild(document.createTextNode(s.v));
+          return;
+        }
+        var chip = document.createElement('span');
+        chip.className = 'pii';
+        chip.textContent = s.v.slice(1, -1);
+        view.appendChild(chip);
+      });
+      if (undoBtn) undoBtn.hidden = !history.length;
+    }
+
+    function set(text) {
+      if (text === src.value) return;
+      history.push(src.value);
+      src.value = text;
+      render();
+    }
+
+    // 가린 칸 밖의 같은 글자를 모두 가린다
+    function maskAll(word) {
+      set(join(segments(src.value).map(function (s) {
+        return s.mask ? s : { mask: false, v: s.v.split(word).join(NEW_LABEL) };
+      })));
+    }
+
+    function selection() {
+      var sel = window.getSelection();
+      if (!sel.rangeCount || sel.isCollapsed) return null;
+      var range = sel.getRangeAt(0);
+      if (!view.contains(range.commonAncestorContainer)) return null;
+      var word = sel.toString().trim();
+      return word ? { word: word, rect: range.getBoundingClientRect() } : null;
+    }
+
+    function placeButton() {
+      var s = selection();
+      maskBtn.hidden = !s;
+      if (!s) return;
+      maskBtn.style.top = (window.scrollY + s.rect.top - 40) + 'px';
+      maskBtn.style.left = (window.scrollX + s.rect.left + s.rect.width / 2) + 'px';
+    }
+
+    view.addEventListener('mouseup', function () { setTimeout(placeButton, 0); });
+    view.addEventListener('keyup', placeButton);
+    view.addEventListener('scroll', function () { maskBtn.hidden = true; });
+    document.addEventListener('mousedown', function (e) {
+      if (e.target !== maskBtn) maskBtn.hidden = true;
+    });
+    // 누르는 순간 선택이 풀리지 않게
+    maskBtn.addEventListener('mousedown', function (e) { e.preventDefault(); });
+    maskBtn.addEventListener('click', function () {
+      var s = selection();
+      maskBtn.hidden = true;
+      if (!s) return;
+      window.getSelection().removeAllRanges();
+      maskAll(s.word);
+    });
+
+    if (undoBtn) {
+      undoBtn.addEventListener('click', function () {
+        if (!history.length) return;
+        src.value = history.pop();
+        render();
+      });
+    }
+
+    // 직접 고치기: 본문을 입력칸으로 바꿔 아무 글자나 고친다. 끝내면 다시 가린 칩으로 보여 준다
+    var editBtn = document.getElementById('mask-edit');
+    var before = null;
+    if (editBtn) {
+      editBtn.addEventListener('click', function () {
+        if (before === null) {
+          before = src.value;
+          var top = view.scrollTop;
+          view.hidden = true;
+          src.hidden = false;
+          src.classList.add('is-editing');
+          src.focus({ preventScroll: true });
+          src.setSelectionRange(0, 0);
+          src.scrollTop = top;
+          editBtn.textContent = '고치기 끝';
+          if (undoBtn) undoBtn.hidden = true;
+        } else {
+          if (src.value !== before) history.push(before);
+          before = null;
+          src.hidden = true;
+          src.classList.remove('is-editing');
+          view.hidden = false;
+          editBtn.textContent = '직접 고치기';
+          render();
+        }
+      });
+    }
   }
 
   // ── 면접 질문 추출 창: 기본 네 유형은 켜고 끄기만, 직접 만든 유형은 추가하면 바로 서버에 저장되고 ×로 바로 지운다.

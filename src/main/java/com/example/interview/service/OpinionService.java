@@ -2,9 +2,16 @@ package com.example.interview.service;
 
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 
 import org.springframework.stereotype.Service;
+
+import jakarta.annotation.PreDestroy;
 
 import com.example.interview.ai.AiClient;
 import com.example.interview.ai.PromptLoader;
@@ -43,6 +50,58 @@ public class OpinionService {
     private final CandidateMapper candidateMapper;
     private final AiClient aiClient;
     private final PromptLoader promptLoader;
+    /** 화면은 기다리지 않고 다른 일을 한다 (사용자 2026-10-27). 사이드바 버튼이 상태를 물어 끝나면 알린다 */
+    private final ExecutorService worker = Executors.newFixedThreadPool(2, r -> {
+        Thread t = new Thread(r, "opinion");
+        t.setDaemon(true);
+        return t;
+    });
+    /** 받는 중(null 값 = 진행 중)이거나 실패한 지원자 → 실패 메시지. 서버를 다시 켜면 사라진다 */
+    private final Map<Long, String> running = new ConcurrentHashMap<>();
+    private static final String IN_PROGRESS = "";
+
+    @PreDestroy
+    void stop() {
+        worker.shutdownNow();
+    }
+
+    /** 뒤에서 받기 시작한다. 이미 받는 중이면 그대로 둔다 */
+    public void start(Long candidateId) {
+        if (!reportService.report(candidateId).isFitChecked()) {
+            throw new BusinessException("포지션 적합도 검사를 먼저 하세요.");
+        }
+        if (IN_PROGRESS.equals(running.put(candidateId, IN_PROGRESS))) {
+            return;
+        }
+        worker.submit(() -> {
+            try {
+                ask(candidateId);
+                running.remove(candidateId);
+            } catch (RuntimeException e) {
+                running.put(candidateId, e.getMessage() == null ? "AI 의견을 받지 못했습니다." : e.getMessage());
+            }
+        });
+    }
+
+    /** NONE · RUNNING · DONE (있음). 마지막 받기가 실패했으면 error */
+    public Map<String, String> status(Long candidateId) {
+        String run = running.get(candidateId);
+        Map<String, String> s = new LinkedHashMap<>();
+        if (IN_PROGRESS.equals(run)) {
+            s.put("state", "RUNNING");
+            return s;
+        }
+        String json = candidateMapper.findById(candidateId).getOpinionJson();
+        s.put("state", json == null || json.isBlank() ? "NONE" : "DONE");
+        if (run != null) {
+            s.put("error", run);
+        }
+        return s;
+    }
+
+    public boolean isRunning(Long candidateId) {
+        return IN_PROGRESS.equals(running.get(candidateId));
+    }
 
     public void ask(Long candidateId) {
         ResultReport r = reportService.report(candidateId);

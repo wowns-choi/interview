@@ -74,7 +74,7 @@
   };
 
   var toastTimer = null;
-  function showToast(msg, isError) {
+  function showToast(msg, isError, ms) {
     if (!msg) return;
     var el = document.getElementById('toast');
     if (!el) {
@@ -88,7 +88,7 @@
     el.classList.toggle('is-error', !!isError);
     el.hidden = false;
     clearTimeout(toastTimer);
-    toastTimer = setTimeout(function () { el.hidden = true; }, isError ? 4000 : 1800);
+    toastTimer = setTimeout(function () { el.hidden = true; }, ms || (isError ? 4000 : 1800));
   }
 
   // ── 포지션 고르기: 고르면 그 주소로 ──
@@ -128,6 +128,95 @@
     }
     box.appendChild(document.createTextNode(text.slice(last)));
   }
+
+  // ── AI 의견: 사이드바 버튼으로 뒤에서 받고, 3초마다 물어 끝나면 알린다. 받았으면 누를 때 창으로 연다 ──
+  var opSide = document.getElementById('op-side');
+  if (opSide) {
+    var opLabel = opSide.querySelector('.op-label');
+    var opTimer = null;
+    var OP_LABELS = { NONE: 'AI 의견 받기', RUNNING: 'AI 의견 추출 중…', DONE: 'AI 의견 보기' };
+    // 받는 동안은 버튼 글자가 「추출 중…」과 「완료되면 알려드릴게요!」를 번갈아 보인다 (알림 대신, 사용자 2026-10-27)
+    var opSwap = null;
+    var opSet = function (state) {
+      opSide.setAttribute('data-state', state);
+      opLabel.textContent = OP_LABELS[state];
+      opLabel.classList.remove('is-out');
+      clearInterval(opSwap);
+      if (state !== 'RUNNING') return;
+      var alt = false;
+      opSwap = setInterval(function () {
+        opLabel.classList.add('is-out');
+        setTimeout(function () {
+          alt = !alt;
+          opLabel.textContent = alt ? '완료되면 알려드릴게요!' : OP_LABELS.RUNNING;
+          opLabel.classList.remove('is-out');
+        }, 200);
+      }, 2600);
+    };
+    var opStart = function () {
+      fetch(opSide.getAttribute('data-start'), { method: 'POST', headers: { 'X-Requested-With': 'fetch' } })
+        .then(function (res) {
+          if (!res.ok) return res.text().then(function (t) { throw new Error(t); });
+          opSide.classList.remove('is-new');
+          opSet('RUNNING');
+          opPoll();
+        })
+        .catch(function (err) { showToast(err.message || 'AI 의견을 받지 못했습니다.', true); });
+    };
+    var opPoll = function () { clearTimeout(opTimer); opTimer = setTimeout(opCheck, 3000); };
+    // 끝나면 이 페이지를 다시 받아 의견 창만 바꿔 끼운다
+    var opRefresh = function () {
+      return fetch(location.pathname).then(function (res) { return res.text(); }).then(function (html) {
+        var neu = new DOMParser().parseFromString(html, 'text/html').getElementById('dlg-opinion');
+        var old = document.getElementById('dlg-opinion');
+        if (neu && old) old.replaceChildren.apply(old, Array.prototype.slice.call(neu.childNodes));
+      });
+    };
+    var opCheck = function () {
+      fetch(opSide.getAttribute('data-status'), { headers: { 'X-Requested-With': 'fetch' } })
+        .then(function (res) { return res.json(); })
+        .then(function (s) {
+          if (s.state === 'RUNNING') { opPoll(); return; }
+          if (s.error) {
+            opSet(s.state);
+            showToast(s.error, true);
+            return;
+          }
+          return opRefresh().then(function () {
+            opSet(s.state);
+            opSide.classList.add('is-new');
+            showToast('AI 의견이 나왔어요. 눌러서 확인하세요.', false, 3500);
+          });
+        })
+        .catch(opPoll);
+    };
+    document.getElementById('op-btn').addEventListener('click', function () {
+      var state = opSide.getAttribute('data-state');
+      if (state === 'RUNNING') return;
+      if (state === 'DONE') {
+        opSide.classList.remove('is-new');
+        document.getElementById('dlg-opinion').showModal();
+        return;
+      }
+      opStart();
+    });
+    document.addEventListener('click', function (e) {
+      if (!e.target.closest('#op-again')) return;
+      document.getElementById('dlg-opinion').close();
+      opStart();
+    });
+    if (opSide.getAttribute('data-state') === 'RUNNING') { opSet('RUNNING'); opPoll(); }
+  }
+
+  // ── 첨부 파일 목록: 바깥을 누르거나 항목을 고르면 닫는다 ──
+  document.addEventListener('click', function (e) {
+    document.querySelectorAll('details.att[open]').forEach(function (d) {
+      if (!d.contains(e.target) || e.target.closest('.att-item')) d.open = false;
+    });
+  });
+  document.addEventListener('keydown', function (e) {
+    if (e.key === 'Escape') document.querySelectorAll('details.att[open]').forEach(function (d) { d.open = false; });
+  });
 
   // ── 자세히 보기 창: data-dialog(카드 전체)로 열고, 닫기 버튼이나 바깥을 누르면 닫는다 ──
   document.addEventListener('click', function (e) {
@@ -375,11 +464,14 @@
     var relabel = function () {
       bzGrid.querySelectorAll('.bz-no').forEach(function (el, i) { el.textContent = '지원자 ' + (i + 1); });
     };
+    // 개인정보 엄격 보호 모드에서는 한 명씩이라 추가 버튼이 없다
     var addBtn = document.getElementById('bz-add');
-    addBtn.addEventListener('click', function () { addZone(); });
-    // 버튼에 파일을 놓아도 받지 않는다 (브라우저가 파일을 여는 것만 막는다)
-    addBtn.addEventListener('dragover', function (e) { e.preventDefault(); e.dataTransfer.dropEffect = 'none'; });
-    addBtn.addEventListener('drop', function (e) { e.preventDefault(); });
+    if (addBtn) {
+      addBtn.addEventListener('click', function () { addZone(); });
+      // 버튼에 파일을 놓아도 받지 않는다 (브라우저가 파일을 여는 것만 막는다)
+      addBtn.addEventListener('dragover', function (e) { e.preventDefault(); e.dataTransfer.dropEffect = 'none'; });
+      addBtn.addEventListener('drop', function (e) { e.preventDefault(); });
+    }
     bzGrid.addEventListener('click', function (e) {
       var del = e.target.closest('.bz-del');
       if (!del) return;
@@ -432,9 +524,9 @@
         var o = document.createElement('option');
         o.value = base + '/results/' + row.id;
         o.setAttribute('data-tail', tail);
-        if (row.inProgress || row.status === 'FAILED') {
-          o.setAttribute('data-mark', row.inProgress ? row.label : '실패');
-          o.setAttribute('data-mark-kind', row.inProgress ? 'progress' : 'failed');
+        if (row.inProgress || row.status === 'FAILED' || row.status === 'UPLOADED') {
+          o.setAttribute('data-mark', row.status === 'FAILED' ? '실패' : row.label);
+          o.setAttribute('data-mark-kind', row.inProgress ? 'progress' : row.status === 'UPLOADED' ? 'wait' : 'failed');
         }
         o.textContent = row.name;
         o.selected = String(row.id) === current;

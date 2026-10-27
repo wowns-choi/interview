@@ -53,9 +53,15 @@ public class InterviewReportService {
         return parse(candidateService.get(candidateId).getReportJson());
     }
 
-    /** 새로 만든다 (이미 있으면 덮어쓴다). 질문과 답변은 면접 기록이 있으면 그것, 없으면 질문지에서 */
+    /**
+     * 만들거나 지금 기록에 다시 맞춘다 (보고서 버튼을 누를 때마다, 사용자 2026-10-27).
+     * 날짜·지원자 정보·질문과 답변은 새로 채우고, 보고서에만 있는 면접관 의견과 지원 포지션은 남긴다.
+     * 질문과 답변은 고른 출처(녹음본·질문지)를 따르고, 그 출처가 비었거나 처음이면 녹음본이 있으면 녹음본, 없으면 질문지.
+     * 파견 가능 여부·입사 가능 시기·희망연봉은 면접 내용이 바뀌었을 때만 GPT에 다시 묻는다.
+     */
     public InterviewReport create(Long candidateId) {
         Candidate c = candidateService.get(candidateId);
+        InterviewReport old = parse(c.getReportJson());
         InterviewRecord record = InterviewRecordService.parse(c.getRecordJson());
         List<InterviewQuestion> sheet = answeredSheet(candidateId);
 
@@ -63,11 +69,39 @@ public class InterviewReportService {
         report.setReportDate(LocalDate.now().toString());
         report.setInterviewDate(c.getInterviewDate() == null ? "" : c.getInterviewDate().toString());
         boolean fromRecord = record != null && !record.getItems().isEmpty();
-        report.setQaSource(fromRecord || sheet.isEmpty() ? InterviewReport.RECORD : InterviewReport.SHEET);
-        report.setQa(qa(report.getQaSource(), record, sheet));
+        String source = fromRecord || sheet.isEmpty() ? InterviewReport.RECORD : InterviewReport.SHEET;
+        if (old != null && !qa(old.getQaSource(), record, sheet).isEmpty()) {
+            source = old.getQaSource();
+        }
+        report.setQaSource(source);
+        report.setQa(qa(source, record, sheet));
+
+        String input = infoInput(c, record, sheet);
+        String key = input == null ? null : sha256(input);
+        InterviewReport.Found found;
+        if (key == null) {
+            found = null;
+        } else if (old != null && key.equals(old.getInfoKey()) && old.getFound() != null) {
+            found = old.getFound();
+        } else {
+            found = found(askInfo(c.getId(), input));
+            if (found == null && old != null) {
+                found = old.getFound(); // 실패하면 전에 찾은 값을 둔다
+                key = old.getInfoKey();
+            }
+        }
+        report.setInfoKey(found == null ? null : key);
+        report.setFound(found);
         report.setInfo(info(c, ReportService.parseProfile(c.getProfileJson()), CareerEvalService.parse(c.getCareerEvalJson()),
-                interviewInfo(c, record, sheet), LocalDate.now()));
-        report.getOpinions().add(new InterviewReport.Opinion());
+                found, LocalDate.now()));
+
+        if (old != null) {
+            report.setPosition(old.getPosition());
+            report.setOpinions(old.getOpinions());
+        }
+        if (report.getOpinions().isEmpty()) {
+            report.getOpinions().add(new InterviewReport.Opinion());
+        }
         save(candidateId, report);
         return report;
     }
@@ -76,6 +110,14 @@ public class InterviewReportService {
         candidateService.get(candidateId);
         report.clean();
         candidateMapper.updateReport(candidateId, JSON.writeValueAsString(report));
+    }
+
+    /** 보고서 화면에서 고친 것을 저장한다. 화면이 모르는 찾은 값은 그대로 둔다 */
+    public void saveEdited(Long candidateId, InterviewReport report) {
+        InterviewReport old = require(candidateId);
+        report.setInfoKey(old.getInfoKey());
+        report.setFound(old.getFound());
+        save(candidateId, report);
     }
 
     /** 질문과 답변을 다른 곳(면접 기록·질문지)에서 다시 가져온다. 보고서에서 고친 질문과 답변은 사라진다 */
@@ -91,44 +133,6 @@ public class InterviewReportService {
         report.setQaSource(s);
         report.setQa(qa);
         save(candidateId, report);
-    }
-
-    /**
-     * 지원자 정보 다시 찾기: 파견 가능 여부·입사 가능 시기·희망연봉만 녹음본과 질문지 답변에서 다시 찾는다.
-     * 찾은 값만 바꾸고(못 찾은 칸은 그대로), 지운 행은 끝에 다시 붙인다. 다른 내용은 건드리지 않는다.
-     * @return 채운 칸 수
-     */
-    public int refreshInfo(Long candidateId) {
-        InterviewReport report = require(candidateId);
-        Candidate c = candidateService.get(candidateId);
-        InterviewRecord record = InterviewRecordService.parse(c.getRecordJson());
-        List<InterviewQuestion> sheet = answeredSheet(candidateId);
-        if (sheet.isEmpty() && record == null && (c.getTranscript() == null || c.getTranscript().isBlank())) {
-            throw new BusinessException("찾을 면접 질문-답변이 없습니다. 면접 기록을 만들거나 질문지에 답변을 적으세요.");
-        }
-        ReportInfoResult found = interviewInfo(c, record, sheet);
-        if (found == null) {
-            throw new BusinessException("지원자 정보를 찾지 못했습니다. 잠시 뒤 다시 시도하세요.");
-        }
-        int filled = 0;
-        filled += setInfo(report, "파견 가능 여부", found.getDispatch());
-        filled += setInfo(report, "입사 가능 시기", found.getStartDate());
-        filled += setInfo(report, "희망연봉", found.getDesiredSalary());
-        save(candidateId, report);
-        return filled;
-    }
-
-    private static int setInfo(InterviewReport report, String label, String value) {
-        if (value == null || value.isBlank()) {
-            return 0;
-        }
-        InterviewReport.InfoRow row = report.getInfo().stream().filter(r -> label.equals(r.getLabel())).findFirst().orElse(null);
-        if (row == null) {
-            report.getInfo().add(InterviewReport.InfoRow.of(label, value));
-        } else {
-            row.setValue(value);
-        }
-        return 1;
     }
 
     public static InterviewReport parse(String json) {
@@ -173,36 +177,68 @@ public class InterviewReportService {
                 .collect(Collectors.toCollection(ArrayList::new));
     }
 
-    /** 파견 가능 여부·입사 가능 시기·희망연봉. 질문지 답변도 녹음본도 없으면 묻지 않는다 */
-    private ReportInfoResult interviewInfo(Candidate c, InterviewRecord record, List<InterviewQuestion> sheet) {
+    private static InterviewReport.Found found(ReportInfoResult r) {
+        if (r == null) {
+            return null;
+        }
+        InterviewReport.Found f = new InterviewReport.Found();
+        f.setDispatch(r.getDispatch());
+        f.setStartDate(r.getStartDate());
+        f.setDesiredSalary(r.getDesiredSalary());
+        return f;
+    }
+
+    private static String sha256(String s) {
+        try {
+            return java.util.HexFormat.of().formatHex(java.security.MessageDigest.getInstance("SHA-256")
+                    .digest(s.getBytes(java.nio.charset.StandardCharsets.UTF_8)));
+        } catch (java.security.NoSuchAlgorithmException e) {
+            throw new IllegalStateException(e);
+        }
+    }
+
+    /** REPORT_INFO에 보낼 내용. 질문지 답변도 녹음본도 없으면 null */
+    private static String infoInput(Candidate c, InterviewRecord record, List<InterviewQuestion> sheet) {
         boolean hasTranscript = c.getTranscript() != null && !c.getTranscript().isBlank();
         boolean hasRecord = record != null && !record.getItems().isEmpty();
         if (sheet.isEmpty() && !hasTranscript && !hasRecord) {
             return null;
         }
         List<Map<String, String>> notes = sheet.stream()
-                .map(q -> Map.of("question", q.getContent(), "answer", q.getAnswer())).toList();
+                .map(q -> qaMap(q.getContent(), q.getAnswer())).toList();
         StringBuilder sb = new StringBuilder("<interviewer_notes>\n")
                 .append(JSON.writerWithDefaultPrettyPrinter().writeValueAsString(notes)).append("\n</interviewer_notes>\n\n");
         if (hasTranscript) {
             sb.append("<transcript>\n").append(c.getTranscript()).append("\n</transcript>");
         } else if (hasRecord) {
             List<Map<String, String>> items = record.getItems().stream()
-                    .map(q -> Map.of("question", q.getQuestion(), "answer", q.getAnswer())).toList();
+                    .map(q -> qaMap(q.getQuestion(), q.getAnswer())).toList();
             sb.append("<transcript>\n").append(JSON.writerWithDefaultPrettyPrinter().writeValueAsString(items)).append("\n</transcript>");
         }
+        return sb.toString();
+    }
+
+    /** 순서가 정해진 질문-답변 (Map.of는 실행마다 순서가 달라 해시가 바뀐다) */
+    private static Map<String, String> qaMap(String question, String answer) {
+        Map<String, String> m = new java.util.LinkedHashMap<>();
+        m.put("question", question);
+        m.put("answer", answer);
+        return m;
+    }
+
+    private ReportInfoResult askInfo(Long candidateId, String input) {
         try {
-            return aiClient.call(AiPurpose.REPORT_INFO, c.getId(), promptLoader.load("report_info"), sb.toString(),
+            return aiClient.call(AiPurpose.REPORT_INFO, candidateId, promptLoader.load("report_info"), input,
                     ReportInfoResult.class, ReportInfoResult::validate);
         } catch (RuntimeException e) {
             // 못 찾으면 빈칸으로 두고 면접관이 적는다
-            log.error("보고서 지원자 정보 찾기 실패 candidateId={}", c.getId(), e);
+            log.error("보고서 지원자 정보 찾기 실패 candidateId={}", candidateId, e);
             return null;
         }
     }
 
     static List<InterviewReport.InfoRow> info(Candidate c, CandidateProfile profile, CareerEvalResult eval,
-            ReportInfoResult interview, LocalDate today) {
+            InterviewReport.Found interview, LocalDate today) {
         CareerEvalResult.Certificates certs = eval == null ? null : eval.getCertificates();
         List<InterviewReport.InfoRow> rows = new ArrayList<>();
         rows.add(InterviewReport.InfoRow.of("성명", c.getDisplayName()));

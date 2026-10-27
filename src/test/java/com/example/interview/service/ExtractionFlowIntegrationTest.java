@@ -93,6 +93,8 @@ public class ExtractionFlowIntegrationTest {
     @Autowired
     BatchCheckService batchCheckService;
     @Autowired
+    PrivacyModeService privacyModeService;
+    @Autowired
     CandidateService candidateService;
     @Autowired
     PositionService positionService;
@@ -359,7 +361,14 @@ public class ExtractionFlowIntegrationTest {
         when(aiClient.call(eq(AiPurpose.OPINION), anyLong(), anyString(), input.capture(), eq(OpinionResult.class), any()))
                 .thenReturn(opinion);
 
-        opinionService.ask(id);
+        // 뒤에서 받는다: 상태를 물어 끝났는지 안다
+        assertThat(opinionService.status(id)).containsEntry("state", "NONE");
+        opinionService.start(id);
+        long until = System.currentTimeMillis() + 5000;
+        while (!"DONE".equals(opinionService.status(id).get("state")) && System.currentTimeMillis() < until) {
+            Thread.onSpinWait();
+        }
+        assertThat(opinionService.status(id)).containsEntry("state", "DONE").doesNotContainKey("error");
 
         assertThat(input.getValue()).contains("<conditions>", "경력 조건", "<criteria>", "Q. " + custom.getContent(),
                 "A. nGrinder로 p95를 측정했다고 답함", "답변을 기록한 질문 1개")
@@ -431,22 +440,33 @@ public class ExtractionFlowIntegrationTest {
                 .contains("홍길동", "총 2년 11개월 (포지션 관련 2년 6개월)", "있음", "없음", "가능", "합격 후 2주 뒤", "4,500만원");
         assertThat(report.getOpinions()).hasSize(1);
 
-        // 지원자 정보 다시 찾기: 세 칸만 바꾸고(못 찾은 칸은 그대로), 지운 행은 다시 붙이고, 나머지는 그대로
+        // 보고서 버튼을 다시 누르면 지금 기록에 맞춘다: 고친 정보는 되돌리고, 면접관 의견·지원 포지션은 남기고,
+        // 면접 내용이 그대로면 GPT에 다시 묻지 않는다
         report.getInfo().removeIf(r -> r.getLabel().equals("희망연봉"));
         report.getInfo().get(0).setValue("고친 이름");
-        interviewReportService.save(id, report);
+        report.getOpinions().get(0).setContent("기술 깊이가 좋음");
+        report.setPosition("백엔드 (보고서에서 고침)");
+        interviewReportService.saveEdited(id, report);
+        report = interviewReportService.create(id);
+        verify(aiClient, org.mockito.Mockito.times(1)).call(eq(AiPurpose.REPORT_INFO), anyLong(), anyString(), anyString(), any(), any());
+        assertThat(report.getInfo()).extracting(InterviewReport.InfoRow::getLabel, InterviewReport.InfoRow::getValue)
+                .contains(tuple("성명", "홍길동"), tuple("희망연봉", "4,500만원"));
+        assertThat(report.getOpinions()).extracting(InterviewReport.Opinion::getContent).containsExactly("기술 깊이가 좋음");
+        assertThat(report.getPosition()).isEqualTo("백엔드 (보고서에서 고침)");
+        assertThat(report.getQa()).hasSize(3);
+
+        // 질문지 답변이 바뀌면 다시 묻는다
         ReportInfoResult again = new ReportInfoResult();
         again.setDispatch("가능 (수도권)");
         again.setStartDate("");
         again.setDesiredSalary("5,800만원");
         when(aiClient.call(eq(AiPurpose.REPORT_INFO), anyLong(), anyString(), anyString(), eq(ReportInfoResult.class), any()))
                 .thenReturn(again);
-        assertThat(interviewReportService.refreshInfo(id)).isEqualTo(2);
-        report = interviewReportService.get(id);
+        extractionService.saveAnswer(id, sheet.get(1).getId(), "희망연봉은 5,800만원이라고 함");
+        report = interviewReportService.create(id);
+        verify(aiClient, org.mockito.Mockito.times(2)).call(eq(AiPurpose.REPORT_INFO), anyLong(), anyString(), anyString(), any(), any());
         assertThat(report.getInfo()).extracting(InterviewReport.InfoRow::getLabel, InterviewReport.InfoRow::getValue)
-                .contains(tuple("성명", "고친 이름"), tuple("파견 가능 여부", "가능 (수도권)"), tuple("입사 가능 시기", "합격 후 2주 뒤"),
-                        tuple("희망연봉", "5,800만원"));
-        assertThat(report.getQa()).hasSize(3);
+                .contains(tuple("파견 가능 여부", "가능 (수도권)"), tuple("입사 가능 시기", ""), tuple("희망연봉", "5,800만원"));
 
         // 보고서를 고쳐도 면접 기록은 그대로
         report.getQa().get(0).setAnswer("보고서에서 고친 답");
@@ -458,7 +478,9 @@ public class ExtractionFlowIntegrationTest {
 
         // 질문지로 바꾸면 면접관이 적은 답변만 가져온다
         interviewReportService.useSource(id, InterviewReport.SHEET);
-        assertThat(interviewReportService.get(id).getQa()).extracting(QaItem::getAnswer).containsExactly("면접관이 직접 적은 답");
+        assertThat(interviewReportService.get(id).getQa()).extracting(QaItem::getAnswer).containsExactly("희망연봉은 5,800만원이라고 함");
+        // 고른 출처는 다시 맞춰도 그대로
+        assertThat(interviewReportService.create(id).getQaSource()).isEqualTo(InterviewReport.SHEET);
     }
 
     private static InterviewRecordResult.Item recordItem(String kind, String question, String answer, String excerpt) {
@@ -566,6 +588,34 @@ public class ExtractionFlowIntegrationTest {
             assertThat(reportService.report(c.getId()).getSections()).as("질문은 면접관이 직접 뽑는다").isEmpty();
         }
         verify(aiClient, never()).call(eq(AiPurpose.QUESTION), anyLong(), anyString(), anyString(), any(), any());
+    }
+
+    @Test
+    void strictPrivacyModeStopsAfterMaskingUntilReviewed() throws Exception {
+        stubAi(aiClient, templateMapper, sectionMapper);
+        when(pdfTextExtractor.extract(any())).thenReturn(RESUME);
+        Long positionId = startPosition(positionService, "포지션");
+        privacyModeService.setStrict(true);
+        try {
+            assertThatThrownBy(() -> batchCheckService.start(positionId, List.of(List.of(pdf()), List.of(pdf()))))
+                    .isInstanceOf(BusinessException.class).hasMessageContaining("한 명씩");
+
+            Long id = batchCheckService.start(positionId, List.of(List.of(pdf()))).get(0);
+            batchCheckService.awaitIdle();
+            Candidate c = candidateService.get(id);
+            assertThat(c.getStatus()).as("가린 뒤 사람이 확인할 때까지 멈춘다").isEqualTo(CandidateStatus.UPLOADED);
+            assertThat(c.getMaskedText()).contains("[전화번호]");
+            verify(aiClient, never()).call(eq(AiPurpose.EVIDENCE), anyLong(), anyString(), anyString(), any(), any());
+
+            // 확인·수정한 글로 검사한다
+            extractionService.checkFit(id, c.getMaskedText().replace("Redis", "[개인정보]"));
+            Candidate checked = candidateService.get(id);
+            assertThat(checked.getStatus()).isEqualTo(CandidateStatus.ANALYZED);
+            assertThat(checked.getMaskedText()).contains("[개인정보] 캐시 도입");
+            verify(aiClient).call(eq(AiPurpose.EVIDENCE), eq(id), anyString(), anyString(), any(), any());
+        } finally {
+            privacyModeService.setStrict(false);
+        }
     }
 
     @Test

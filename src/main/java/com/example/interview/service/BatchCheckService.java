@@ -22,7 +22,8 @@ import lombok.extern.slf4j.Slf4j;
 
 /**
  * 포지션 적합도 검사(다수): 지원자마다 개인정보 가리기 → 적합도 검사를 한 명씩 차례로 서버 뒤에서 돌린다.
- * 사람이 가린 글을 검토하는 단계는 없다 (사용자 결정). 가리고 남은 주민번호·전화번호·이메일 모양이 있으면 그 지원자는 실패로 멈춘다.
+ * 사람이 가린 글을 검토하는 단계는 없다 (사용자 결정). 다만 개인정보 엄격 보호 모드(설정)에서는 한 명씩만 받고, 가린 뒤 멈춰
+ * 사람이 확인·수정하고 검사를 누를 때까지 외부 AI로 보내지 않는다 (user 2026-10-27). 가리고 남은 주민번호·전화번호·이메일 모양이 있으면 그 지원자는 실패로 멈춘다.
  * 올린 원본 파일은 다시 내려받을 수 있게 그대로 저장한다 (사용자 결정, 2026-10-26). 뽑은 원문 글은
  * DB에 넣지 않고 메모리에만 두므로, 서버가 다시 켜지면 끝나지 못한 지원자는 실패로 바꾼다.
  */
@@ -37,6 +38,7 @@ public class BatchCheckService {
     private final PositionService positionService;
     private final ResumeAnonymizer resumeAnonymizer;
     private final CandidateMapper candidateMapper;
+    private final PrivacyModeService privacyMode;
     private final ExecutorService worker = Executors.newSingleThreadExecutor(r -> {
         Thread t = new Thread(r, "batch-check");
         t.setDaemon(true);
@@ -44,12 +46,14 @@ public class BatchCheckService {
     });
 
     public BatchCheckService(ExtractionService extractionService, CandidateService candidateService,
-            PositionService positionService, ResumeAnonymizer resumeAnonymizer, CandidateMapper candidateMapper) {
+            PositionService positionService, ResumeAnonymizer resumeAnonymizer, CandidateMapper candidateMapper,
+            PrivacyModeService privacyMode) {
         this.extractionService = extractionService;
         this.candidateService = candidateService;
         this.positionService = positionService;
         this.resumeAnonymizer = resumeAnonymizer;
         this.candidateMapper = candidateMapper;
+        this.privacyMode = privacyMode;
     }
 
     /**
@@ -68,6 +72,10 @@ public class BatchCheckService {
         if (chosen.isEmpty()) {
             throw new BusinessException("이력서 파일을 올려 주세요.");
         }
+        boolean strict = privacyMode.isStrict();
+        if (strict && chosen.size() > 1) {
+            throw new BusinessException("개인정보 엄격 보호 모드에서는 지원자를 한 명씩 올립니다.");
+        }
         List<String> texts = new ArrayList<>();
         for (List<MultipartFile> files : chosen) {
             texts.add(extractionService.combine(files));
@@ -78,7 +86,7 @@ public class BatchCheckService {
             candidateService.saveFiles(id, chosen.get(i));
             String text = texts.get(i);
             ids.add(id);
-            worker.submit(() -> process(positionId, id, text));
+            worker.submit(() -> process(positionId, id, text, strict));
         }
         return ids;
     }
@@ -105,10 +113,12 @@ public class BatchCheckService {
         }
         candidateMapper.updateStatus(candidateId, CandidateStatus.QUEUED, null);
         Long positionId = c.getPositionId();
-        worker.submit(() -> process(positionId, candidateId, text));
+        boolean strict = privacyMode.isStrict();
+        worker.submit(() -> process(positionId, candidateId, text, strict));
     }
 
-    private void process(Long positionId, Long candidateId, String text) {
+    /** @param strict 개인정보 엄격 보호 모드: 가린 뒤 UPLOADED로 멈추고 검사하지 않는다 */
+    private void process(Long positionId, Long candidateId, String text, boolean strict) {
         if (candidateMapper.findById(candidateId) == null) {
             return; // 기다리는 동안 삭제됨
         }
@@ -123,6 +133,9 @@ public class BatchCheckService {
             candidateMapper.updateStatus(candidateId, CandidateStatus.FAILED,
                     "개인정보를 가리지 못했습니다. " + e.getMessage());
             return;
+        }
+        if (strict) {
+            return; // 사람이 가린 이력서를 확인하고 검사를 누를 때까지 기다린다
         }
         try {
             extractionService.checkFit(candidateId);

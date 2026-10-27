@@ -8,10 +8,6 @@
 <div class="rp-bar">
   <a class="rp-back" href="<c:url value='/results/${candidate.id}'/>"><svg class="i"><use href="#i-arrow-right"/></svg><c:out value="${candidate.displayName}"/></a>
   <span class="save-state" id="rp-state" aria-live="polite"></span>
-  <form method="post" action="<c:url value='/results/${candidate.id}/report'/>" data-busy="보고서를 다시 만드는 중"
-        data-confirm="보고서를 처음부터 다시 만듭니다. 보고서에서 고친 내용은 모두 사라집니다.">
-    <button type="submit" class="btn btn-ghost btn-sm">다시 만들기</button>
-  </form>
   <button type="button" class="btn btn-primary btn-sm" id="rp-pdf"><svg class="i"><use href="#i-download"/></svg>PDF 저장</button>
 </div>
 
@@ -32,11 +28,7 @@
 
   <section class="rp-sec">
     <div class="rp-h">
-      <h2><span class="rp-h-no">1</span>지원자 정보</h2>
-      <form class="rp-tools" method="post" data-partial="#rp" action="<c:url value='/results/${candidate.id}/report/info'/>" data-busy="지원자 정보를 찾는 중" data-busy-sub="면접 질문-답변에서 파견 가능 여부·입사 가능 시기·희망연봉을 찾고 있습니다">
-        <button type="submit" class="rp-tool">지원자 정보 다시 찾기</button>
-      </form>
-    </div>
+      <h2><span class="rp-h-no">1</span>지원자 정보</h2>    </div>
     <div class="rp-info" data-list="info">
       <c:forEach var="row" items="${report.info}">
         <div class="rp-cell rp-item">
@@ -56,8 +48,8 @@
       <div class="rp-tools">
         <form class="rp-seg" method="post" data-partial="#rp" action="<c:url value='/results/${candidate.id}/report/source'/>"
               data-confirm="질문과 답변을 다시 가져옵니다. 보고서에서 고친 질문과 답변은 사라집니다.">
-          <button type="${report.qaSource == 'SHEET' ? 'button' : 'submit'}" name="source" value="SHEET" aria-pressed="${report.qaSource == 'SHEET'}">타이핑</button>
-          <button type="${report.qaSource == 'RECORD' ? 'button' : 'submit'}" name="source" value="RECORD" aria-pressed="${report.qaSource == 'RECORD'}" ${hasRecord ? '' : 'disabled title="면접 기록이 없습니다"'}>녹음본</button>
+          <button type="${report.qaSource == 'SHEET' ? 'button' : 'submit'}" name="source" value="SHEET" aria-pressed="${report.qaSource == 'SHEET'}">면접전(타이핑)</button>
+          <button type="${report.qaSource == 'RECORD' ? 'button' : 'submit'}" name="source" value="RECORD" aria-pressed="${report.qaSource == 'RECORD'}" ${hasRecord ? '' : 'disabled title="면접 기록이 없습니다"'}>면접후(녹음본)</button>
         </form>
       </div>
     </div>

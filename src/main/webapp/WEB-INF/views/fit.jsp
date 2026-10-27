@@ -36,8 +36,15 @@
       <a href="#sec-profile">개인정보</a>
       <a href="#sec-evidence">평가 기준 충족 여부</a>
       <a href="#questions">면접 질문</a>
-      <a href="#opinion">AI 의견</a>
     </nav>
+    <%-- AI 의견: 누르면 뒤에서 받고(다른 일을 해도 된다), 끝나면 알린다. 받았으면 누를 때 창으로 연다 --%>
+    <div class="op-side" id="op-side" data-state="${opinionRunning ? 'RUNNING' : (empty r.opinion ? 'NONE' : 'DONE')}"
+         data-start="<c:url value='/results/${r.candidate.id}/opinion'/>" data-status="<c:url value='/results/${r.candidate.id}/opinion/status'/>">
+      <button type="button" class="op-btn" id="op-btn">
+        <span class="op-ico"><svg class="i"><use href="#i-spark"/></svg></span>
+        <span class="op-label">${opinionRunning ? 'AI 의견 추출 중…' : (empty r.opinion ? 'AI 의견 받기' : 'AI 의견 보기')}</span>
+      </button>
+    </div>
   </aside>
   </c:if>
 
@@ -62,14 +69,16 @@
             </div>
           </c:forEach>
         </div>
-        <button type="button" class="add-row bz-add" id="bz-add"><svg class="i"><use href="#i-plus"/></svg>지원자 추가</button>
-        <button type="submit" class="btn btn-primary btn-lg bz-submit">포지션 적합도 검사</button>
+        <c:if test="${not strictPrivacy}"><button type="button" class="add-row bz-add" id="bz-add"><svg class="i"><use href="#i-plus"/></svg>지원자 추가</button></c:if>
+        <button type="submit" class="btn btn-primary btn-lg bz-submit">${strictPrivacy ? '개인정보 가리기' : '포지션 적합도 검사'}</button>
       </form>
     </section>
   </c:when>
   <c:otherwise>
 <c:set var="st" value="${r.candidate.status}"/>
 <c:set var="busy" value="${st == 'QUEUED' or st == 'MASKING' or st == 'ANALYZING'}"/>
+<%-- 개인정보 엄격 보호 모드: 가린 뒤 멈춘 지원자는 가린 이력서를 확인·수정하고 검사한다 --%>
+<c:set var="reviewing" value="${strictPrivacy and st == 'UPLOADED' and not empty r.candidate.maskedText and not r.fitChecked}"/>
 <c:set var="pf" value="${r.profile}"/>
 <c:set var="showProfile" value="${r.fitChecked and ((not empty pf and pf.filled) or not empty position.requiredExperience)}"/>
 <c:set var="renameBtn"><c:if test="${not busy}"><button type="button" class="icon-btn" id="cand-rename" title="이름 바꾸기"><svg class="i"><use href="#i-pencil"/></svg></button></c:if></c:set>
@@ -80,21 +89,15 @@
     <button type="button" class="iv-fail${r.candidate.decision == 'FAIL' ? ' is-on' : ''}" data-decision="FAIL" aria-pressed="${r.candidate.decision == 'FAIL'}">불합격</button>
   </div>
   <%-- 보고서는 합격 여부와 상관없이 만들 수 있다 --%>
-  <c:choose>
-    <c:when test="${hasReport}">
-      <a class="btn btn-primary btn-sm iv-report" id="iv-report" href="<c:url value='/results/${r.candidate.id}/report'/>">보고서</a>
-    </c:when>
-    <c:otherwise>
-      <form class="iv-report" id="iv-report" method="post" action="<c:url value='/results/${r.candidate.id}/report'/>"
-            data-busy="보고서를 만드는 중" data-busy-sub="면접 질문지와 녹음본에서 지원자 정보를 찾고 있습니다">
-        <button type="submit" class="btn btn-primary btn-sm">보고서</button>
-      </form>
-    </c:otherwise>
-  </c:choose>
+  <%-- 보고서 버튼을 누를 때마다 묻지 않고 지금 기록에 맞춘다 (사용자 2026-10-27) --%>
+  <form class="iv-report" id="iv-report" method="post" action="<c:url value='/results/${r.candidate.id}/report'/>"
+        data-busy="${hasReport ? '보고서를 맞추는 중' : '보고서를 만드는 중'}">
+    <button type="submit" class="btn btn-primary btn-sm">보고서</button>
+  </form>
   <span class="save-state" id="iv-state" aria-live="polite"></span>
   <c:if test="${not busy}">
   <div class="cand-actions">
-  <c:if test="${not empty r.candidate.maskedText}">
+  <c:if test="${not empty r.candidate.maskedText and not reviewing}">
   <form method="post" action="<c:url value='/results/${r.candidate.id}/check'/>" data-busy="포지션 적합도를 검사하는 중"
         <c:if test="${not empty r.sections}">data-confirm="다시 검사하면 지금 질문지가 지워집니다. 계속할까요?"</c:if>>
     <button type="submit" class="btn btn-sm ${r.fitChecked ? 'btn-ghost' : 'btn-primary'}">${r.fitChecked ? '다시 검사' : '검사'}</button>
@@ -112,17 +115,25 @@
   </div>
   </c:if>
 </div>
-<%-- 가린 이력서(외부 AI가 본 글) 보기와 지원자가 낸 원본 파일 (가리지 않은 원본) --%>
+<%-- 가린 이력서(외부 AI가 본 글) 보기와 지원자가 낸 원본 파일 (가리지 않은 원본). 버튼 하나로 모아 누르면 목록이 열린다 (사용자 2026-10-27) --%>
+<c:set var="showMasked" value="${not empty r.candidate.maskedText and not reviewing}"/>
 <c:if test="${not empty candFiles or not empty r.candidate.maskedText}">
-<ul class="file-chips cand-files">
-  <c:if test="${not empty r.candidate.maskedText}">
-    <li><button type="button" class="file-chip is-masked" data-dialog="dlg-masked"><svg class="i"><use href="#i-eye"/></svg><span>가린 이력서</span></button></li>
-  </c:if>
-  <c:forEach var="cf" items="${candFiles}">
-    <li><a class="file-chip" href="<c:url value='/results/${r.candidate.id}/files/${cf.id}'/>" download title="내려받기">
-      <svg class="i"><use href="#i-file"/></svg><span><c:out value="${cf.fileName}"/></span></a></li>
-  </c:forEach>
-</ul>
+<c:if test="${not empty candFiles or showMasked}">
+<div class="cand-files">
+<details class="att">
+  <summary class="file-chip att-btn"><svg class="i"><use href="#i-clip"/></svg><span>첨부 파일</span><span class="att-count">${fn:length(candFiles) + (showMasked ? 1 : 0)}</span></summary>
+  <ul class="att-menu">
+    <c:if test="${showMasked}">
+      <li><button type="button" class="att-item is-masked" data-dialog="dlg-masked"><svg class="i"><use href="#i-eye"/></svg><span>가린 이력서</span><em>보기</em></button></li>
+    </c:if>
+    <c:forEach var="cf" items="${candFiles}">
+      <li><a class="att-item" href="<c:url value='/results/${r.candidate.id}/files/${cf.id}'/>" download title="<c:out value='${cf.fileName}'/>">
+        <svg class="i"><use href="#i-file"/></svg><span><c:out value="${cf.fileName}"/></span><em>내려받기</em></a></li>
+    </c:forEach>
+  </ul>
+</details>
+</div>
+</c:if>
 <c:if test="${not empty r.candidate.maskedText}">
 <dialog class="pf-dialog masked-dialog" id="dlg-masked">
   <header><h3>가린 이력서</h3><button type="button" class="icon-btn" data-close title="닫기"><svg class="i"><use href="#i-x"/></svg></button></header>
@@ -143,6 +154,21 @@
             <div class="progress-box" id="progress-box">
               <span class="spinner"></span>
               <strong>${st == 'QUEUED' ? '차례를 기다리는 중' : st == 'MASKING' ? '개인정보를 가리는 중' : '포지션 적합도를 검사하는 중'}</strong>
+            </div>
+          </c:when>
+          <c:when test="${reviewing}">
+            <div class="review" id="sec-review">
+              <form method="post" action="<c:url value='/results/${r.candidate.id}/check'/>" data-busy="포지션 적합도를 검사하는 중" id="review-form">
+                <div class="mask-view" id="mask-view" hidden></div>
+                <textarea name="maskedText" id="masked-text" class="crit-text"><c:out value="${r.candidate.maskedText}"/></textarea>
+              </form>
+              <div class="review-side">
+                <button type="submit" form="review-form" class="btn btn-primary btn-lg">포지션 적합도 검사</button>
+                <div class="review-tools">
+                  <button type="button" class="btn btn-ghost btn-sm" id="mask-edit">직접 고치기</button>
+                  <button type="button" class="btn btn-ghost btn-sm" id="mask-undo" hidden>되돌리기</button>
+                </div>
+              </div>
             </div>
           </c:when>
           <c:when test="${empty r.candidate.maskedText}">
@@ -376,8 +402,8 @@
   <header class="stage-head">
     <h2>면접 질문지</h2>
     <div class="qtabs" role="tablist">
-      <button type="button" role="tab" class="qtab" data-qtab="sheet" aria-selected="true">타이핑</button>
-      <button type="button" role="tab" class="qtab" data-qtab="record" aria-selected="false">녹음본<c:if test="${not empty record}"> <b>${fn:length(record.items)}</b></c:if></button>
+      <button type="button" role="tab" class="qtab" data-qtab="sheet" aria-selected="true">면접전(타이핑)</button>
+      <button type="button" role="tab" class="qtab" data-qtab="record" aria-selected="false">면접후(녹음본)<c:if test="${not empty record}"> <b>${fn:length(record.items)}</b></c:if></button>
     </div>
     <label class="iv-date">면접 본 날짜<input type="date" id="iv-date" value="${r.candidate.interviewDate}"><span class="save-state" id="iv-date-state" aria-live="polite"></span></label>
   </header>
@@ -546,17 +572,15 @@
 </section>
 </c:if>
 
-<%-- AI 의견 참고: 뽑는다면·안 뽑는다면 그 이유. 결정은 면접관이 한다 --%>
+<%-- AI 의견 참고: 뽑는다면·안 뽑는다면 그 이유. 결정은 면접관이 한다.
+     사이드바 버튼(#op-side)으로 뒤에서 받고, 끝나면 이 창으로 본다 (사용자 2026-10-27) --%>
 <c:if test="${qOpen}">
-<section class="stage op" id="opinion">
-  <header class="stage-head">
-    <h2>AI 의견 참고</h2>
+<dialog class="pf-dialog op-dialog" id="dlg-opinion">
+  <header>
+    <h3>AI 의견 참고</h3>
     <c:if test="${not empty r.opinion}"><span class="op-at"><c:out value="${r.opinion.askedAt}"/></span></c:if>
-    <div class="stage-actions">
-      <form method="post" action="<c:url value='/results/${r.candidate.id}/opinion'/>" data-partial="#opinion" data-busy="AI 의견을 받는 중">
-        <button type="submit" class="btn btn-sm ${empty r.opinion ? 'btn-primary' : 'btn-ghost'}">${empty r.opinion ? 'AI 의견 받기' : '다시 받기'}</button>
-      </form>
-    </div>
+    <button type="button" class="btn btn-ghost btn-sm op-again" id="op-again">다시 받기</button>
+    <button type="button" class="icon-btn" data-close title="닫기"><svg class="i"><use href="#i-x"/></svg></button>
   </header>
   <c:if test="${not empty r.opinion}">
     <div class="op-grid">
@@ -588,7 +612,7 @@
       </div>
     </div>
   </c:if>
-</section>
+</dialog>
 </c:if>
   </c:otherwise>
 </c:choose>

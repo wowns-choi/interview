@@ -9,6 +9,6 @@
     <c:when test="${row.status == 'FAILED'}"><c:set var="tail" value="실패"/></c:when>
     <c:otherwise><c:set var="tail" value="${row.statusLabel}"/></c:otherwise>
   </c:choose>
-  <option value="<c:url value='/results/${row.candidateId}'/>" data-in-progress="${row.inProgress}" data-tail="${tail}"${row.inProgress ? ' data-mark="'.concat(row.statusLabel).concat('" data-mark-kind="progress"') : row.status == 'FAILED' ? ' data-mark="실패" data-mark-kind="failed"' : ''}
+  <option value="<c:url value='/results/${row.candidateId}'/>" data-in-progress="${row.inProgress}" data-tail="${tail}"${row.inProgress ? ' data-mark="'.concat(row.statusLabel).concat('" data-mark-kind="progress"') : row.status == 'FAILED' ? ' data-mark="실패" data-mark-kind="failed"' : row.status == 'UPLOADED' ? ' data-mark="확인 대기" data-mark-kind="wait"' : ''}
           ${not empty r and r.candidate.id == row.candidateId ? 'selected' : ''}><c:out value="${row.displayName}"/></option>
 </c:forEach>

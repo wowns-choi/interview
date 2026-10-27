@@ -20,6 +20,7 @@ import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.util.MultiValueMap;
+import org.springframework.web.bind.annotation.ModelAttribute;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
@@ -48,6 +49,7 @@ import com.example.interview.service.ExtractionService;
 import com.example.interview.service.InterviewRecordService;
 import com.example.interview.service.OpinionService;
 import com.example.interview.service.PositionService;
+import com.example.interview.service.PrivacyModeService;
 import com.example.interview.service.RankingService;
 import com.example.interview.service.ReportService;
 import com.example.interview.web.dto.ConditionForm;
@@ -80,6 +82,13 @@ public class ExtractController {
     private final CandidateService candidateService;
     private final CustomQuestionTypeService customQuestionTypeService;
     private final CareerEvalService careerEvalService;
+    private final PrivacyModeService privacyMode;
+
+    /** 개인정보 엄격 보호 모드: 지원자 한 명씩, 가린 이력서를 확인한 뒤 검사 */
+    @ModelAttribute("strictPrivacy")
+    public boolean strictPrivacy() {
+        return privacyMode.isStrict();
+    }
 
     @GetMapping({"/", "/extract"})
     public String home() {
@@ -269,6 +278,7 @@ public class ExtractController {
         model.addAttribute("r", r);
         model.addAttribute("record", InterviewRecordService.parse(r.getCandidate().getRecordJson()));
         model.addAttribute("hasReport", r.getCandidate().getReportJson() != null);
+        model.addAttribute("opinionRunning", opinionService.isRunning(id));
         model.addAttribute("candFiles", candidateService.files(id));
         model.addAttribute("customTypes", customQuestionTypeService.list());
         addFit(model, r.getPosition().getId());
@@ -320,10 +330,17 @@ public class ExtractController {
         return "redirect:/results/" + id + "#extract";
     }
 
+    /** AI 의견은 뒤에서 받는다. 화면은 상태를 물어 끝나면 알린다 */
     @PostMapping("/results/{id}/opinion")
-    public String askOpinion(@PathVariable Long id) {
-        opinionService.ask(id);
-        return "redirect:/results/" + id + "#opinion";
+    public ResponseEntity<Void> askOpinion(@PathVariable Long id) {
+        opinionService.start(id);
+        return ResponseEntity.accepted().build();
+    }
+
+    @GetMapping("/results/{id}/opinion/status")
+    @ResponseBody
+    public Map<String, String> opinionStatus(@PathVariable Long id) {
+        return opinionService.status(id);
     }
 
     @PostMapping("/results/{id}/questions/merge")

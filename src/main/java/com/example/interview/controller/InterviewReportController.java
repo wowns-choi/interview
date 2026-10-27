@@ -62,21 +62,13 @@ public class InterviewReportController {
 
     @PutMapping("/results/{id}/report")
     public ResponseEntity<Void> saveReport(@PathVariable Long id, @RequestBody InterviewReport report) {
-        reportService.save(id, report);
+        reportService.saveEdited(id, report);
         return ResponseEntity.noContent().build();
     }
 
     @PostMapping("/results/{id}/report/source")
     public String useSource(@PathVariable Long id, @RequestParam String source) {
         reportService.useSource(id, source);
-        return "redirect:/results/" + id + "/report";
-    }
-
-    @PostMapping("/results/{id}/report/info")
-    public String refreshInfo(@PathVariable Long id, RedirectAttributes ra) {
-        int filled = reportService.refreshInfo(id);
-        ra.addFlashAttribute("message", filled == 0 ? "면접 질문-답변에서 파견 가능 여부·입사 가능 시기·희망연봉을 찾지 못했습니다."
-                : "지원자 정보 " + filled + "칸을 채웠습니다.");
         return "redirect:/results/" + id + "/report";
     }
 }

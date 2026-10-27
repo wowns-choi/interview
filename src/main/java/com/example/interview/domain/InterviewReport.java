@@ -28,6 +28,17 @@ public class InterviewReport {
     private List<InfoRow> info = new ArrayList<>();
     private List<QaItem> qa = new ArrayList<>();
     private List<Opinion> opinions = new ArrayList<>();
+    /** 파견 가능 여부·입사 가능 시기·희망연봉을 찾을 때 보낸 내용의 해시. 같으면 다시 묻지 않고 found를 쓴다 */
+    private String infoKey;
+    private Found found;
+
+    /** GPT가 면접 내용에서 찾은 값 (보고서에서 고쳐도 그대로) */
+    @Data
+    public static class Found {
+        private String dispatch = "";
+        private String startDate = "";
+        private String desiredSalary = "";
+    }
 
     @Data
     public static class InfoRow {

@@ -43,6 +43,7 @@ public class RankingRow {
             case MASKING -> "가리는 중";
             case ANALYZING -> "검사 중";
             case FAILED -> "실패";
+            case UPLOADED -> "확인 대기"; // 개인정보 엄격 보호 모드: 가린 이력서를 사람이 확인하기 전
             default -> "검토 중";
         };
     }
