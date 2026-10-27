@@ -231,9 +231,13 @@ public class TimelineView {
             if (!eval.counts(c.getAlias())) {
                 continue; // 외부 AI가 경력으로 세지 않은 것 (고객사 등)
             }
-            names.put(c.getAlias(), new String[] {"경력", or(c.getCompany(), "회사"), c.getDepartment()});
+            names.put(c.getAlias(), new String[] {"경력", or(c.getCompany(), "회사"),
+                    eval.unrelated(c.getAlias()) ? join(or(c.getDepartment(), ""), "포지션 무관") : c.getDepartment()});
         }
         for (CandidateProfile.Education e : p.getEducation()) {
+            if (e.isLevelOnly()) {
+                continue; // 「최종학력: 대학교(4년) 졸업」 같은 요약 줄
+            }
             names.put(e.getAlias(), new String[] {"학력", or(e.getSchool(), "학교"), join(e.getMajor(), e.getStatus())});
         }
         for (CandidateProfile.Training t : p.getTrainings()) {

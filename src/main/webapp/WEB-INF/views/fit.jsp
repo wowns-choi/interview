@@ -56,6 +56,7 @@
                 <span class="bz-no">지원자 ${n}</span>
                 <span class="dz-icon" aria-hidden="true"><svg class="i"><use href="#i-file"/></svg></span>
                 <span class="dz-text">이력서·포트폴리오를 끌어다 놓거나 클릭</span>
+                <span class="dz-types">PDF · DOC · DOCX · PPT · PPTX · HWP · HWPX</span>
               </label>
               <button type="button" class="icon-btn bz-del" title="빼기"><svg class="i"><use href="#i-trash"/></svg></button>
             </div>
@@ -187,7 +188,7 @@
             <c:set var="gauge" value="${r.careerGauge}"/>
             <c:set var="certs" value="${cev.certificates}"/>
             <div class="pf-checks">
-              <div class="pf-check"<c:if test="${not empty pf.careers}"> data-dialog="dlg-career" tabindex="0" role="button" aria-label="경력 자세히"</c:if>>
+              <div class="pf-check"<c:if test="${not empty r.relevantCareers}"> data-dialog="dlg-career" tabindex="0" role="button" aria-label="경력 자세히"</c:if>>
                 <div class="pf-check-head">
                   <c:choose>
                     <c:when test="${not empty fit.career}"><c:set var="markLabel" value="경력"/><c:set var="markKind" value="${fit.career ? 'met' : 'unmet'}"/><c:set var="markText" value="${fit.career ? '충족' : '미충족'}"/>
@@ -202,7 +203,7 @@
                 </div>
               </div>
 
-              <div class="pf-check"<c:if test="${not empty pf.education}"> data-dialog="dlg-education" tabindex="0" role="button" aria-label="학력 자세히"</c:if>>
+              <div class="pf-check"<c:if test="${not empty r.schools}"> data-dialog="dlg-education" tabindex="0" role="button" aria-label="학력 자세히"</c:if>>
                 <div class="pf-check-head">
                   <c:choose>
                     <c:when test="${not empty fit.education}"><c:set var="markLabel" value="학력"/><c:set var="markKind" value="${fit.education ? 'met' : 'unmet'}"/><c:set var="markText" value="${fit.education ? '충족' : '미충족'}"/>
@@ -266,13 +267,12 @@
             </c:if>
 
             <%-- 상세보기 창 --%>
-            <c:if test="${not empty pf.careers}">
+            <c:if test="${not empty r.relevantCareers}">
               <dialog class="pf-dialog" id="dlg-career">
                 <header><h3>경력 상세</h3><button type="button" class="icon-btn" data-close title="닫기"><svg class="i"><use href="#i-x"/></svg></button></header>
-                <c:if test="${not empty gauge}"><p class="pf-dialog-sum">총 경력 <c:out value="${gauge.actualText}"/><c:if test="${not empty gauge.relevantMonths}"> · 포지션 관련 <c:out value="${gauge.relevantText}"/></c:if></p></c:if>
+                <c:if test="${not empty gauge and not empty gauge.relevantMonths}"><p class="pf-dialog-sum">포지션 관련 <c:out value="${gauge.relevantText}"/></p></c:if>
                 <ul class="pf-list">
-                  <c:forEach var="cr" items="${pf.careers}">
-                    <c:if test="${empty r.careerEval or r.careerEval.counts(cr.alias)}">
+                  <c:forEach var="cr" items="${r.relevantCareers}">
                     <li>
                       <div class="pf-item-main">
                         <strong><c:out value="${cr.company}"/></strong>
@@ -285,17 +285,15 @@
                         </c:if>
                       </div>
                     </li>
-                    </c:if>
                   </c:forEach>
                 </ul>
               </dialog>
             </c:if>
-            <c:if test="${not empty pf.education}">
+            <c:if test="${not empty r.schools}">
               <dialog class="pf-dialog" id="dlg-education">
                 <header><h3>학력 상세</h3><button type="button" class="icon-btn" data-close title="닫기"><svg class="i"><use href="#i-x"/></svg></button></header>
-                <c:if test="${not empty cev.educationReason}"><p class="pf-dialog-sum"><c:out value="${cev.educationReason}"/></p></c:if>
                 <ul class="pf-list">
-                  <c:forEach var="ed" items="${pf.education}">
+                  <c:forEach var="ed" items="${r.schools}">
                     <li>
                       <div class="pf-item-main">
                         <strong><c:out value="${ed.school}"/></strong>
@@ -380,27 +378,29 @@
     <label class="iv-date">면접 본 날짜<input type="date" id="iv-date" value="${r.candidate.interviewDate}"><span class="save-state" id="iv-date-state" aria-live="polite"></span></label>
   </header>
   <div class="qpane" data-qpane="sheet">
-  <%-- 질문 추출: 유형을 골라 여러 번 추출해 쌓고, 질문지에 넣는다. 질문지가 있고 넣을 질문이 없으면 접어 둔다 --%>
-  <details class="qx" id="extract" ${empty r.sections or not empty r.extracted ? 'open' : ''}>
-    <summary class="qx-sum">
-      <span class="qx-title">질문 추출</span>
-      <c:if test="${not empty r.extracted}"><span class="qx-pending">질문지에 넣지 않은 질문 <b>${r.extractedCount}</b></span></c:if>
-    </summary>
-    <div class="qx-body">
-    <form class="qx-bar" method="post" data-partial="#questions" action="<c:url value='/results/${r.candidate.id}/questions/generate'/>" data-busy="면접 질문을 추출하는 중">
-      <div class="qx-group">
-        <span class="qx-cap">이력서에 쓴 것</span>
-        <label class="qx-type"><input type="checkbox" name="types" value="VERIFY" checked><span>거짓말 판독기</span></label>
-        <label class="qx-type"><input type="checkbox" name="types" value="DEPTH" checked><span>어디까지 알고 한 거야?</span></label>
-        <label class="qx-type"><input type="checkbox" name="types" value="CHOICE" checked><span>그 기술 왜 선택했어?</span></label>
+  <%-- 질문 추출: 버튼 → 창에서 유형 이름을 적고(기본 네 유형, 직접 적은 유형) 추출. 여러 번 추출해 쌓고, 질문지에 넣는다 --%>
+  <dialog class="pf-dialog qx-dialog" id="dlg-extract">
+    <header><h3>면접 질문 추출</h3><button type="button" class="icon-btn" data-close title="닫기"><svg class="i"><use href="#i-x"/></svg></button></header>
+    <form method="post" data-partial="#questions" action="<c:url value='/results/${r.candidate.id}/questions/generate'/>" data-busy="면접 질문을 추출하는 중" id="qx-form">
+      <%-- 기본 네 유형은 켜고 끄기만. 직접 만든 유형은 「+ 유형 추가」로 바로 저장되고, ×로 바로 지운다 --%>
+      <div class="qx-chips" id="qx-chips" data-url="<c:url value='/question-types'/>">
+        <c:forEach var="t" items="${['거짓말 판독기', '어디까지 알고 한 거야?', '그 기술 왜 선택했어?', '해본 적 있어?']}">
+          <label class="qx-type"><input type="checkbox" name="type" value="${t}" checked><span>${t}</span></label>
+        </c:forEach>
+        <c:forEach var="ct" items="${customTypes}">
+          <span class="qx-chip" data-id="${ct.id}"><label class="qx-type"><input type="checkbox" name="type" value="<c:out value='${ct.name}'/>" checked><span><c:out value="${ct.name}"/></span></label><button type="button" class="qx-chip-del" title="지우기"><svg class="i"><use href="#i-x"/></svg></button></span>
+        </c:forEach>
+        <button type="button" class="qx-add" id="qx-add"><svg class="i"><use href="#i-plus"/></svg>유형 추가</button>
+        <span class="qx-new-row" id="qx-new-row" hidden><input type="text" class="qx-new" id="qx-new" maxlength="60" placeholder="유형 이름" aria-label="추가할 유형"><button type="button" class="btn btn-primary btn-sm" id="qx-new-save">저장</button><button type="button" class="btn btn-ghost btn-sm" id="qx-new-cancel">취소</button></span>
       </div>
-      <div class="qx-group">
-        <span class="qx-cap">포지션 요구 기술</span>
-        <label class="qx-type"${r.experienceAskable ? '' : ' title="모든 평가 기준을 충족했습니다"'}><input type="checkbox" name="types" value="EXPERIENCE" ${r.experienceAskable ? 'checked' : 'disabled'}><span>해본 적 있어?</span></label>
-      </div>
-      <button type="submit" class="btn btn-primary">${r.extractedCount + r.questionCount > 0 ? '더 추출' : '질문 추출'}</button>
+      <footer class="qx-foot">
+        <button type="button" class="btn btn-ghost" data-close>취소</button>
+        <button type="submit" class="btn btn-primary">추출</button>
+      </footer>
     </form>
-
+  </dialog>
+  <div id="extract">
+    <button type="button" class="qx-empty" data-dialog="dlg-extract"><svg class="ico"><use href="#i-plus"/></svg>면접 질문 추출</button>
     <c:if test="${not empty r.extracted}">
       <div class="qx-pool" id="qx-pool">
         <div class="qx-pool-head">
@@ -427,7 +427,7 @@
                     </div>
                     <c:if test="${not empty qv.criterionName}"><div class="iq-meta"><span class="iq-crit"><c:out value="${qv.criterionName}"/></span></div></c:if>
                     <c:if test="${not empty qv.followUps}">
-                      <ul class="iq-follow"><c:if test="${not q.questionType.claim}"><li class="iq-follow-cap">해봤다고 하면</li></c:if><c:forEach var="f" items="${qv.followUps}"><li><c:out value="${f}"/></li></c:forEach></ul>
+                      <ul class="iq-follow"><c:if test="${q.questionType.experience}"><li class="iq-follow-cap">해봤다고 하면</li></c:if><c:forEach var="f" items="${qv.followUps}"><li><c:out value="${f}"/></li></c:forEach></ul>
                     </c:if>
                   </div>
                 </li>
@@ -437,8 +437,8 @@
         </c:forEach>
       </div>
     </c:if>
-    </div>
-  </details>
+    <c:if test="${not empty r.sections}"><hr class="qx-rule"></c:if>
+  </div>
   <c:if test="${not empty r.sections}">
   <div class="iq-board" id="iq-board">
     <c:forEach var="sec" items="${r.sections}">
@@ -451,6 +451,7 @@
               <c:when test="${q.origin == 'COMMON_PERSONALIZED'}"><c:set var="kind" value="personal"/><c:set var="kindLabel" value="공통 · 맞춤"/></c:when>
               <c:when test="${q.origin == 'COMMON_ORIGINAL' or q.origin == 'FIXED'}"><c:set var="kind" value="common"/><c:set var="kindLabel" value="공통"/></c:when>
               <c:when test="${q.origin == 'MANUAL' or empty q.questionType}"><c:set var="kind" value="manual"/><c:set var="kindLabel" value="직접 추가"/></c:when>
+              <c:when test="${q.questionType == 'CUSTOM'}"><c:set var="kind" value="custom"/><c:set var="kindLabel" value="${q.typeLabel}"/></c:when>
               <c:when test="${q.questionType.claim}"><c:set var="kind" value="verify"/><c:set var="kindLabel" value="${q.questionType.label}"/></c:when>
               <c:otherwise><c:set var="kind" value="skill"/><c:set var="kindLabel" value="${q.questionType.label}"/></c:otherwise>
             </c:choose>
@@ -469,12 +470,12 @@
                 <c:if test="${not empty qv.originalContent}"><p class="iq-origin"><span>원래 질문</span><c:out value="${qv.originalContent}"/></p></c:if>
                 <c:if test="${kind != 'common'}">
                   <div class="iq-meta">
-                    <span class="kind kind-${kind}">${kindLabel}</span>
+                    <span class="kind kind-${kind}"><c:out value="${kindLabel}"/></span>
                     <c:if test="${not empty qv.criterionName}"><span class="iq-crit"><c:out value="${qv.criterionName}"/></span></c:if>
                   </div>
                 </c:if>
                 <c:if test="${not empty qv.followUps}">
-                  <ul class="iq-follow"><c:if test="${not empty q.questionType and not q.questionType.claim}"><li class="iq-follow-cap">해봤다고 하면</li></c:if><c:forEach var="f" items="${qv.followUps}"><li><c:out value="${f}"/></li></c:forEach></ul>
+                  <ul class="iq-follow"><c:if test="${not empty q.questionType and q.questionType.experience}"><li class="iq-follow-cap">해봤다고 하면</li></c:if><c:forEach var="f" items="${qv.followUps}"><li><c:out value="${f}"/></li></c:forEach></ul>
                 </c:if>
               </div>
               <div class="q-answer">
@@ -504,10 +505,10 @@
     <form class="aa rec-form" id="rec-form" method="post" data-partial="#questions" enctype="multipart/form-data" action="<c:url value='/results/${r.candidate.id}/record'/>"
           data-busy="녹음본으로 면접 기록을 만드는 중" data-busy-sub="녹음본이 길면 몇 분 걸립니다"
           <c:if test="${not empty record}">data-confirm="면접 기록을 새로 만듭니다. 지금 기록은 바뀝니다." hidden</c:if>>
-      <textarea name="transcript" class="aa-text" rows="8" placeholder="면접 녹음본 글을 붙여넣으세요"><c:out value="${r.candidate.transcript}"/></textarea>
+      <textarea name="transcript" class="aa-text" rows="8" placeholder="녹음본 글을 붙여넣거나 파일을 끌어다 놓으세요"><c:out value="${r.candidate.transcript}"/></textarea>
+      <div class="aa-dropped" hidden><svg class="i"><use href="#i-file"/></svg><span class="aa-name"></span><button type="button" class="icon-btn js-aa-clear" title="빼기"><svg class="i"><use href="#i-x"/></svg></button></div>
       <div class="aa-foot">
-        <label class="btn btn-ghost btn-sm aa-file"><input type="file" name="file" accept=".txt,.md,.doc,.docx,.pdf,.hwp,.hwpx"><span>파일 선택</span></label>
-        <span class="aa-name"></span>
+        <label class="aa-file"><input type="file" name="file" accept=".txt,.md,.doc,.docx,.pdf,.hwp,.hwpx"><svg class="i"><use href="#i-file"/></svg><span>파일 올리기</span></label>
         <c:if test="${not empty record}"><button type="button" class="btn btn-ghost btn-sm" data-open="rec-form">취소</button></c:if>
         <button type="submit" class="btn btn-primary btn-sm">${empty record ? '면접 기록 만들기' : '다시 만들기'}</button>
       </div>

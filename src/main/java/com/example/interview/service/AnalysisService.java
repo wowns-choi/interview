@@ -93,6 +93,36 @@ public class AnalysisService {
      * 실패해도 지원자 상태는 그대로 두고 화면에 오류만 알린다.
      */
     public Extraction extractQuestions(Long candidateId, Collection<QuestionType> types) {
+        return extractQuestions(candidateId, types, List.of());
+    }
+
+    /** 창에 적은 유형 이름들: 기본 네 유형의 이름과 같으면 그 유형, 아니면 면접관이 직접 적은 유형 */
+    public Extraction extractQuestionsByNames(Long candidateId, List<String> names) {
+        List<QuestionType> types = new ArrayList<>();
+        List<String> customs = new ArrayList<>();
+        for (String raw : names == null ? List.<String>of() : names) {
+            String name = raw == null ? "" : raw.strip().replaceAll("\\s+", " ");
+            if (name.isEmpty()) {
+                continue;
+            }
+            QuestionType t = QuestionType.ofLabel(name);
+            if (t != null) {
+                types.add(t);
+            } else if (customs.stream().noneMatch(name::equalsIgnoreCase)) {
+                customs.add(name.length() > MAX_CUSTOM_CHARS ? name.substring(0, MAX_CUSTOM_CHARS) : name);
+            }
+        }
+        if (customs.size() > MAX_CUSTOMS) {
+            throw new BusinessException("직접 적은 유형은 " + MAX_CUSTOMS + "개까지 한 번에 추출할 수 있습니다.");
+        }
+        return extractQuestions(candidateId, types, customs);
+    }
+
+    static final int MAX_CUSTOMS = 6;
+    static final int MAX_CUSTOM_CHARS = 60;
+
+    /** @param customs 면접관이 직접 적은 유형 이름 (다듬은 것) */
+    public Extraction extractQuestions(Long candidateId, Collection<QuestionType> types, List<String> customs) {
         Candidate candidate = candidateService.get(candidateId);
         Position position = positionService.get(candidate.getPositionId());
         List<EvalCriterion> criteria = criteria(candidate);
@@ -101,14 +131,14 @@ public class AnalysisService {
             throw new BusinessException("포지션 적합도 검사를 먼저 하세요.");
         }
         List<QuestionType> chosen = QuestionType.SELECTABLE.stream().filter(types::contains).toList();
-        if (chosen.isEmpty()) {
-            throw new BusinessException("추출할 질문 유형을 고르세요.");
+        if (chosen.isEmpty() && customs.isEmpty()) {
+            throw new BusinessException("추출할 질문 유형을 적으세요.");
         }
         List<QuestionType> possible = chosen.stream()
                 .filter(t -> t.isClaim() ? !QuestionService.claimRefs(evidences).isEmpty()
                         : !QuestionService.experienceCriteria(criteria, evidences).isEmpty())
                 .toList();
-        if (possible.isEmpty()) {
+        if (possible.isEmpty() && customs.isEmpty()) {
             throw new BusinessException(chosen.contains(QuestionType.EXPERIENCE)
                     ? "모든 평가 기준을 충족해 '해본 적 있어?' 질문을 만들 평가 기준이 없습니다."
                     : "충족·부분 충족한 평가 기준이 없어 이력서 내용에 대한 질문을 만들 수 없습니다.");
@@ -117,7 +147,7 @@ public class AnalysisService {
         List<InterviewQuestion> existing = questionMapper.findByCandidateId(candidateId);
         QuestionResult extracted;
         try {
-            extracted = questionService.generate(position, candidate, criteria, evidences, possible, existing);
+            extracted = questionService.generate(position, candidate, criteria, evidences, possible, customs, existing);
         } catch (RuntimeException e) {
             log.error("질문 추출 실패 candidateId={}", candidateId, e);
             throw new BusinessException("질문을 추출하지 못했습니다. " + e.getMessage());
@@ -130,12 +160,17 @@ public class AnalysisService {
             q.setCandidateId(candidateId);
             q.setSection("");
             q.setOrigin(QuestionOrigin.CUSTOM);
-            q.setQuestionType(QuestionType.valueOf(item.getQuestionType()));
+            if (item.getQuestionType().startsWith("CUSTOM_")) {
+                q.setQuestionType(QuestionType.CUSTOM);
+                q.setTypeLabel(customs.get(Integer.parseInt(item.getQuestionType().substring("CUSTOM_".length())) - 1));
+            } else {
+                q.setQuestionType(QuestionType.valueOf(item.getQuestionType()));
+            }
             q.setContent(item.getContent().strip());
             q.setIntent(item.getIntent());
             q.setGoodSignal(item.getGoodSignal());
             q.setWarningSignal(item.getWarningSignal());
-            q.setFollowUps(JSON.writeValueAsString(item.getFollowUps() == null ? List.of() : item.getFollowUps()));
+            q.setFollowUps("[]"); // 꼬리질문은 만들지 않는다 (사용자 2026-10-26)
             q.setCriterionId(item.getCriterionId());
             q.setEvidenceId(item.getEvidenceId() == null ? null
                     : evidences.get(item.getEvidenceId().intValue() - 1).getId());
@@ -150,6 +185,21 @@ public class AnalysisService {
 
     /** @param skipped 골랐지만 물을 대상이 없어 만들지 않은 유형 */
     public record Extraction(int count, List<QuestionType> skipped) {
+    }
+
+    /**
+     * 질문이 하나도 없으면 공통 질문을 설정 순서 그대로 질문지로 만든다 (AI 호출 없음). 추출한 질문은 나중에 그 사이에 넣는다.
+     */
+    public void startCommonSheet(Long candidateId) {
+        if (!questionMapper.findByCandidateId(candidateId).isEmpty()) {
+            return;
+        }
+        List<QuestionTemplate> templates = templateMapper.findActive();
+        if (templates.isEmpty()) {
+            return;
+        }
+        List<InterviewQuestion> sheet = assembler.commonSheet(candidateId, sectionMapper.findAll(), templates);
+        transactionTemplate.executeWithoutResult(status -> sheet.forEach(questionMapper::insert));
     }
 
     /**

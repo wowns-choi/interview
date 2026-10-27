@@ -47,21 +47,33 @@ public class QuestionService {
     private final PromptLoader promptLoader;
 
     /**
+     * @param customs  면접관이 직접 적은 유형 이름. AI에는 CUSTOM_1, CUSTOM_2… 코드로 보내고 응답도 그 코드로 받는다
      * @param existing 이미 추출한 질문 (겹치지 않게 보낸다)
      */
     public QuestionResult generate(Position position, Candidate candidate, List<EvalCriterion> criteria,
-            List<Evidence> evidences, Collection<QuestionType> types, List<InterviewQuestion> existing) {
+            List<Evidence> evidences, Collection<QuestionType> types, List<String> customs, List<InterviewQuestion> existing) {
         Map<Long, Long> claimRefs = claimRefs(evidences);
         Set<Long> experience = experienceCriteria(criteria, evidences);
         Set<String> typeNames = types.stream().map(Enum::name).collect(Collectors.toCollection(LinkedHashSet::new));
         Set<String> claimTypes = types.stream().filter(QuestionType::isClaim).map(Enum::name).collect(Collectors.toSet());
+        Set<String> customCodes = new LinkedHashSet<>();
+        List<Object> customInput = new ArrayList<>();
+        for (int i = 0; i < customs.size(); i++) {
+            customCodes.add(customCode(i));
+            customInput.add(new CustomTypeInput(customCode(i), customs.get(i)));
+        }
+        typeNames.addAll(customCodes);
+        Set<Long> criteriaIds = criteria.stream().map(EvalCriterion::getId).collect(Collectors.toSet());
 
         StringBuilder sb = new StringBuilder();
         sb.append("<question_types>").append(String.join(", ", typeNames)).append("</question_types>\n\n");
+        if (!customInput.isEmpty()) {
+            sb.append("<custom_types>\n").append(toJson(customInput)).append("\n</custom_types>\n\n");
+        }
         sb.append("<job_posting>\n").append(position.getPostingText()).append("\n</job_posting>\n\n");
         sb.append("<criteria>\n").append(toJson(map(criteria, c -> new CriterionInput(c.getId(), c.getName(),
                 c.getDescription(), c.getCategory().name())))).append("\n</criteria>\n\n");
-        if (!claimTypes.isEmpty()) {
+        if (!claimTypes.isEmpty() || !customCodes.isEmpty()) {
             sb.append("<resume>\n").append(candidate.getMaskedText()).append("\n</resume>\n\n");
             sb.append("<evidence>\n").append(toJson(evidenceInput(evidences))).append("\n</evidence>\n\n");
         }
@@ -78,7 +90,12 @@ public class QuestionService {
                 .append("</career_level>");
 
         return aiClient.call(AiPurpose.QUESTION, candidate.getId(), promptLoader.load("questions"),
-                sb.toString(), QuestionResult.class, r -> r.validate(typeNames, claimRefs, experience, claimTypes));
+                sb.toString(), QuestionResult.class, r -> r.validate(typeNames, claimRefs, experience, claimTypes, customCodes, criteriaIds));
+    }
+
+    /** 직접 적은 유형의 AI용 코드 (0부터 받아 CUSTOM_1부터) */
+    public static String customCode(int index) {
+        return "CUSTOM_" + (index + 1);
     }
 
     /** 근거 참조값(1부터) → 평가항목 id. 근거 질문이 기댈 수 있는 직접·간접 근거만 */
@@ -179,6 +196,9 @@ public class QuestionService {
 
     private static String toJson(Object value) {
         return JSON.writerWithDefaultPrettyPrinter().writeValueAsString(value);
+    }
+
+    record CustomTypeInput(String code, String name) {
     }
 
     record CriterionInput(Long criterion_id, String name, String description, String category) {

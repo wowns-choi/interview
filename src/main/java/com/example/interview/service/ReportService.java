@@ -62,7 +62,12 @@ public class ReportService {
         // 그래도 없으면 가장 비슷한 원문을 저장하기 전에 검사한 근거는 여기서 찾아 보여 준다 (저장은 하지 않는다)
         evidences.stream().filter(e -> !"Y".equals(e.getVerifiedYn()) && e.getQuote() != null)
                 .forEach(e -> {
+                    String same;
                     if (quoteVerifier.verify(e.getQuote(), candidate.getMaskedText())) {
+                        e.setVerifiedYn("Y");
+                        e.setClosestQuote(null);
+                    } else if ((same = quoteVerifier.sameSpan(e.getQuote(), candidate.getMaskedText())) != null) {
+                        e.setQuote(same); // 몇 글자만 다르게 옮긴 인용은 원문 구간을 보여 준다
                         e.setVerifiedYn("Y");
                         e.setClosestQuote(null);
                     } else if (e.getClosestQuote() == null) {
@@ -134,7 +139,9 @@ public class ReportService {
         for (QuestionType t : QuestionType.values()) {
             for (InterviewQuestion q : questions) {
                 if (!q.isMerged() && q.getQuestionType() == t) {
-                    byLabel.computeIfAbsent(t.getLabel(), k -> new ArrayList<>()).add(view(q, criterionNames, Map.of()));
+                    // 직접 적은 유형은 적은 이름마다 따로 (기본 유형 뒤에)
+                    String label = t == QuestionType.CUSTOM && q.getTypeLabel() != null ? q.getTypeLabel() : t.getLabel();
+                    byLabel.computeIfAbsent(label, k -> new ArrayList<>()).add(view(q, criterionNames, Map.of()));
                 }
             }
         }

@@ -68,6 +68,14 @@ public class EvidenceService {
                 } else {
                     e.setQuote(item.getQuote());
                     boolean verified = quoteVerifier.verify(item.getQuote(), candidate.getMaskedText());
+                    if (!verified) {
+                        // 몇 글자만 다르게 옮긴 인용은 원문 구간으로 바꿔 통과시킨다
+                        String same = quoteVerifier.sameSpan(item.getQuote(), candidate.getMaskedText());
+                        if (same != null) {
+                            e.setQuote(same);
+                            verified = true;
+                        }
+                    }
                     e.setVerifiedYn(verified ? "Y" : "N");
                     quoted++;
                     if (!verified) {

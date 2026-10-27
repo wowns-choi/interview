@@ -19,6 +19,7 @@ import org.springframework.ui.Model;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PatchMapping;
+import org.springframework.util.MultiValueMap;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
@@ -41,6 +42,7 @@ import com.example.interview.resume.ResumeProcessingException;
 import com.example.interview.service.BatchCheckService;
 import com.example.interview.service.BusinessException;
 import com.example.interview.service.CandidateService;
+import com.example.interview.service.CustomQuestionTypeService;
 import com.example.interview.service.ExtractionService;
 import com.example.interview.service.InterviewRecordService;
 import com.example.interview.service.OpinionService;
@@ -75,6 +77,7 @@ public class ExtractController {
     private final RankingService rankingService;
     private final BatchCheckService batchCheckService;
     private final CandidateService candidateService;
+    private final CustomQuestionTypeService customQuestionTypeService;
 
     @GetMapping({"/", "/extract"})
     public String home() {
@@ -251,10 +254,16 @@ public class ExtractController {
     @GetMapping("/results/{id}")
     public String result(@PathVariable Long id, Model model) {
         ResultReport r = reportService.report(id);
+        // 검사가 끝났으면 질문을 추출하기 전에도 공통 질문은 질문지로 보인다
+        if (r.isFitChecked() && r.getSections().isEmpty() && r.getExtracted().isEmpty()) {
+            extractionService.startCommonSheet(id);
+            r = reportService.report(id);
+        }
         model.addAttribute("r", r);
         model.addAttribute("record", InterviewRecordService.parse(r.getCandidate().getRecordJson()));
         model.addAttribute("hasReport", r.getCandidate().getReportJson() != null);
         model.addAttribute("candFiles", candidateService.files(id));
+        model.addAttribute("customTypes", customQuestionTypeService.list());
         addFit(model, r.getPosition().getId());
         return "fit";
     }
@@ -291,8 +300,9 @@ public class ExtractController {
 
     @PostMapping("/results/{id}/questions/generate")
     public String extractQuestions(@PathVariable Long id,
-            @RequestParam(name = "types", required = false) List<QuestionType> types, RedirectAttributes ra) {
-        var result = extractionService.extractQuestions(id, types == null ? List.of() : types);
+            @RequestParam MultiValueMap<String, String> form, RedirectAttributes ra) {
+        // List<String>로 받으면 값이 하나일 때 쉼표로 쪼개지므로 ("협업, 갈등") 폼 값 그대로 받는다
+        var result = extractionService.extractQuestionsByNames(id, form.getOrDefault("type", List.of()));
         String message = "질문 " + result.count() + "개를 추출했습니다.";
         if (result.skipped().contains(QuestionType.EXPERIENCE)) {
             message += " 모든 평가 기준을 충족해 '해본 적 있어?' 질문은 만들지 않았습니다.";

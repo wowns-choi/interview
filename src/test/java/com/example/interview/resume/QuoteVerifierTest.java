@@ -79,4 +79,15 @@ class QuoteVerifierTest {
         assertThat(verifier.verify("현재 회사에서는...자기소개", text)).isFalse();
         assertThat(verifier.verify("...", text)).isFalse();
     }
+
+    @Test
+    void sameSpanReturnsOriginalWhenOnlyAFewLettersDiffer() {
+        String text = "주요 업무\n- AWS 및 CloudV 환경에 서비스 배포, Cloudflare–Nginx–Spring–DB–Python 서버 간 전체 아키텍처 직접 설계 및 구현\n"
+                + "- 사내 결제 모듈 리팩터링";
+        String quote = "AWS 및 CloudV 환경에 서비스 배포, Cloudflare–Nginx–Spring–DB–Python 전체 아키텍처를 직접 설계 및 구현";
+        assertThat(verifier.verify(quote, text)).isFalse();
+        assertThat(verifier.sameSpan(quote, text))
+                .isEqualTo("AWS 및 CloudV 환경에 서비스 배포, Cloudflare–Nginx–Spring–DB–Python 서버 간 전체 아키텍처 직접 설계 및 구현");
+        assertThat(verifier.sameSpan("사내 결제 모듈을 처음부터 새로 개발", text)).isNull();
+    }
 }

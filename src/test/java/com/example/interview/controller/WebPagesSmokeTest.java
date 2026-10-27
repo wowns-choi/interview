@@ -175,9 +175,20 @@ class WebPagesSmokeTest {
         assertThat(checked).contains("가나커머스", "class=\"cmp-sign\"", "공고", "id=\"dlg-career\"", "data-dialog=\"dlg-career\"",
                 "<h3>타임라인</h3>", "class=\"is-career\"", "2021.03 ~ 2024.02", "이력서상 기록 없음 <small>8개월</small>", "2020.07 ~ 2021.02")
                 .doesNotContain("class=\"gauge\"", "공고까지", "없는항목", "<h3>연봉", "5,000만원", "<h3>교육</h3>");
-        assertThat(checked).contains("홍길동", "부분 충족", "총 경력 2년 11개월", "포지션 관련 2년 6개월", "title=\"백엔드 업무 기간\"",
+        assertThat(checked).contains("홍길동", "부분 충족", "포지션 관련 2년 6개월", "title=\"백엔드 업무 기간\"",
                 "<h3 class=\"vmark is-unmet\">", "<span class=\"sr-only\">미충족</span>","일 100만 건 주문 데이터 배치 처리 개선", "원문에서 찾지 못한",
-                "질문 추출</button>", "name=\"types\" value=\"EXPERIENCE\" checked", "class=\"print-head\"").doesNotContain("<script>alert(1)</script>", "id=\"iq-board\"");
+                "id=\"dlg-extract\"", "class=\"qx-empty\"", "name=\"type\" value=\"해본 적 있어?\"", "class=\"print-head\"",
+                // 추출 전에도 공통 질문은 질문지로 보인다
+                "class=\"qx-rule\"", "id=\"iq-board\"").doesNotContain("<script>alert(1)</script>", "총 경력 2년 11개월");
+        // 직접 만든 질문 유형: 추가하면 저장되어 추출 창에 칩으로, 같은 이름은 하나, 기본 유형 이름은 거절
+        HttpResponse<String> addedType = json("POST", "/question-types", "{\"name\":\"  고객사  파견 적응력 \"}");
+        assertThat(addedType.statusCode()).isEqualTo(200);
+        String typeId = addedType.body().replaceAll(".*\"id\"\\s*:\\s*(\\d+).*", "$1");
+        assertThat(json("POST", "/question-types", "{\"name\":\"고객사 파견 적응력\"}").body()).contains("\"id\":" + typeId);
+        assertThat(json("POST", "/question-types", "{\"name\":\"해본 적 있어?\"}").statusCode()).isEqualTo(400);
+        assertThat(get("/results/" + id).body()).contains("data-id=\"" + typeId + "\"", "value=\"고객사 파견 적응력\"");
+        assertThat(json("DELETE", "/question-types/" + typeId, null).statusCode()).isEqualTo(204);
+        assertThat(get("/results/" + id).body()).doesNotContain("고객사 파견 적응력");
         // 점수: 근거 직접 1·없음 0·없음 0 (경력·학력은 점수에 넣지 않는다)
         assertThat(checked).contains("class=\"score-pill\"", "1<small> / 3점</small>").doesNotContain(" · 1 / 3</option>");
         String ranking = get("/ranking?position=" + positionId).body();
@@ -190,14 +201,14 @@ class WebPagesSmokeTest {
                 .doesNotContain("class=\"rk-no\">1<");
         assertThat(json("PATCH", "/positions/" + positionId + "/exclusions", "{\"career\":false,\"education\":false}").statusCode()).isEqualTo(204);
         extractionService.extractQuestions(id, com.example.interview.domain.QuestionType.SELECTABLE);
-        assertThat(get("/results/" + id).body()).contains("추출한 질문 <b>1</b>", "공통 질문과 합치기", "거짓말 판독기").doesNotContain("id=\"iq-board\"");
+        assertThat(get("/results/" + id).body()).contains("추출한 질문 <b>1</b>", "질문지에 넣기", "거짓말 판독기", "id=\"iq-board\"", "class=\"qx-empty\"");
         extractionService.mergeQuestions(id);
 
         HttpResponse<String> result = get("/results/" + id);
         assertThat(result.statusCode()).isEqualTo(200);
         String body = result.body();
-        assertThat(body).contains("100만 건 배치 처리 시간을 어떻게 측정하셨나요?", "병목은 어디였나요?", "답변 기록", "data-qtab=\"record\"", ">타이핑<", "면접 기록 만들기",
-                "질문 추가", "kind kind-verify\">거짓말 판독기<", "AI 의견 참고", "AI 의견 받기</button>", "id=\"must-check\"", "js-q-must", "id=\"iv-bar\"", "면접 본 날짜", "data-decision=\"PASS\"").doesNotContain("추출한 질문 <b>");
+        assertThat(body).contains("100만 건 배치 처리 시간을 어떻게 측정하셨나요?", "답변 기록", "data-qtab=\"record\"", ">타이핑<", "면접 기록 만들기",
+                "질문 추가", "kind kind-verify\">거짓말 판독기<", "AI 의견 참고", "AI 의견 받기</button>", "id=\"must-check\"", "js-q-must", "id=\"iv-bar\"", "면접 본 날짜", "data-decision=\"PASS\"").doesNotContain("추출한 질문 <b>", "병목은 어디였나요?");
 
         HttpResponse<String> addedQ = json("POST", "/results/" + id + "/questions", "{\"section\":\"기술 검증\",\"content\":\"추가 질문\"}");
         assertThat(addedQ.statusCode()).isEqualTo(200);

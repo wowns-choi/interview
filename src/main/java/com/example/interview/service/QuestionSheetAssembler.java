@@ -68,6 +68,18 @@ public class QuestionSheetAssembler {
         return renumber(sheet);
     }
 
+    /** 공통 질문만으로, 설정한 섹션·순서 그대로 만든 질문지 */
+    public List<InterviewQuestion> commonSheet(Long candidateId, List<QuestionSection> sections,
+            List<QuestionTemplate> templates) {
+        Map<Long, String> sectionNames = new HashMap<>();
+        sections.forEach(s -> sectionNames.put(s.getId(), s.getName()));
+        List<InterviewQuestion> sheet = new ArrayList<>();
+        for (QuestionTemplate t : templates) {
+            sheet.add(common(candidateId, sectionNames.getOrDefault(t.getSectionId(), LEFTOVER_SECTION), t));
+        }
+        return renumber(sheet);
+    }
+
     /**
      * 이미 있는 질문지는 그대로 두고 새로 추출한 질문만 넣는다: 같은 평가항목 질문 뒤, 없으면 마지막 추출 질문 뒤,
      * 그것도 없으면 맨 끝 "추가 질문" 섹션.

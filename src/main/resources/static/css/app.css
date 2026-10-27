@@ -410,6 +410,8 @@ textarea:focus, input:focus { outline: 0; border-color: var(--accent); box-shado
 .dz-x { flex: none; width: 24px; height: 24px; border: 0; border-radius: 50%; background: transparent; color: var(--muted); font-size: 16px; line-height: 1; cursor: pointer; }
 .dz-x:hover { background: var(--chip); color: var(--danger); }
 .has-file .dz-text { color: var(--muted); font-size: 14.5px; font-weight: 600; }
+.dz-types { color: var(--muted); font-size: 13px; font-weight: 600; letter-spacing: .02em; }
+.has-file .dz-types { display: none; }
 
 .panel-label { display: flex; align-items: center; gap: 8px; font-size: 15px; font-weight: 700; color: var(--muted); }
 .crit-text { flex: 1; min-height: 320px; background: var(--surface); border-color: var(--border); line-height: 1.7; resize: vertical; }
@@ -860,6 +862,7 @@ html.revealing .detail { opacity: 0; }
 .kind-personal { background: var(--data-weak); color: #3b5063; }
 .kind-verify { background: var(--warn-weak); color: var(--warn); }
 .kind-skill { background: var(--ok-weak); color: var(--ok); }
+.kind-custom { background: var(--accent-weak); color: var(--accent); }
 .iq-crit { padding-left: 8px; border-left: 1px solid var(--border); color: var(--muted); font-size: 14px; }
 .iq-follow { display: flex; flex-direction: column; gap: 4px; margin: 12px 0 0; padding: 0; list-style: none; }
 .iq-follow li { position: relative; padding-left: 18px; color: var(--muted); font-size: 15.5px; }
@@ -874,12 +877,23 @@ html.revealing .detail { opacity: 0; }
 /* 자동 답변 채우기로 넣은 답의 녹취 원문 (화면에만) */
 .q-excerpt { display: flex; align-items: baseline; gap: 8px; margin: 8px 2px 0; color: var(--muted); font-size: 14px; line-height: 1.6; white-space: pre-wrap; word-break: break-word; }
 .q-excerpt span { flex: none; padding: 0 6px; border: 1px solid var(--border-2); border-radius: 5px; color: var(--faint); font-size: 12px; font-weight: 700; line-height: 19px; }
-.aa { margin: -4px 0 24px; padding: 16px; border-radius: 14px; background: var(--surface-2); }
-.aa-text { display: block; width: 100%; min-height: 140px; padding: 12px 14px; border: 1px solid var(--border); border-radius: 10px; background: var(--surface); font-size: 15px; line-height: 1.6; resize: vertical; }
-.aa-foot { display: flex; align-items: center; gap: 8px; margin-top: 10px; }
-.aa-file { position: relative; cursor: pointer; }
+/* 녹음본 받기: 질문 추출 상자처럼 점선 하나 안에 글 칸과 파일 올리기 */
+.aa { margin: 28px 0 24px; border: 1.5px dashed var(--border-2); border-radius: 14px; background: var(--surface); transition: border-color .15s, background .15s; }
+.aa:focus-within { border-color: var(--muted); }
+.aa.is-over { border-color: var(--accent); background: var(--accent-weak); }
+.aa-text { display: block; width: 100%; min-height: 220px; padding: 22px 24px; border: 0; border-radius: 14px 14px 0 0; background: transparent; font-size: 15.5px; line-height: 1.7; resize: vertical; }
+.aa-text:focus { border: 0; box-shadow: none; }
+.aa-text::placeholder { color: var(--muted); }
+.aa-text[hidden] { display: none; }
+.aa-dropped { display: flex; align-items: center; justify-content: center; gap: 10px; min-height: 220px; padding: 22px 24px; color: var(--text); font-size: 16px; font-weight: 700; }
+.aa-dropped[hidden] { display: none; }
+.aa-dropped > .i { width: 22px; height: 22px; color: var(--accent); }
+.aa-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.aa-foot { display: flex; align-items: center; gap: 8px; padding: 12px 14px 12px 18px; border-top: 1px solid var(--border); }
+.aa-file { position: relative; display: inline-flex; align-items: center; gap: 7px; margin-right: auto; padding: 7px 12px; border-radius: 8px; color: var(--text-2); font-size: 14.5px; font-weight: 700; cursor: pointer; transition: background .15s, color .15s; }
+.aa-file:hover, .aa-file:focus-within { background: var(--hover); color: var(--text); }
+.aa-file .i { width: 17px; height: 17px; }
 .aa-file input { position: absolute; inset: 0; opacity: 0; cursor: pointer; }
-.aa-name { flex: 1; min-width: 0; color: var(--muted); font-size: 14px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .pdf-parts { display: flex; flex-wrap: wrap; gap: 10px 22px; }
 .pdf-parts label { display: flex; align-items: center; gap: 7px; font-weight: 600; cursor: pointer; }
 .pdf-parts input { width: 17px; height: 17px; accent-color: var(--accent); }
@@ -926,7 +940,7 @@ html.revealing .detail { opacity: 0; }
 .qx-pool-head h3 b { margin-left: 4px; color: var(--accent); }
 .qx-pool-head form { margin: 0 0 0 auto; }
 .qx-sec + .qx-sec { margin-top: 18px; }
-.qx .iq { grid-template-columns: 26px minmax(0, 1fr); }
+.qx-pool .iq { grid-template-columns: 26px minmax(0, 1fr); }
 .iq-no.is-static { cursor: default; }
 .iq-no.is-static:hover { box-shadow: none; color: var(--muted); }
 
@@ -1313,3 +1327,63 @@ button.file-chip { font-family: inherit; cursor: pointer; }
 .masked-dialog header { flex: none; }
 .masked-doc { flex: 1; min-height: 0; overflow: auto; padding: 20px 24px; border: 1px solid var(--border); border-radius: 12px; background: var(--surface-2); color: var(--text-2); font-size: 15.5px; line-height: 1.85; white-space: pre-wrap; word-break: break-word; }
 .mask-tag { display: inline-block; margin: 0 1px; padding: 0 6px; border-radius: 6px; background: var(--chip); color: var(--muted); font-size: 13px; font-weight: 700; line-height: 1.7; vertical-align: 1px; white-space: nowrap; }
+
+/* 면접 질문 추출: 질문지 머리의 버튼 → 유형 이름을 적는 창 (user 2026-10-26) */
+.qx-empty { display: flex; align-items: center; justify-content: center; gap: 8px; width: 100%; margin-top: 28px; padding: 64px 20px; border: 1.5px dashed var(--border-2); border-radius: 14px; background: transparent; color: var(--muted); font: inherit; font-size: 17px; font-weight: 700; cursor: pointer; transition: background .15s, color .15s, border-color .15s; }
+.qx-empty .ico { width: 20px; height: 20px; }
+.qx-rule { margin: 80px 0 64px; border: 0; border-top: 1px solid var(--border); }
+.qx-empty:hover, .qx-empty:focus-visible { background: var(--hover); color: var(--text); border-color: var(--muted); outline: none; }
+.qx-dialog { width: min(560px, calc(100vw - 32px)); padding: 24px 26px 22px; }
+.qx-chips { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin-top: 6px; }
+.qx-chip { position: relative; display: inline-flex; }
+.qx-chip .qx-type span { padding-right: 34px; }
+.qx-chip-del { position: absolute; top: 50%; right: 6px; width: 24px; height: 24px; margin-top: -12px; padding: 0; border: 0; border-radius: 50%; background: transparent; color: var(--muted); display: inline-flex; align-items: center; justify-content: center; cursor: pointer; }
+.qx-chip-del:hover { background: var(--danger-weak); color: var(--danger); }
+.qx-chip-del .i { width: 14px; height: 14px; }
+.qx-add { display: inline-flex; align-items: center; gap: 6px; height: 36px; padding: 0 14px 0 11px; border: 1px dashed var(--border-2); border-radius: 999px; background: transparent; color: var(--muted); font: inherit; font-size: 15px; font-weight: 600; cursor: pointer; }
+.qx-add:hover { border-color: var(--accent); color: var(--accent); }
+.qx-add .i { width: 15px; height: 15px; }
+.qx-add[hidden], .qx-new-row[hidden] { display: none; }
+.qx-new-row { display: inline-flex; align-items: center; gap: 6px; }
+.qx-new-row .btn { height: 36px; border-radius: 999px; }
+.qx-new { width: 180px; height: 36px; padding: 0 14px; border: 1px solid var(--accent); border-radius: 999px; background: var(--surface); color: var(--text); font: inherit; font-size: 15px; font-weight: 600; }
+.qx-new:focus { outline: none; box-shadow: 0 0 0 3px var(--accent-weak); }
+.qx-foot { display: flex; align-items: center; justify-content: flex-end; gap: 8px; margin-top: 18px; padding-top: 16px; border-top: 1px solid var(--border); }
+/* 추출한 질문은 아직 질문지 밖: 공통 질문(회색)과 갈리도록 초록으로 */
+.qx-pool { padding: 20px 22px 22px; border: 1px solid color-mix(in srgb, var(--accent) 28%, transparent); border-left: 4px solid var(--accent); border-radius: 14px; background: var(--accent-weak); }
+.qx-pool-head h3 { color: var(--accent); }
+.qx-pool .iq-sec-name { color: var(--accent); }
+.qx-pool .iq-sec-name::after { background: color-mix(in srgb, var(--accent) 25%, transparent); }
+.qx-pool .iq-no, .qx-pool .iq-no.is-static:hover { background: var(--accent); color: #fff; }
+.qx-pool .iq:hover { background: none; }
+.qx-pool .iq-crit { border-left-color: color-mix(in srgb, var(--accent) 30%, transparent); }
+#extract .qx-pool { margin-top: 48px; }
+
+/* 질문 추출 직후: 상자가 한 번 빛나고 새 질문이 차례로 떠오른다 (extract.js revealExtracted) */
+@media screen {
+  .qx-pool.is-new { animation: qx-glow 1.1s ease-out .3s; }
+  .qx-row.is-arriving { animation: qx-rise .5s cubic-bezier(.2, .8, .3, 1.15) both; animation-delay: calc(.35s + var(--i, 0) * 90ms); }
+}
+@keyframes qx-glow {
+  0% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--accent) 35%, transparent); }
+  100% { box-shadow: 0 0 0 14px transparent; }
+}
+@keyframes qx-rise {
+  from { opacity: 0; transform: translateY(14px) scale(.985); }
+  to { opacity: 1; transform: none; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .qx-pool.is-new, .qx-row.is-arriving { animation: none; }
+}
+@media screen {
+  .qx-pool-head .btn.is-hint { animation: qx-hint 1.1s ease-out .6s 3; }
+}
+@keyframes qx-hint {
+  0% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--accent) 55%, transparent); transform: scale(1); }
+  30% { transform: scale(1.06); }
+  60% { transform: scale(1); }
+  100% { box-shadow: 0 0 0 12px transparent; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .qx-pool-head .btn.is-hint { animation: none; }
+}

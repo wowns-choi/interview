@@ -50,6 +50,16 @@ public class CandidateProfile {
         public boolean isBlank() {
             return allBlank(school, major, status, period, gpa);
         }
+
+        /**
+         * 학교 이름 없이 학력 수준만 적힌 줄 ("대학교", "고등학교"). 이력서 양식의 「최종학력: 대학교(4년) 졸업」 요약을
+         * 로컬 AI가 학교로 뽑은 것이라 학력 상세·타임라인에서 뺀다 (user 2026-10-27)
+         */
+        @JsonIgnore
+        public boolean isLevelOnly() {
+            String name = school == null ? "" : school.replaceAll("\\(.*?\\)|\\s", "");
+            return name.matches("(대학교|대학|대학원|전문대학?|고등학교|고교|중학교|초대졸|대졸|고졸)?");
+        }
     }
 
     @Data

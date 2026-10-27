@@ -108,6 +108,26 @@ public class CareerEvalResult {
         return perCompany.stream().anyMatch(c -> c.getCompany() != null && bare(c.getCompany()).equals(key));
     }
 
+    /** 외부 AI가 이 회사에서 포지션 관련 경력을 하루라도 셌는지 (경력 상세에 이 회사만 보인다) */
+    public boolean relevant(String alias) {
+        if (perCompany == null || alias == null) {
+            return false;
+        }
+        String key = bare(alias);
+        return perCompany.stream().anyMatch(c -> c.getCompany() != null && bare(c.getCompany()).equals(key)
+                && c.getRelevantMonths() != null && c.getRelevantMonths() > 0);
+    }
+
+    /** 외부 AI가 이 회사 경력을 포지션과 전혀 관련 없다고 본 것 (관련 개월 0). 타임라인에 무관으로 적는다 */
+    public boolean unrelated(String alias) {
+        if (perCompany == null || alias == null) {
+            return false;
+        }
+        String key = bare(alias);
+        return perCompany.stream().anyMatch(c -> c.getCompany() != null && bare(c.getCompany()).equals(key)
+                && c.getRelevantMonths() != null && c.getRelevantMonths() == 0);
+    }
+
     /** 이 회사에서 외부 AI가 센 근무 개월 ("5개월"). 이력서에 기간 길이가 없을 때(재직중 등) 화면에 쓴다. 없으면 빈 문자열 */
     public String durationOf(String alias) {
         if (perCompany == null || alias == null) {

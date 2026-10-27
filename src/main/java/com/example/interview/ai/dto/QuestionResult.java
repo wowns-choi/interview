@@ -49,6 +49,15 @@ public class QuestionResult {
      */
     public void validate(Set<String> types, Map<Long, Long> claimRefs, Set<Long> experienceCriteria,
             Set<String> claimTypes) {
+        validate(types, claimRefs, experienceCriteria, claimTypes, Set.of(), Set.of());
+    }
+
+    /**
+     * @param customTypes 면접관이 직접 적은 유형의 코드 (CUSTOM_1…). 근거·평가항목은 있으면 맞는 것만 남기고 없어도 된다
+     * @param criteriaIds 이 포지션의 평가항목 id
+     */
+    public void validate(Set<String> types, Map<Long, Long> claimRefs, Set<Long> experienceCriteria,
+            Set<String> claimTypes, Set<String> customTypes, Set<Long> criteriaIds) {
         if (questions == null || questions.isEmpty()) {
             throw new AiResponseInvalidException("questions 배열이 비어 있습니다.");
         }
@@ -60,6 +69,16 @@ public class QuestionResult {
                 errors.add("questions[" + i + "].content 누락");
             } else if (!types.contains(q.questionType)) {
                 errors.add("questions[" + i + "].question_type은 " + String.join(", ", types) + " 중 하나여야 함");
+            } else if (customTypes.contains(q.questionType)) {
+                if (q.evidenceId != null && claimRefs.containsKey(q.evidenceId)) {
+                    q.criterionId = claimRefs.get(q.evidenceId);
+                } else {
+                    q.evidenceId = null;
+                    if (q.criterionId != null && !criteriaIds.contains(q.criterionId)) {
+                        q.criterionId = null;
+                    }
+                }
+                kept.add(q);
             } else if (claimTypes.contains(q.questionType)) {
                 if (q.evidenceId == null || !claimRefs.containsKey(q.evidenceId)) {
                     errors.add("questions[" + i + "].evidence_id는 <evidence>의 DIRECT/INDIRECT 근거여야 함");

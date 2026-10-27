@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.example.interview.mapper.CustomQuestionTypeMapper">
+
+    <select id="findAll" resultType="com.example.interview.domain.CustomQuestionType">
+        SELECT id, name FROM custom_question_type ORDER BY id
+    </select>
+
+    <insert id="insert" useGeneratedKeys="true" keyProperty="id" keyColumn="id">
+        INSERT INTO custom_question_type (name) VALUES (#{name})
+    </insert>
+
+    <delete id="delete">
+        DELETE FROM custom_question_type WHERE id = #{id}
+    </delete>
+</mapper>

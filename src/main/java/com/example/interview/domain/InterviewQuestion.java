@@ -10,6 +10,8 @@ public class InterviewQuestion {
     private String section;
     private QuestionOrigin origin;
     private QuestionType questionType;
+    /** 면접관이 직접 적은 유형 이름 (questionType이 CUSTOM일 때) */
+    private String typeLabel;
     private String content;
     /** 공통 질문을 지원자에 맞게 고쳤을 때 고치기 전 원문 */
     private String originalContent;

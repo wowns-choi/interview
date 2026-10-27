@@ -163,8 +163,16 @@ public class ExtractionService {
         return analysisService.extractQuestions(candidateId, types);
     }
 
+    public AnalysisService.Extraction extractQuestionsByNames(Long candidateId, List<String> names) {
+        return analysisService.extractQuestionsByNames(candidateId, names);
+    }
+
     public void mergeQuestions(Long candidateId) {
         analysisService.mergeQuestions(candidateId);
+    }
+
+    public void startCommonSheet(Long candidateId) {
+        analysisService.startCommonSheet(candidateId);
     }
 
     public List<ExtractionSummary> candidates(Long positionId) {

@@ -95,10 +95,162 @@
   initConditions();
   initCriteria();
   initQuestions();
+  initExtractDialog();
   // 질문 추출·합치기·면접 기록 뒤에는 그 영역만 새로 받아 오므로 다시 붙인다
   document.addEventListener('partial', function (e) {
-    if (e.detail.some(function (el) { return el.id === 'questions'; })) initQuestions();
+    if (e.detail.some(function (el) { return el.id === 'questions'; })) {
+      initQuestions();
+      initExtractDialog();
+      revealExtracted();
+    }
   });
+
+  // 추출이 끝나면 추출한 질문으로 부드럽게 내려가고, 새로 나온 질문이 차례로 떠오른다
+  var beforeExtract = null;
+  function revealExtracted() {
+    var before = beforeExtract;
+    beforeExtract = null;
+    var pool = document.getElementById('qx-pool');
+    if (!before || !pool) return;
+    var fresh = Array.prototype.filter.call(pool.querySelectorAll('.qx-row'), function (li) {
+      return before.indexOf(li.getAttribute('data-id')) < 0;
+    });
+    if (!fresh.length) return;
+    pool.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    pool.classList.remove('is-new');
+    void pool.offsetWidth;
+    pool.classList.add('is-new');
+    // 「질문지에 넣기」도 몇 번 고동쳐 다음 할 일을 알린다
+    var merge = pool.querySelector('.qx-pool-head button');
+    if (merge) {
+      merge.classList.add('is-hint');
+      setTimeout(function () { merge.classList.remove('is-hint'); }, 3600);
+    }
+    fresh.forEach(function (li, i) {
+      li.style.setProperty('--i', i);
+      li.classList.add('is-arriving');
+    });
+    setTimeout(function () {
+      pool.classList.remove('is-new');
+      fresh.forEach(function (li) { li.classList.remove('is-arriving'); li.style.removeProperty('--i'); });
+    }, 1400 + fresh.length * 90);
+  }
+
+  // ── 면접 질문 추출 창: 기본 네 유형은 켜고 끄기만, 직접 만든 유형은 추가하면 바로 서버에 저장되고 ×로 바로 지운다.
+  //    켜고 끈 상태는 「추출」을 누를 때만 브라우저에 남고, 취소·닫기는 그 상태로 되돌린다 ──
+  function initExtractDialog() {
+    var chips = document.getElementById('qx-chips');
+    var form = document.getElementById('qx-form');
+    if (!chips || !form) return;
+    var dialog = form.closest('dialog');
+    var url = chips.getAttribute('data-url');
+    var addBtn = document.getElementById('qx-add');
+    var input = document.getElementById('qx-new');
+    var newRow = document.getElementById('qx-new-row');
+    var submit = form.querySelector('[type=submit]');
+    var submitted = false;
+
+    var boxes = function () { return Array.prototype.slice.call(chips.querySelectorAll('.qx-type input')); };
+    var savedOff = function () {
+      try {
+        var off = JSON.parse(localStorage.getItem('qxOff') || '[]');
+        return Array.isArray(off) ? off : [];
+      } catch (err) { return []; }
+    };
+    var sync = function () { submit.disabled = !chips.querySelector('.qx-type input:checked'); };
+    var reset = function () {
+      var off = savedOff();
+      boxes().forEach(function (b) { b.checked = off.indexOf(b.value) < 0; });
+      closeInput();
+      sync();
+    };
+    var customChip = function (type) {
+      var wrap = document.createElement('span');
+      wrap.className = 'qx-chip';
+      wrap.setAttribute('data-id', type.id);
+      var label = document.createElement('label');
+      label.className = 'qx-type';
+      var box = document.createElement('input');
+      box.type = 'checkbox';
+      box.name = 'type';
+      box.value = type.name;
+      box.checked = true;
+      var text = document.createElement('span');
+      text.textContent = type.name;
+      label.append(box, text);
+      var del = document.createElement('button');
+      del.type = 'button';
+      del.className = 'qx-chip-del';
+      del.title = '지우기';
+      del.innerHTML = '<svg class="i"><use href="#i-x"/></svg>';
+      wrap.append(label, del);
+      return wrap;
+    };
+    var closeInput = function () {
+      newRow.hidden = true;
+      input.value = '';
+      addBtn.hidden = false;
+    };
+    var saving = false;
+    var commitInput = function () {
+      if (newRow.hidden || saving) return;
+      var name = input.value.replace(/\s+/g, ' ').trim();
+      if (!name) { closeInput(); return; }
+      var same = boxes().find(function (b) { return b.value.toLowerCase() === name.toLowerCase(); });
+      if (same) { same.checked = true; closeInput(); sync(); return; }
+      saving = true;
+      api('POST', url, { name: name }).then(function (type) {
+        var there = chips.querySelector('.qx-chip[data-id="' + type.id + '"] input');
+        if (there) there.checked = true;
+        else chips.insertBefore(customChip(type), addBtn);
+        closeInput();
+        sync();
+      }).catch(function () { input.focus(); }).then(function () { saving = false; });
+    };
+
+    reset();
+    addBtn.addEventListener('click', function () {
+      addBtn.hidden = true;
+      newRow.hidden = false;
+      input.focus();
+    });
+    input.addEventListener('keydown', function (e) {
+      if (e.isComposing) return;
+      if (e.key === 'Enter') { e.preventDefault(); commitInput(); }
+      if (e.key === 'Escape') { e.preventDefault(); closeInput(); addBtn.focus(); }
+    });
+    document.getElementById('qx-new-save').addEventListener('click', function () {
+      if (input.value.trim()) commitInput(); else input.focus();
+    });
+    document.getElementById('qx-new-cancel').addEventListener('click', function () { closeInput(); addBtn.focus(); });
+    chips.addEventListener('change', sync);
+    // ×: 서버에서 바로 지운다
+    chips.addEventListener('click', function (e) {
+      var del = e.target.closest('.qx-chip-del');
+      if (!del) return;
+      var chip = del.closest('.qx-chip');
+      api('DELETE', url + '/' + chip.getAttribute('data-id')).then(function () {
+        chip.remove();
+        sync();
+      }).catch(function () { /* 토스트로 알림 */ });
+    });
+    if (dialog) dialog.addEventListener('close', function () {
+      if (!submitted) reset();
+      submitted = false;
+    });
+    form.addEventListener('submit', function (e) {
+      if (!chips.querySelector('.qx-type input:checked')) {
+        e.preventDefault();
+        e.stopImmediatePropagation();
+        return;
+      }
+      var off = boxes().filter(function (b) { return !b.checked; }).map(function (b) { return b.value; });
+      try { localStorage.setItem('qxOff', JSON.stringify(off)); } catch (err) { /* 무시 */ }
+      submitted = true;
+      beforeExtract = Array.prototype.map.call(document.querySelectorAll('#qx-pool .qx-row'), function (li) { return li.getAttribute('data-id'); });
+      if (dialog && dialog.open) dialog.close();
+    });
+  }
   // 타임라인이 넓으면 최근 기록이 보이도록 오른쪽 끝에서 시작
   document.querySelectorAll('.tl-scroll').forEach(function (el) { el.scrollLeft = el.scrollWidth; });
 
@@ -673,10 +825,40 @@
   var form = document.getElementById('rec-form');
   if (!form) return;
   var file = form.querySelector('input[type=file]');
-  file.addEventListener('change', function () {
-    form.querySelector('.aa-name').textContent = file.files.length ? file.files[0].name : '';
-    // 파일을 고르면 붙여넣은 글 대신 파일로 만든다
-    if (file.files.length) form.querySelector('textarea').value = '';
+  var text = form.querySelector('textarea');
+  var dropped = form.querySelector('.aa-dropped');
+  // 파일을 고르면 붙여넣은 글 대신 파일로 만든다: 글 칸 자리에 파일 이름을 보여 준다
+  var showFile = function () {
+    var has = file.files.length > 0;
+    form.querySelector('.aa-name').textContent = has ? file.files[0].name : '';
+    dropped.hidden = !has;
+    text.hidden = has;
+    if (has) text.value = '';
+  };
+  file.addEventListener('change', showFile);
+  form.querySelector('.js-aa-clear').addEventListener('click', function () {
+    file.value = '';
+    showFile();
+    text.focus();
+  });
+  ['dragenter', 'dragover'].forEach(function (type) {
+    form.addEventListener(type, function (e) {
+      if (!e.dataTransfer || Array.prototype.indexOf.call(e.dataTransfer.types, 'Files') < 0) return;
+      e.preventDefault();
+      form.classList.add('is-over');
+    });
+  });
+  form.addEventListener('dragleave', function (e) {
+    if (!form.contains(e.relatedTarget)) form.classList.remove('is-over');
+  });
+  form.addEventListener('drop', function (e) {
+    form.classList.remove('is-over');
+    if (!e.dataTransfer || !e.dataTransfer.files.length) return;
+    e.preventDefault();
+    var dt = new DataTransfer();
+    dt.items.add(e.dataTransfer.files[0]);
+    file.files = dt.files;
+    showFile();
   });
   }
 })();

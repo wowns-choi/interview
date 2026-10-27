@@ -297,6 +297,46 @@ public class ExtractionFlowIntegrationTest {
     }
 
     @Test
+    void customQuestionTypesGoToAiAsCodesAndComeBackUnderTheirOwnNames() {
+        stubAi(aiClient, templateMapper, sectionMapper);
+        when(pdfTextExtractor.extract(any())).thenReturn(RESUME);
+        Long id = extractionService.uploadResume(startPosition(positionService, "백엔드 개발자"), List.of(pdf()));
+        extractionService.checkFit(id, null);
+
+        QuestionResult qr = new QuestionResult();
+        QuestionResult.Item mine = new QuestionResult.Item();
+        mine.setQuestionType("CUSTOM_1");
+        mine.setContent("팀원과 의견이 갈렸을 때 어떻게 정리하셨나요?");
+        mine.setCriterionId(999_999L); // 없는 평가항목은 지운다
+        QuestionResult.Item verify = new QuestionResult.Item();
+        verify.setQuestionType("VERIFY");
+        verify.setContent("배치 처리 시간은 어떻게 측정하셨나요?");
+        verify.setEvidenceId(1L);
+        qr.setQuestions(List.of(mine, verify));
+        org.mockito.ArgumentCaptor<String> input = org.mockito.ArgumentCaptor.forClass(String.class);
+        when(aiClient.call(eq(AiPurpose.QUESTION), anyLong(), anyString(), input.capture(), eq(QuestionResult.class), any()))
+                .thenAnswer(inv -> {
+                    java.util.function.Consumer<QuestionResult> check = inv.getArgument(5);
+                    check.accept(qr);
+                    return qr;
+                });
+
+        // 기본 유형 이름은 그 유형으로, 나머지는 직접 적은 유형 (쉼표가 있어도 한 유형)
+        var result = extractionService.extractQuestionsByNames(id, List.of(" 거짓말 판독기 ", "협업, 갈등 경험", "", "협업, 갈등 경험"));
+        assertThat(result.count()).isEqualTo(2);
+        assertThat(input.getValue()).contains("<question_types>VERIFY, CUSTOM_1</question_types>", "<custom_types>",
+                "\"code\" : \"CUSTOM_1\"", "\"name\" : \"협업, 갈등 경험\"").doesNotContain("CUSTOM_2");
+        ResultReport pooled = reportService.report(id);
+        assertThat(pooled.getExtracted()).extracting(SectionView::getSection).containsExactly("거짓말 판독기", "협업, 갈등 경험");
+        assertThat(pooled.getExtracted().get(1).getQuestions().get(0).getQuestion())
+                .extracting("questionType", "typeLabel", "criterionId", "evidenceId")
+                .containsExactly(QuestionType.CUSTOM, "협업, 갈등 경험", null, null);
+
+        assertThatThrownBy(() -> extractionService.extractQuestionsByNames(id, List.of(" ", "")))
+                .isInstanceOf(BusinessException.class).hasMessageContaining("유형");
+    }
+
+    @Test
     void opinionGetsAnswersButNoPersonalDataAndARecheckClearsIt() {
         stubAi(aiClient, templateMapper, sectionMapper);
         when(pdfTextExtractor.extract(any())).thenReturn(RESUME);
@@ -679,7 +719,11 @@ public class ExtractionFlowIntegrationTest {
                             result(ids.get(1), item("NONE", null)),
                             result(ids.get(2), item("NONE", null))));
                     EvidenceResult.Career calc = new EvidenceResult.Career();
-                    calc.setPerCompany(List.of());
+                    CareerEvalResult.Company ganara = new CareerEvalResult.Company();
+                    ganara.setCompany("A사");
+                    ganara.setMonths(35);
+                    ganara.setRelevantMonths(30);
+                    calc.setPerCompany(List.of(ganara));
                     calc.setTotalMonths(35);
                     calc.setTotalReason("A사 35개월");
                     calc.setRelevantMonths(30);

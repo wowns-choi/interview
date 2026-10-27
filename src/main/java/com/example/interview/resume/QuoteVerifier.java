@@ -8,6 +8,8 @@ public class QuoteVerifier {
 
     /** 가장 비슷한 원문은 이만큼 이상 비슷할 때만 보여 준다 (그보다 다르면 아무 문장이나 끌어온 셈) */
     static final double MIN_SIMILARITY = 0.5;
+    /** 이만큼 이상 비슷하면 AI가 옮기며 몇 글자 바꾼 것으로 보고 원문 구간을 인용으로 쓴다 (user 2026-10-27: "서버 간"을 뺀 인용) */
+    static final double SAME_SIMILARITY = 0.9;
     /** 너무 긴 인용은 앞부분만으로 찾는다 (계산량: 인용 글자 수 × 원문 글자 수) */
     private static final int MAX_QUOTE_CHARS = 600;
     /** 줄임표: "…" 또는 점 두 개 이상 */
@@ -53,11 +55,21 @@ public class QuoteVerifier {
         return Character.isLetterOrDigit(cp);
     }
 
+    /** 원문에서 인용과 가장 비슷한 구간. {@link #MIN_SIMILARITY} 미만이면 null */
+    public String closest(String quote, String text) {
+        return within(quote, text, MIN_SIMILARITY);
+    }
+
+    /** 인용과 거의 같은 원문 구간 ({@link #SAME_SIMILARITY} 이상). 없으면 null */
+    public String sameSpan(String quote, String text) {
+        return within(quote, text, SAME_SIMILARITY);
+    }
+
     /**
      * 원문에서 인용과 가장 비슷한 구간을 원문 모양 그대로(줄바꿈·문장부호 포함) 돌려준다.
-     * 글자와 숫자만 놓고 편집 거리가 가장 작은 부분 문자열을 찾는다. 비슷한 정도가 {@link #MIN_SIMILARITY} 미만이면 null.
+     * 글자와 숫자만 놓고 편집 거리가 가장 작은 부분 문자열을 찾는다. 비슷한 정도가 minSimilarity 미만이면 null.
      */
-    public String closest(String quote, String text) {
+    private String within(String quote, String text, double minSimilarity) {
         if (quote == null || text == null) {
             return null;
         }
@@ -121,7 +133,7 @@ public class QuoteVerifier {
         }
         double similarity = 1.0 - (double) prev[best] / m;
         int start = prevStart[best];
-        if (similarity < MIN_SIMILARITY || start >= best) {
+        if (similarity < minSimilarity || start >= best) {
             return null;
         }
         return text.substring(pos[start], pos[best - 1] + Character.charCount(text.codePointAt(pos[best - 1]))).strip();

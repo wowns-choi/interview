@@ -14,10 +14,10 @@
 
     <insert id="insert" useGeneratedKeys="true" keyProperty="id" keyColumn="id">
         INSERT INTO interview_question
-            (candidate_id, section, origin, question_type, content, original_content, intent, good_signal, warning_signal,
+            (candidate_id, section, origin, question_type, type_label, content, original_content, intent, good_signal, warning_signal,
              follow_ups, resume_answered_yn, template_id, criterion_id, evidence_id, priority, sort_order, merged, must_ask)
         VALUES
-            (#{candidateId}, #{section}, #{origin}, #{questionType}, #{content}, #{originalContent}, #{intent}, #{goodSignal}, #{warningSignal},
+            (#{candidateId}, #{section}, #{origin}, #{questionType}, #{typeLabel}, #{content}, #{originalContent}, #{intent}, #{goodSignal}, #{warningSignal},
              #{followUps}, #{resumeAnsweredYn}, #{templateId}, #{criterionId}, #{evidenceId}, #{priority}, #{sortOrder}, #{merged}, #{mustAsk})
     </insert>
 

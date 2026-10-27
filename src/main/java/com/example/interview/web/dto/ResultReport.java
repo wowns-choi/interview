@@ -33,6 +33,25 @@ public class ResultReport {
     Map<Long, Evidence> evidenceById;
     AiUsageSummary usage;
 
+    /** 학력 상세에 보일 학교: 학교 이름 없이 수준만 적힌 줄은 뺀다 */
+    public List<CandidateProfile.Education> getSchools() {
+        if (profile == null || profile.getEducation() == null) {
+            return List.of();
+        }
+        return profile.getEducation().stream().filter(e -> !e.isLevelOnly()).toList();
+    }
+
+    /** 경력 상세에 보일 회사: 외부 AI가 포지션 관련 경력을 센 회사만 (user 2026-10-27). 회사별 계산이 없으면 모두 */
+    public List<CandidateProfile.Career> getRelevantCareers() {
+        if (profile == null || profile.getCareers() == null) {
+            return List.of();
+        }
+        if (careerEval == null || careerEval.getPerCompany() == null) {
+            return profile.getCareers();
+        }
+        return profile.getCareers().stream().filter(c -> careerEval.relevant(c.getAlias())).toList();
+    }
+
     /** 경력 막대. 공고 경력이나 지원자 경력을 숫자로 읽을 수 없으면 null */
     public CareerGauge getCareerGauge() {
         return CareerGauge.of(profile, position.getRequiredExperience(), careerEval);
