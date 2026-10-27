@@ -494,6 +494,7 @@ public class ExtractController {
     private void extractCriteria(Long positionId, RedirectAttributes ra) {
         try {
             positionService.extractCriteria(positionId);
+            ra.addFlashAttribute("justExtracted", true); // 공고와 평가 기준을 글 쓰듯 한 번 보여 준다
         } catch (AiCallException e) {
             log.warn("평가항목 추출 실패 positionId={}: {}", positionId, e.getMessage());
             ra.addFlashAttribute("error", "평가 기준을 추출하지 못했습니다. " + e.getMessage());

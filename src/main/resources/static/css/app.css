@@ -1179,6 +1179,8 @@ html.revealing .detail { opacity: 0; }
 .att-item:hover em { color: var(--accent); }
 .att-item.is-masked .i, .att-item.is-masked span { color: var(--accent); }
 .att-menu li:has(.is-masked):not(:last-child) { margin-bottom: 4px; padding-bottom: 4px; border-bottom: 1px solid var(--chip); }
+.att.is-left .att-menu { left: 0; right: auto; }
+.pos-split .att { margin: -6px 0 24px; }
 .iv-bar .save-state { position: static; }
 
 /* 자격증 */
@@ -1454,3 +1456,9 @@ button.file-chip { font-family: inherit; cursor: pointer; }
 @media (prefers-reduced-motion: reduce) {
   .qx-pool-head .btn.is-hint { animation: none; }
 }
+
+/* 평가 기준을 막 추출했을 때 글 쓰듯 채우기 (extract.js initWriting) */
+.wr-wait { visibility: hidden; }
+.wr-wait::before { content: none !important; }
+.wr-caret { display: inline-block; width: 2px; height: 1.05em; margin-left: 1px; background: var(--accent); vertical-align: -0.15em; animation: wr-blink .8s steps(1) infinite; }
+@keyframes wr-blink { 50% { opacity: 0; } }

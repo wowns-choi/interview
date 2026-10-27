@@ -97,6 +97,7 @@
   initQuestions();
   initExtractDialog();
   initReview();
+  initWriting();
   // 질문 추출·합치기·면접 기록 뒤에는 그 영역만 새로 받아 오므로 다시 붙인다
   document.addEventListener('partial', function (e) {
     if (e.detail.some(function (el) { return el.id === 'questions'; })) {
@@ -136,6 +137,84 @@
       fresh.forEach(function (li) { li.classList.remove('is-arriving'); li.style.removeProperty('--i'); });
     }, 1400 + fresh.length * 90);
   }
+
+  // ── 평가 기준을 막 추출했으면 공고와 조건·평가 기준을 글 쓰듯 채운다 (사용자 2026-10-27: 한꺼번에 팍 나오던 것) ──
+  // 누르거나 키를 누르면 바로 끝까지 보인다
+  function initWriting() {
+    var grid = document.querySelector('.pos-grid[data-write]');
+    if (!grid || (window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches)) return;
+    // 공고(왼쪽)와 조건·평가 기준(오른쪽)을 동시에 쓴다
+    var tracks = [[], []];
+    var all = [];
+    var add = function (track, el, msPerChar, maxMs, row) {
+      var text = el.textContent;
+      if (!text.trim()) return;
+      el.textContent = '';
+      el.classList.add('wr-wait');
+      if (row) row.classList.add('wr-wait');
+      var s = { el: el, text: text, ms: Math.min(maxMs, text.length * msPerChar), row: row };
+      tracks[track].push(s);
+      all.push(s);
+    };
+    var posting = grid.querySelector('.posting');
+    if (posting) add(0, posting, 4, 2400);
+    grid.querySelectorAll('#conds dd').forEach(function (dd) { add(1, dd, 30, 500); });
+    grid.querySelectorAll('#crit-list .crit').forEach(function (li) {
+      add(1, li.querySelector('.crit-name'), 30, 700, li);
+      add(1, li.querySelector('.crit-desc'), 12, 900);
+    });
+    if (!all.length) return;
+
+    var done = false;
+    var show = function (s) {
+      s.el.classList.remove('wr-wait');
+      if (s.row) s.row.classList.remove('wr-wait');
+    };
+    var carets = [];
+    var finish = function () {
+      if (done) return;
+      done = true;
+      carets.forEach(function (c) { c.remove(); });
+      all.forEach(function (s) { show(s); s.el.textContent = s.text; });
+      document.removeEventListener('pointerdown', finish, true);
+      document.removeEventListener('keydown', finish, true);
+    };
+    var left = tracks.filter(function (t) { return t.length; }).length;
+    var run = function (steps) {
+      var caret = document.createElement('span');
+      caret.className = 'wr-caret';
+      carets.push(caret);
+      var i = 0, node, startAt;
+      var begin = function () {
+        show(steps[i]);
+        node = document.createTextNode('');
+        steps[i].el.replaceChildren(node, caret);
+        startAt = performance.now();
+      };
+      var frame = function (now) {
+        if (done) return;
+        var s = steps[i];
+        var n = Math.min(s.text.length, Math.ceil((now - startAt) / s.ms * s.text.length));
+        node.data = s.text.slice(0, n);
+        if (n >= s.text.length) {
+          s.el.textContent = s.text;
+          if (++i >= steps.length) {
+            caret.remove();
+            if (--left === 0) finish();
+            return;
+          }
+          begin();
+        }
+        requestAnimationFrame(frame);
+      };
+      begin();
+      requestAnimationFrame(frame);
+    };
+    document.addEventListener('pointerdown', finish, true);
+    document.addEventListener('keydown', finish, true);
+    tracks.forEach(function (t) { if (t.length) run(t); });
+  }
+
 
   // ── 개인정보 엄격 보호 모드: 가린 이력서 확인. 드래그해서 가리기(같은 글자 모두), 직접 고치기, 되돌리기 ──
   function initReview() {

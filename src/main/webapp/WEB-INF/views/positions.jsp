@@ -41,13 +41,17 @@
         </div>
       </c:if>
     </header>
+    <%-- 올린 공고 파일: 지원자 화면처럼 「첨부 파일」 버튼 하나로 모은다 (사용자 2026-10-27) --%>
     <c:if test="${not empty position and not empty files}">
-      <ul class="file-chips">
-        <c:forEach var="pf" items="${files}">
-          <li><a class="file-chip" href="<c:url value='/positions/${position.id}/files/${pf.id}'/>" download title="내려받기">
-            <svg class="i"><use href="#${fn:startsWith(pf.contentType, 'image/') ? 'i-image' : 'i-file'}"/></svg><span><c:out value="${pf.fileName}"/></span></a></li>
-        </c:forEach>
-      </ul>
+      <details class="att is-left">
+        <summary class="file-chip att-btn"><svg class="i"><use href="#i-clip"/></svg><span>첨부 파일</span><span class="att-count">${fn:length(files)}</span></summary>
+        <ul class="att-menu">
+          <c:forEach var="pf" items="${files}">
+            <li><a class="att-item" href="<c:url value='/positions/${position.id}/files/${pf.id}'/>" download title="<c:out value='${pf.fileName}'/>">
+              <svg class="i"><use href="#${fn:startsWith(pf.contentType, 'image/') ? 'i-image' : 'i-file'}"/></svg><span><c:out value="${pf.fileName}"/></span><em>내려받기</em></a></li>
+          </c:forEach>
+        </ul>
+      </details>
     </c:if>
 
     <c:choose>
@@ -66,7 +70,7 @@
         </form>
       </c:when>
       <c:otherwise>
-        <div class="pos-grid">
+        <div class="pos-grid"${justExtracted ? ' data-write' : ''}>
           <section class="pos-col">
             <h3 class="col-label">공고</h3>
             <c:if test="${not empty position.jdText}">
