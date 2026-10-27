@@ -65,7 +65,7 @@ class WebPagesSmokeTest {
         assertThat(get("/extract").statusCode()).isEqualTo(302);
         HttpResponse<String> positions = get("/positions");
         assertThat(positions.statusCode()).isEqualTo(200);
-        assertThat(positions.body()).contains("공통 질문 설정", "평가 기준 추출", "포지션 적합도 검사", "지원자 비교", "새 포지션", "평가 기준 추출<svg", "파일 추가")
+        assertThat(positions.body()).contains("공통 질문 설정", "평가 기준 추출", "포지션 적합도 검사", "지원자 비교", "새 포지션", "id=\"crit-go\"", "파일 추가")
                 .doesNotContain("jsessionid", "type=\"file\" id=\"resume\"");
         HttpResponse<String> settings = get("/settings");
         assertThat(settings.statusCode()).isEqualTo(200);
@@ -117,7 +117,7 @@ class WebPagesSmokeTest {
                 .doesNotContain("필수", "우대", "type=\"file\" id=\"resume\"", "<dt>연봉</dt>");
         // 적합도 검사: 포지션은 고르기만, 평가항목은 읽기 전용
         String fitPage = get("/fit?position=" + positionId).body();
-        assertThat(fitPage).contains("name=\"applicant-1\"", "data-nav", "selected", "class=\"pick-new is-active\"", "지원자 추가", "포지션 적합도 검사</button>")
+        assertThat(fitPage).contains("name=\"applicant-1\"", "data-nav", "selected", "class=\"pick-new is-active\"", "지원자 추가", "id=\"bz-go\"")
                 .doesNotContain("평가 기준 추가", "js-crit-edit", "class=\"pick-crit\"", "(1인)", "(다수)", "id=\"resume\"");
         assertThat(get("/fit").body()).contains("name=\"applicant-1\"");
         HttpResponse<String> crit = json("POST", "/positions/" + positionId + "/criteria",
@@ -136,7 +136,7 @@ class WebPagesSmokeTest {
         assertThat(get("/positions/more?offset=0").body()).contains("class=\"side-pos\"", "백엔드 개발자 (Java)");
         assertThat(get("/positions/more?offset=30").body()).doesNotContain("side-pos");
         // 경력·학력 조건 칸 (값을 바꾸면 뒤의 점수 확인이 달라지므로 화면과 없는 포지션만 본다)
-        assertThat(get("/positions/" + positionId).body()).contains("id=\"conds\"", "data-key=\"requiredEducation\"", "id=\"conds-edit\"", "data-exp-kind=");
+        assertThat(get("/positions/" + positionId).body()).contains("id=\"conds\"", "data-key=\"requiredEducation\"", "data-edit=\"requiredMajor\"", "data-exp-kind=");
         assertThat(json("PATCH", "/positions/" + (positionId + 999) + "/conditions", "{\"requiredExperience\":\"x\"}").statusCode()).isEqualTo(404);
         // 포지션 이름 바꾸기
         HttpResponse<String> renamed = json("PATCH", "/positions/" + positionId, "{\"title\":\"<b>10월 공채</b>\"}");
@@ -158,7 +158,7 @@ class WebPagesSmokeTest {
         // 개인정보 엄격 보호 모드: 한 명씩 올리고, 가린 이력서를 확인·수정한 뒤 검사
         assertThat(post("/settings/privacy", "strict=true", false).statusCode()).isEqualTo(302);
         assertThat(get("/settings").body()).contains("개인정보 엄격 보호 모드", "name=\"strict\" value=\"true\" checked");
-        assertThat(get("/fit?position=" + positionId).body()).contains("개인정보 가리기</button>").doesNotContain("id=\"bz-add\"");
+        assertThat(get("/fit?position=" + positionId).body()).contains("개인정보 가리기</span>").doesNotContain("id=\"bz-add\"");
         assertThat(get("/results/" + id).body()).contains("id=\"mask-view\"", "name=\"maskedText\"", "id=\"mask-edit\"", "data-mark=\"확인 대기\"")
                 .doesNotContain(">검사</button>", "010-1111-2222");
         assertThat(post("/settings/privacy", "", false).statusCode()).isEqualTo(302);
@@ -205,7 +205,7 @@ class WebPagesSmokeTest {
                 .doesNotContain("검사 전", ">연봉</th>", "제외됨");
         // 경력 미충족 제외를 켜면 순위 없이 제외됨으로
         assertThat(json("PATCH", "/positions/" + positionId + "/exclusions", "{\"career\":true,\"education\":false}").statusCode()).isEqualTo(204);
-        assertThat(get("/ranking?position=" + positionId).body()).contains("제외됨 1명", "rk-why\">경력 미충족<", "checked><span class=\"switch-track\"></span>경력 미충족 제외")
+        assertThat(get("/ranking?position=" + positionId).body()).contains("제외됨 1명", "rk-why\">경력 미충족<", "data-rk-exclude=\"career\" checked><span>경력 미충족 제외</span>")
                 .doesNotContain("class=\"rk-no\">1<");
         assertThat(json("PATCH", "/positions/" + positionId + "/exclusions", "{\"career\":false,\"education\":false}").statusCode()).isEqualTo(204);
         extractionService.extractQuestions(id, com.example.interview.domain.QuestionType.SELECTABLE);

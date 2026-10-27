@@ -12,30 +12,29 @@
 <c:set var="pickBase" value="/ranking"/>
 <%@ include file="common/position-pick.jspf" %>
 
+<%-- 거르기: 글이 든 켜고 끄는 버튼 하나씩, 표 위 바탕에 (사용자 2026-10-27) --%>
+<c:if test="${not empty rows}">
+<div class="rk-filters" id="rk" data-base="<c:url value='/positions/${position.id}'/>">
+  <label class="fchip"><input type="checkbox" data-rk-exclude="career" ${position.excludeCareer ? 'checked' : ''}><span>경력 미충족 제외</span></label>
+  <label class="fchip"><input type="checkbox" data-rk-exclude="education" ${position.excludeEducation ? 'checked' : ''}><span>학력 미충족 제외</span></label>
+  <label class="fchip"><input type="checkbox" data-rk-filter="interviewed"><span>면접 본 사람만</span></label>
+  <label class="fchip"><input type="checkbox" data-rk-filter="passed"><span>합격한 사람만</span></label>
+  <label class="fchip"><input type="checkbox" data-rk-filter="engineer"><span>정보처리기사 있는 사람만</span></label>
+  <label class="fchip"><input type="checkbox" data-rk-filter="sqld"><span>SQLD 있는 사람만</span></label>
+  <div class="rk-legend">
+    <span><i class="rk-sq ev-DIRECT"></i>충족 1</span>
+    <span><i class="rk-sq ev-INDIRECT"></i>부분 충족 0.5</span>
+    <span><i class="rk-sq ev-NONE"></i>미확인 0</span>
+  </div>
+</div>
+</c:if>
+
 <section class="stage">
   <c:choose>
     <c:when test="${empty rows}">
       <div class="empty-box">아직 이력서가 없습니다. <a href="<c:url value='/fit?position=${position.id}'/>">이력서 올리기</a></div>
     </c:when>
     <c:otherwise>
-      <div class="rk-top" id="rk" data-base="<c:url value='/positions/${position.id}'/>">
-        <label class="switch"><input type="checkbox" data-rk-exclude="career" ${position.excludeCareer ? 'checked' : ''}><span class="switch-track"></span>경력 미충족 제외</label>
-        <label class="switch"><input type="checkbox" data-rk-exclude="education" ${position.excludeEducation ? 'checked' : ''}><span class="switch-track"></span>학력 미충족 제외</label>
-        <span class="rk-sep"></span>
-        <label class="switch"><input type="checkbox" data-rk-filter="interviewed"><span class="switch-track"></span>면접 본 사람만</label>
-        <label class="switch"><input type="checkbox" data-rk-filter="passed"><span class="switch-track"></span>합격한 사람만</label>
-        <span class="rk-sep"></span>
-        <label class="switch"><input type="checkbox" data-rk-filter="engineer"><span class="switch-track"></span>정보처리기사 있음</label>
-        <label class="switch"><input type="checkbox" data-rk-filter="sqld"><span class="switch-track"></span>SQLD 있음</label>
-        <div class="rk-legend">
-          <span><i class="rk-sq ev-DIRECT"></i>충족 1</span>
-          <span><i class="rk-sq ev-INDIRECT"></i>부분 충족 0.5</span>
-          <span><i class="rk-sq ev-NONE"></i>미확인 0</span>
-        </div>
-      </div>
-      <ol class="rk-key">
-        <c:forEach var="c" items="${criteria}" varStatus="cs"><li><b>${cs.count}</b><c:out value="${c.name}"/></li></c:forEach>
-      </ol>
       <div class="rk-scroll">
         <table class="rk">
           <thead>
@@ -45,7 +44,7 @@
               <th class="rk-total">평가 기준 충족</th>
               <th class="rk-cnd">경력</th>
               <th class="rk-cnd">학력</th>
-              <c:forEach var="c" items="${criteria}" varStatus="cs"><th class="rk-c${cs.first ? ' rk-first' : ''}${cs.last ? ' rk-last' : ''}" title="<c:out value='${c.name}'/>">${cs.count}</th></c:forEach>
+              <c:forEach var="c" items="${criteria}" varStatus="cs"><th class="rk-c${cs.first ? ' rk-first' : ''}${cs.last ? ' rk-last' : ''}" title="<c:out value='${c.name}'/>"><span class="rk-cwrap"><span class="rk-cname"><c:out value="${c.name}"/></span></span></th></c:forEach>
             </tr>
           </thead>
           <tbody>

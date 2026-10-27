@@ -27,6 +27,13 @@
   <a class="pick-new${empty r ? ' is-active' : ''}" href="${newHref}"><svg class="i"><use href="#i-plus"/></svg>${empty candidates ? '지원자 추가' : '추가'}</a>
   </div>
   </c:if>
+  <%-- 보고서: 고른 지원자의 것이라 고르기 줄 오른쪽 끝 (사용자 2026-10-27). 누를 때마다 묻지 않고 지금 기록에 맞춘다 --%>
+  <c:if test="${onFit and not empty r}">
+  <form class="iv-report" id="iv-report" method="post" action="<c:url value='/results/${r.candidate.id}/report'/>"
+        data-busy="${hasReport ? '보고서를 맞추는 중' : '보고서를 만드는 중'}">
+    <button type="submit" class="btn btn-primary"><svg class="i"><use href="#i-file"/></svg>보고서</button>
+  </form>
+  </c:if>
 </div>
 <%-- 적합도 검사에서 아래로 내리면 포지션과 지원자를 위에 붙여 둔다 --%>
 <c:if test="${onFit}">
@@ -43,6 +50,12 @@
     </select>
     </c:if>
     <a class="pick-bar-new" href="${newHref}" title="지원자 추가" aria-label="지원자 추가"><svg class="i"><use href="#i-plus"/></svg></a>
+    <c:if test="${not empty r}">
+    <form class="pick-bar-report" method="post" action="<c:url value='/results/${r.candidate.id}/report'/>"
+          data-busy="${hasReport ? '보고서를 맞추는 중' : '보고서를 만드는 중'}">
+      <button type="submit" class="btn btn-primary btn-sm"><svg class="i"><use href="#i-file"/></svg>보고서</button>
+    </form>
+    </c:if>
   </div>
 </div>
 </c:if>

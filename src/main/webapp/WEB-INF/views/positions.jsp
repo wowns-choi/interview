@@ -18,7 +18,8 @@
   <section class="stage" id="criteria">
     <header class="stage-head">
       <c:choose>
-        <c:when test="${empty position}"><h2>새 포지션</h2></c:when>
+        <c:when test="${empty position}"><h2>새 포지션</h2>
+          <div class="stage-actions"><button type="submit" form="crit-form" class="btn btn-primary" id="crit-go">평가 기준 추출<svg class="i"><use href="#i-arrow-right"/></svg></button></div></c:when>
         <c:otherwise>
           <div class="title-edit">
             <h2 id="pos-title"><c:out value="${position.title}"/></h2>
@@ -28,9 +29,6 @@
       </c:choose>
       <c:if test="${not empty position}">
         <div class="stage-actions">
-          <c:if test="${not empty criteria}">
-            <a class="btn btn-primary btn-sm" href="<c:url value='/fit?position=${position.id}'/>">적합도 검사<svg class="i"><use href="#i-arrow-right"/></svg></a>
-          </c:if>
           <form method="post" action="<c:url value='/positions/${position.id}/criteria/extract'/>" data-busy="평가 기준을 추출하는 중"
                 data-confirm="평가 기준을 새로 추출할까요? 지금 평가 기준과 이 포지션의 검사 결과가 바뀝니다.">
             <button type="submit" class="btn btn-ghost btn-sm">다시 추출</button>
@@ -65,7 +63,6 @@
             <button type="button" class="btn btn-ghost btn-sm" id="img-add"><svg class="i"><use href="#i-file"/></svg>파일 추가</button>
             <span class="img-hint">PDF · TXT · MD · 이미지</span>
             <p class="img-note" id="img-note"></p>
-            <button type="submit" class="btn btn-primary composer-go">평가 기준 추출<svg class="i"><use href="#i-arrow-right"/></svg></button>
           </div>
         </form>
       </c:when>
@@ -78,14 +75,15 @@
             </c:if>
           </section>
           <section class="pos-col">
-            <h3 class="col-label">평가 기준<span class="count" id="crit-count">${fn:length(criteria)}</span></h3>
+            <h3 class="col-label">지원 조건</h3>
+            <%-- 칸마다 연필: 그 칸만 고르기 칸이 되고, 고르면 바로 저장 (사용자 2026-10-27) --%>
             <dl class="terms conds" id="conds" data-exp-kind="${conds.expKind}" data-exp-years="${conds.expYears}"
                 data-edu="${conds.eduLevel}">
-              <div><dt>요구 경력</dt><dd data-key="requiredExperience"><c:out value="${position.requiredExperience}"/></dd></div>
-              <div><dt>학력</dt><dd data-key="requiredEducation"><c:out value="${position.requiredEducation}"/></dd></div>
-              <div><dt>학과</dt><dd data-key="requiredMajor"><c:out value="${position.requiredMajor}"/></dd></div>
-              <button type="button" class="icon-btn conds-edit" id="conds-edit" title="조건 고치기"><svg class="i"><use href="#i-pencil"/></svg></button>
+              <div><dt>요구 경력<button type="button" class="icon-btn cond-pen" data-edit="requiredExperience" title="요구 경력 고치기"><svg class="i"><use href="#i-pencil"/></svg></button></dt><dd data-key="requiredExperience"><c:out value="${position.requiredExperience}"/></dd></div>
+              <div><dt>학력<button type="button" class="icon-btn cond-pen" data-edit="requiredEducation" title="학력 고치기"><svg class="i"><use href="#i-pencil"/></svg></button></dt><dd data-key="requiredEducation"><c:out value="${position.requiredEducation}"/></dd></div>
+              <div><dt>학과<button type="button" class="icon-btn cond-pen" data-edit="requiredMajor" title="학과 고치기"><svg class="i"><use href="#i-pencil"/></svg></button></dt><dd data-key="requiredMajor"><c:out value="${position.requiredMajor}"/></dd></div>
             </dl>
+            <h3 class="col-label crit-label">평가 기준<span class="count" id="crit-count">${fn:length(criteria)}</span></h3>
             <ul class="crit-list" id="crit-list">
               <c:forEach var="c" items="${criteria}">
                 <li class="crit" data-id="${c.id}">
@@ -106,6 +104,13 @@
       </c:otherwise>
     </c:choose>
   </section>
+  <%-- 다음 단계: 흰 카드 오른쪽 바깥에 따라다니는 버튼 (사용자 2026-10-27) --%>
+  <c:if test="${not empty position and not empty criteria}">
+    <a class="next-step" href="<c:url value='/fit?position=${position.id}'/>">
+      <span class="next-step-ico"><svg class="i"><use href="#i-arrow-right"/></svg></span>
+      <span class="next-step-label">적합도<br>검사</span>
+    </a>
+  </c:if>
 </div>
 
 <template id="tpl-crit">

@@ -249,13 +249,15 @@
   if (rk) {
     var rkBase = rk.getAttribute('data-base');
     var rkSave = function (path, body) {
+      // 물결이 다 찰 때까지 기다렸다가 새로 그린다
+      var waved = new Promise(function (ok) { setTimeout(ok, 600); });
       return fetch(rkBase + path, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'fetch' },
         body: JSON.stringify(body)
       }).then(function (res) {
         if (!res.ok) return res.text().then(function (t) { throw new Error(t || '저장하지 못했습니다.'); });
-        location.reload();
+        return waved.then(function () { location.reload(); });
       }).catch(function (err) { alert(err.message); });
     };
     rk.querySelectorAll('[data-rk-exclude]').forEach(function (box) {
@@ -272,6 +274,20 @@
         document.querySelectorAll('.rk-row.is-' + fold.getAttribute('data-rk-fold')).forEach(function (tr) { tr.hidden = !open; });
       });
     });
+    // 평가 기준 열: 마우스를 올린 열 전체를 옅게 칠한다
+    var rkTable = document.querySelector('table.rk');
+    if (rkTable) {
+      var markCol = function (idx) {
+        rkTable.querySelectorAll('tr').forEach(function (tr) {
+          tr.querySelectorAll('.rk-c').forEach(function (cell, i) { cell.classList.toggle('is-col', i === idx); });
+        });
+      };
+      rkTable.addEventListener('mouseover', function (e) {
+        var cell = e.target.closest('.rk-c');
+        markCol(cell ? Array.prototype.indexOf.call(cell.parentNode.querySelectorAll('.rk-c'), cell) : -1);
+      });
+      rkTable.addEventListener('mouseleave', function () { markCol(-1); });
+    }
     // 면접 본 사람만·합격한 사람만: 화면에서만 거른다 (고른 것은 브라우저에 기억)
     var filters = rk.querySelectorAll('[data-rk-filter]');
     var applyFilters = function () {
@@ -357,6 +373,8 @@
     } catch (e) { /* 저장소를 못 쓰면 끈 채로 */ }
     filters.forEach(function (f) { f.addEventListener('change', applyFilters); });
     applyFilters();
+    // 기억해 둔 칩을 켜 놓을 때는 물결 없이, 그 뒤 누를 때만 물결
+    requestAnimationFrame(function () { requestAnimationFrame(function () { rk.classList.add('is-live'); }); });
   }
 
   // ── 평가 기준 추출 왼쪽 포지션 목록: 끝까지 내리면 다음 묶음을 이어 붙인다 ──
@@ -385,7 +403,7 @@
   }
 
   // ── 이력서 드롭존 (지원자마다 하나): 고르거나 놓을 때마다 쌓이고, 파일마다 뺄 수 있다 ──
-  var DZ_TEXT = '이력서·포트폴리오를 끌어다 놓거나 클릭';
+  var DZ_TEXT = '이력서 또는 포트폴리오를 넣어주세요';
   function setFiles(dz, files) {
     dz._files = files;
     var dt = new DataTransfer();
@@ -396,6 +414,7 @@
   function showFiles(dz) {
     var files = dz._files || [];
     dz.classList.toggle('has-file', files.length > 0);
+    dz.dispatchEvent(new Event('dzchange', { bubbles: true }));
     dz.querySelector('.dz-text').textContent = files.length ? '파일 더 넣기' : DZ_TEXT;
     var list = dz.querySelector('.dz-files');
     if (!list) {
@@ -455,7 +474,7 @@
       input.name = 'applicant-' + bzNext;
       zone.querySelector('.bz-no').textContent = '지원자 ' + bzNext;
       bzNext++;
-      bzGrid.appendChild(zone);
+      bzGrid.insertBefore(zone, document.getElementById('bz-add'));
       bindDropzone(dz);
       relabel();
       return zone;
@@ -472,6 +491,16 @@
       addBtn.addEventListener('dragover', function (e) { e.preventDefault(); e.dataTransfer.dropEffect = 'none'; });
       addBtn.addEventListener('drop', function (e) { e.preventDefault(); });
     }
+    // 검사 버튼: 파일을 넣은 지원자가 있어야 켜지고, 몇 명인지 보인다
+    var goBtn = document.getElementById('bz-go');
+    var goCount = function () {
+      if (!goBtn) return;
+      var n = Array.prototype.filter.call(bzGrid.querySelectorAll('input[type=file]'), function (i) { return i.files.length > 0; }).length;
+      goBtn.disabled = n === 0;
+      goBtn.querySelector('.bz-go-label').textContent = (n > 1 ? '지원자 ' + n + '명 ' : '') + goBtn.getAttribute('data-label');
+    };
+    bzGrid.addEventListener('dzchange', goCount);
+    goCount();
     bzGrid.addEventListener('click', function (e) {
       var del = e.target.closest('.bz-del');
       if (!del) return;
@@ -479,6 +508,7 @@
       if (bzGrid.querySelectorAll('.bz').length > 1) {
         zone.remove();
         relabel();
+        goCount();
       } else {
         setFiles(zone.querySelector('.dropzone'), []);
       }
@@ -648,6 +678,9 @@
         ivButtons.forEach(function (x) { x.classList.remove('is-on'); x.setAttribute('aria-pressed', false); });
         b.classList.toggle('is-on', on);
         b.setAttribute('aria-pressed', on);
+        // 찍을 때만 도장 내려찍는 움직임
+        b.classList.remove('is-stamped');
+        if (on) { void b.offsetWidth; b.classList.add('is-stamped'); }
         ivSave('iv-state');
       });
     });

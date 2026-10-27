@@ -51,8 +51,8 @@
   <div class="detail"${justChecked ? ' data-reveal' : ''}>
 <c:choose>
   <c:when test="${empty r}">
-    <section class="stage" id="fit">
-      <header class="stage-head"><h2>포지션 적합도 검사</h2></header>
+    <div class="bz-page" id="fit">
+      <p class="bz-types">PDF · DOC · DOCX · PPT · PPTX · HWP · HWPX 형식을 지원합니다.</p>
       <form method="post" enctype="multipart/form-data" action="<c:url value='/positions/${position.id}/batch'/>"
             data-busy="이력서를 읽는 중" id="batch-form">
         <div class="bz-grid" id="bz-grid">
@@ -62,17 +62,17 @@
                 <input type="file" name="applicant-${n}" accept=".pdf,.doc,.docx,.ppt,.pptx,.hwp,.hwpx" multiple>
                 <span class="bz-no">지원자 ${n}</span>
                 <span class="dz-icon" aria-hidden="true"><svg class="i"><use href="#i-file"/></svg></span>
-                <span class="dz-text">이력서·포트폴리오를 끌어다 놓거나 클릭</span>
-                <span class="dz-types">PDF · DOC · DOCX · PPT · PPTX · HWP · HWPX</span>
+                <span class="dz-text">이력서 또는 포트폴리오를 넣어주세요</span>
               </label>
               <button type="button" class="icon-btn bz-del" title="빼기"><svg class="i"><use href="#i-trash"/></svg></button>
             </div>
           </c:forEach>
+          <c:if test="${not strictPrivacy}"><button type="button" class="bz-add" id="bz-add" title="지원자 추가" aria-label="지원자 추가"><span class="bz-add-dot"><svg class="i"><use href="#i-plus"/></svg></span></button></c:if>
         </div>
-        <c:if test="${not strictPrivacy}"><button type="button" class="add-row bz-add" id="bz-add"><svg class="i"><use href="#i-plus"/></svg>지원자 추가</button></c:if>
-        <button type="submit" class="btn btn-primary btn-lg bz-submit">${strictPrivacy ? '개인정보 가리기' : '포지션 적합도 검사'}</button>
+        <%-- 파일을 넣은 지원자 수를 버튼에 보이고, 하나도 없으면 꺼 둔다 (사용자 2026-10-27) --%>
+        <button type="submit" class="btn btn-primary bz-go" id="bz-go" data-label="${strictPrivacy ? '개인정보 가리기' : '포지션 적합도 검사'}"><span class="bz-go-label">${strictPrivacy ? '개인정보 가리기' : '포지션 적합도 검사'}</span><svg class="i"><use href="#i-arrow-right"/></svg></button>
       </form>
-    </section>
+    </div>
   </c:when>
   <c:otherwise>
 <c:set var="st" value="${r.candidate.status}"/>
@@ -85,15 +85,9 @@
 <%-- 면접 기록: 면접관이 직접 체크한다 (AI는 합격·불합격을 정하지 않는다) --%>
 <div class="iv-bar" id="iv-bar" data-url="<c:url value='/results/${r.candidate.id}/interview'/>" data-interviewed="${r.candidate.interviewed}" data-date="${r.candidate.interviewDate}">
   <div class="iv-decision" role="group" aria-label="합격 여부">
-    <button type="button" class="iv-pass${r.candidate.decision == 'PASS' ? ' is-on' : ''}" data-decision="PASS" aria-pressed="${r.candidate.decision == 'PASS'}">합격</button>
-    <button type="button" class="iv-fail${r.candidate.decision == 'FAIL' ? ' is-on' : ''}" data-decision="FAIL" aria-pressed="${r.candidate.decision == 'FAIL'}">불합격</button>
+    <button type="button" class="iv-stamp iv-pass${r.candidate.decision == 'PASS' ? ' is-on' : ''}" data-decision="PASS" aria-pressed="${r.candidate.decision == 'PASS'}"><span class="stamp-ink">합격</span></button>
+    <button type="button" class="iv-stamp iv-fail${r.candidate.decision == 'FAIL' ? ' is-on' : ''}" data-decision="FAIL" aria-pressed="${r.candidate.decision == 'FAIL'}"><span class="stamp-ink">불합격</span></button>
   </div>
-  <%-- 보고서는 합격 여부와 상관없이 만들 수 있다 --%>
-  <%-- 보고서 버튼을 누를 때마다 묻지 않고 지금 기록에 맞춘다 (사용자 2026-10-27) --%>
-  <form class="iv-report" id="iv-report" method="post" action="<c:url value='/results/${r.candidate.id}/report'/>"
-        data-busy="${hasReport ? '보고서를 맞추는 중' : '보고서를 만드는 중'}">
-    <button type="submit" class="btn btn-primary btn-sm">보고서</button>
-  </form>
   <span class="save-state" id="iv-state" aria-live="polite"></span>
   <c:if test="${not busy}">
   <div class="cand-actions">

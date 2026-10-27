@@ -138,12 +138,12 @@
     }, 1400 + fresh.length * 90);
   }
 
-  // ── 평가 기준을 막 추출했으면 공고와 조건·평가 기준을 글 쓰듯 채운다 (사용자 2026-10-27: 한꺼번에 팍 나오던 것) ──
+  // ── 평가 기준을 막 추출했으면 조건·평가 기준을 글 쓰듯 채운다 (사용자 2026-10-27: 한꺼번에 팍 나오던 것) ──
   // 누르거나 키를 누르면 바로 끝까지 보인다
   function initWriting() {
     var grid = document.querySelector('.pos-grid[data-write]');
     if (!grid || (window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches)) return;
-    // 공고(왼쪽)와 조건·평가 기준(오른쪽)을 동시에 쓴다
+    // 공고는 바로 보이고, 조건·평가 기준만 쓴다 (사용자 2026-10-27: 공고까지 써지니 불편)
     var tracks = [[], []];
     var all = [];
     var add = function (track, el, msPerChar, maxMs, row) {
@@ -156,8 +156,6 @@
       tracks[track].push(s);
       all.push(s);
     };
-    var posting = grid.querySelector('.posting');
-    if (posting) add(0, posting, 4, 2400);
     grid.querySelectorAll('#conds dd').forEach(function (dd) { add(1, dd, 30, 500); });
     grid.querySelectorAll('#crit-list .crit').forEach(function (li) {
       add(1, li.querySelector('.crit-name'), 30, 700, li);
@@ -481,6 +479,7 @@
     var MAX = 5, MB = 1024 * 1024;
     var IMAGE_TYPES = ['image/png', 'image/jpeg', 'image/webp', 'image/gif'];
     var files = [];
+    var go = document.getElementById('crit-go');
 
     function kind(f) {
       if (IMAGE_TYPES.indexOf(f.type) >= 0) return 'image';
@@ -551,6 +550,7 @@
         list.appendChild(li);
       });
       addBtn.hidden = files.length >= MAX;
+      ready();
     }
 
     ['dragenter', 'dragover'].forEach(function (t) {
@@ -575,6 +575,10 @@
       e.preventDefault();
       add(pasted);
     });
+    // 공고 글이나 파일이 있어야 버튼이 살아난다
+    function ready() { if (go) go.disabled = text.value.trim() === '' && files.length === 0; }
+    text.addEventListener('input', ready);
+    ready();
     form.addEventListener('submit', function (e) {
       if (text.value.trim() === '' && files.length === 0) {
         e.preventDefault();
@@ -652,19 +656,17 @@
     }
   }
 
-  // ── 경력·학력 조건 고치기: 드롭다운으로 고르고, 정해진 문장으로 저장한다 ──
+  // ── 경력·학력 조건 고치기: 칸마다 연필을 누르면 그 칸만 드롭다운이 되고, 고르면(학과는 Enter·칸 밖으로) 정해진 문장으로 바로 저장. Esc는 취소 (사용자 2026-10-27) ──
   function initConditions() {
     var dl = document.getElementById('conds');
     if (!dl) return;
-    var btn = document.getElementById('conds-edit');
     var dd = {};
     dl.querySelectorAll('dd[data-key]').forEach(function (el) { dd[el.getAttribute('data-key')] = el; });
     var EDU = [['', '공고에 없음'], ['ANY', '학력무관'], ['HIGH', '고졸 이상'], ['COLLEGE', '초대졸(2·3년제) 이상'],
       ['UNIV', '대졸(4년제) 이상'], ['MASTER', '석사 이상'], ['DOCTOR', '박사 이상']];
     var years = [];
     for (var y = 1; y <= 20; y++) years.push([String(y), y + '년']);
-    var form = null;
-    var before = null;
+    var editing = null; // { key, cell, before, value(), state(), cleanup }
 
     function select(options, value) {
       var s = document.createElement('select');
@@ -674,75 +676,101 @@
       return s;
     }
 
-    function open() {
-      before = {};
-      Object.keys(dd).forEach(function (k) { before[k] = dd[k].textContent; });
-      form = {
-        expKind: select([['', '공고에 없음'], ['ANY', '경력무관'], ['MIN', '이상'], ['MAX', '이하']], dl.dataset.expKind),
-        expYears: select(years, dl.dataset.expYears || '3'),
-        edu: select(EDU, dl.dataset.edu)
-      };
-      var exp = document.createElement('div');
-      exp.className = 'cond-row';
-      exp.append(form.expYears, form.expKind);
-      function sync() {
-        form.expYears.hidden = !(form.expKind.value === 'MIN' || form.expKind.value === 'MAX');
-      }
-      form.expKind.addEventListener('change', sync);
-      sync();
-      dd.requiredExperience.replaceChildren(exp);
-      dd.requiredEducation.replaceChildren(form.edu);
-      form.major = document.createElement('input');
-      form.major.type = 'text';
-      form.major.className = 'inline-edit';
-      form.major.placeholder = '예: 컴퓨터공학 등 관련 학과';
-      form.major.value = before.requiredMajor;
-      dd.requiredMajor.replaceChildren(form.major);
-
-      var actions = document.createElement('div');
-      actions.className = 'conds-actions';
-      actions.innerHTML = '<button type="button" class="btn btn-ghost btn-sm">취소</button><button type="button" class="btn btn-primary btn-sm">저장</button>';
-      actions.children[0].addEventListener('click', function () { close(null); });
-      actions.children[1].addEventListener('click', save);
-      dl.appendChild(actions);
-      form.actions = actions;
-      dl.classList.add('is-editing');
-      btn.hidden = true;
-      dl.addEventListener('keydown', onKey);
+    function texts() {
+      var t = {};
+      Object.keys(dd).forEach(function (k) { t[k] = dd[k].textContent; });
+      return t;
     }
 
-    function onKey(e) {
-      if (e.key === 'Escape') { e.preventDefault(); close(null); }
-      if (e.key === 'Enter' && !e.isComposing) { e.preventDefault(); save(); }
+    function open(key) {
+      if (editing) close(false);
+      var cell = dd[key];
+      var e = { key: key, cell: cell, before: cell.textContent };
+      if (key === 'requiredExperience') {
+        var kind = select([['', '공고에 없음'], ['ANY', '경력무관'], ['MIN', '이상'], ['MAX', '이하']], dl.dataset.expKind);
+        var yrs = select(years, dl.dataset.expYears || '3');
+        var row = document.createElement('div');
+        row.className = 'cond-row';
+        row.append(yrs, kind);
+        var sync = function () { yrs.hidden = !(kind.value === 'MIN' || kind.value === 'MAX'); };
+        sync();
+        kind.addEventListener('change', function () { sync(); save(); });
+        yrs.addEventListener('change', save);
+        e.value = function () {
+          return kind.value === 'ANY' ? '경력무관'
+            : kind.value ? '경력 ' + yrs.value + '년 ' + (kind.value === 'MIN' ? '이상' : '이하') : '';
+        };
+        e.state = function () { return { expKind: kind.value, expYears: kind.value === 'MIN' || kind.value === 'MAX' ? yrs.value : '' }; };
+        cell.replaceChildren(row);
+        e.focus = kind;
+      } else if (key === 'requiredEducation') {
+        var edu = select(EDU, dl.dataset.edu);
+        edu.addEventListener('change', save);
+        e.value = function () { return edu.value ? EDU.filter(function (o) { return o[0] === edu.value; })[0][1] : ''; };
+        e.state = function () { return { edu: edu.value }; };
+        cell.replaceChildren(edu);
+        e.focus = edu;
+      } else {
+        var major = document.createElement('input');
+        major.type = 'text';
+        major.className = 'inline-edit';
+        major.placeholder = '예: 컴퓨터공학';
+        major.value = e.before;
+        major.addEventListener('blur', function () { if (editing === e) save(); });
+        e.value = function () { return major.value.trim(); };
+        e.state = function () { return {}; };
+        cell.replaceChildren(major);
+        e.focus = major;
+      }
+      editing = e;
+      cell.parentNode.classList.add('is-editing');
+      dl.classList.add('is-cell-editing');
+      e.focus.focus();
+    }
+
+    function close(keep) {
+      var e = editing;
+      if (!e) return;
+      editing = null;
+      e.cell.textContent = keep ? e.value() : e.before;
+      e.cell.parentNode.classList.remove('is-editing');
+      dl.classList.remove('is-cell-editing');
     }
 
     function save() {
-      var kind = form.expKind.value;
-      var exp = kind === 'ANY' ? '경력무관'
-        : kind ? '경력 ' + form.expYears.value + '년 ' + (kind === 'MIN' ? '이상' : '이하') : '';
-      var eduLabel = EDU.filter(function (o) { return o[0] === form.edu.value; })[0];
-      var edu = form.edu.value ? eduLabel[1] : '';
-      var state = { expKind: kind, expYears: kind === 'MIN' || kind === 'MAX' ? form.expYears.value : '', edu: form.edu.value };
-      var major = form.major.value.trim();
-      api('PATCH', positionBase + '/conditions', { requiredExperience: exp, requiredEducation: edu, requiredMajor: major })
-        .then(function () {
-          Object.keys(state).forEach(function (k) { dl.dataset[k] = state[k]; });
-          close({ requiredExperience: exp, requiredEducation: edu, requiredMajor: major });
-          toast('저장했습니다');
-        }, function () {});
+      var e = editing;
+      if (!e) return;
+      if (e.saving) return;
+      var value = e.value();
+      if (value === e.before) { close(false); return; }
+      e.saving = true;
+      var body = texts();
+      body[e.key] = value;
+      var state = e.state();
+      api('PATCH', positionBase + '/conditions', body).then(function () {
+        Object.keys(state).forEach(function (k) { dl.dataset[k] = state[k]; });
+        e.saving = false;
+        if (editing === e) close(true);
+        else if (!editing || editing.cell !== e.cell) e.cell.textContent = value;
+        toast('저장했습니다');
+      }, function () { e.saving = false; });
     }
 
-    function close(values) {
-      var v = values || before;
-      Object.keys(dd).forEach(function (k) { dd[k].textContent = v[k]; });
-      form.actions.remove();
-      form = null;
-      dl.classList.remove('is-editing');
-      dl.removeEventListener('keydown', onKey);
-      btn.hidden = false;
-    }
-
-    btn.addEventListener('click', open);
+    dl.addEventListener('click', function (ev) {
+      var pen = ev.target.closest('.cond-pen');
+      if (pen) open(pen.getAttribute('data-edit'));
+    });
+    dl.addEventListener('keydown', function (ev) {
+      if (!editing) return;
+      if (ev.key === 'Escape') { ev.preventDefault(); close(false); }
+      if (ev.key === 'Enter' && !ev.isComposing && ev.target.tagName === 'INPUT') { ev.preventDefault(); save(); }
+    });
+    // 고르기만 하고 바깥을 누르면 그대로 닫는다 (고른 값은 이미 저장됐다)
+    document.addEventListener('pointerdown', function (ev) {
+      if (editing && !editing.cell.parentNode.contains(ev.target)) {
+        if (editing.cell.querySelector('input')) save(); else close(false);
+      }
+    });
   }
 
   // ── 평가항목 편집 ──
