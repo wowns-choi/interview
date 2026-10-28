@@ -966,7 +966,6 @@ html.revealing .detail { opacity: 0; }
   background: var(--surface); color: var(--text-2); font: inherit; font-size: 15.5px; font-weight: 700; text-align: left; cursor: pointer; transition: background .12s, border-color .12s;
 }
 .op-btn:hover, .side-btn:hover { background: var(--hover); }
-.must-side { margin-bottom: 8px; }
 .op-ico { display: inline-flex; align-items: center; justify-content: center; flex: none; width: 32px; height: 32px; border-radius: 50%; background: var(--accent-weak); color: var(--accent); }
 .op-ico .i { width: 18px; height: 18px; }
 
@@ -1236,15 +1235,16 @@ html.revealing .detail { opacity: 0; }
 .rp-item.is-dragging { opacity: .45; }
 .rp-add { display: inline-flex; align-items: center; gap: 6px; margin-top: 10px; padding: 6px 10px; border: 1px dashed var(--rp-line); border-radius: 8px; background: transparent; color: var(--rp-blue); font: inherit; font-size: 14px; font-weight: 600; cursor: pointer; }
 .rp-add:hover { background: var(--rp-tint-2); }
-.rp-paper input, .rp-paper textarea { outline: none; }
+/* 종이 위 입력칸은 칸 모양 그대로: 공통 입력칸의 둥근 모서리·초록 테두리 그림자를 뺀다 */
+.rp-paper input, .rp-paper textarea, .rp-paper input:focus, .rp-paper textarea:focus { outline: none; border-radius: 0; box-shadow: none; }
 .rp-paper input:focus, .rp-paper textarea:focus { background: #fffbe8; }
 
 /* 지원자 정보: 항목·값 한 쌍이 한 칸, 두 칸씩 */
 .rp-info { display: grid; grid-template-columns: 1fr 1fr; border-top: 1px solid var(--rp-line); border-left: 1px solid var(--rp-line); }
 .rp-cell { display: grid; grid-template-columns: 168px 1fr; border-right: 1px solid var(--rp-line); border-bottom: 1px solid var(--rp-line); }
-.rp-cell .rp-label, .rp-cell .rp-value { min-width: 0; padding: 10px 14px; border: 0; color: inherit; font: inherit; }
+.rp-cell .rp-label, .rp-cell .rp-value { min-width: 0; padding: 7px 14px; border: 0; border-radius: 0; box-shadow: none; display: block; color: inherit; font: inherit; }
 .rp-cell .rp-label { border-right: 1px solid var(--rp-line); background: var(--rp-tint); color: var(--rp-ink); font-weight: 700; }
-.rp-cell .rp-value { padding-right: 64px; background: #fff; line-height: 1.65; resize: none; overflow: hidden; }
+.rp-cell .rp-value { padding-right: 64px; background: #fff; line-height: 1.5; resize: none; overflow: hidden; }
 .rp-cell .rp-handle { left: auto; right: 34px; top: 9px; z-index: 1; }
 .rp-cell .rp-del { right: 6px; top: 7px; z-index: 1; }
 
@@ -1261,10 +1261,10 @@ html.revealing .detail { opacity: 0; }
 
 .rp-ops { display: grid; gap: 12px; }
 .rp-op { border: 1px solid var(--rp-line); break-inside: avoid; }
-.rp-op-who { display: flex; border-bottom: 1px solid var(--rp-line); background: var(--rp-tint); }
+.rp-op-who { display: flex; line-height: 24px; border-bottom: 1px solid var(--rp-line); background: var(--rp-tint); }
 .rp-op-who label { display: flex; align-items: center; flex: 1; }
 .rp-op-who label + label { border-left: 1px solid var(--rp-line); }
-.rp-op-who span { padding: 8px 14px; color: var(--rp-ink); font-weight: 700; white-space: nowrap; }
+.rp-op-who span { padding: 8px 14px; align-self: stretch; display: flex; align-items: center; border-right: 1px solid var(--rp-line); color: var(--rp-ink); font-weight: 700; white-space: nowrap; }
 .rp-op-who input { flex: 1; min-width: 0; align-self: stretch; padding: 8px 10px; border: 0; background: #fff; color: inherit; font: inherit; }
 .rp-op textarea { display: block; min-height: 90px; padding: 12px 14px; }
 
@@ -1300,6 +1300,9 @@ html.revealing .detail { opacity: 0; }
   .rp-sec { margin-top: 24px; }
   .rp-h, .rp-sub { break-after: avoid; }
   .rp-cell .rp-value { padding-right: 14px; }
+  /* 화면에서 잰 높이가 그대로 남으면 작은 인쇄 글씨에 칸만 길어진다. 내용 높이로 다시 맞춘다 */
+  .rp-paper textarea { field-sizing: content; height: auto !important; }
+  .rp-cell .rp-label, .rp-cell .rp-value { padding-top: 5px; padding-bottom: 5px; }
   .rp-meta th, .rp-info .rp-label, .rp-op-who, .rp-h-no, .rp-box.is-on::before { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
   .rp-op textarea { min-height: 0; }
 }
@@ -1701,7 +1704,12 @@ button.file-chip { font-family: inherit; cursor: pointer; }
 .rk-more { display: inline-flex; align-items: center; gap: 4px; padding: 6px 10px; border: 0; border-radius: 8px; background: none; color: var(--muted); font: inherit; font-size: 13.5px; font-weight: 700; cursor: pointer; white-space: nowrap; }
 .rk-more:hover { background: var(--chip); color: var(--text); text-decoration: none; }
 .rk-more-mark { display: inline-block; }
-.rk .rk-detail td { height: auto; padding: 4px 12px 26px; text-align: left; cursor: default; }
+.rk .rk-detail td { height: auto; padding: 0 12px; text-align: left; cursor: default; }
+/* 펼치고 접을 때 스르륵 (사용자 2026-10-28): 표 줄은 높이가 움직이지 않아 안쪽 칸을 0fr ↔ 1fr로 */
+.rk-fold { display: grid; grid-template-rows: 0fr; opacity: 0; transition: grid-template-rows .3s ease, opacity .25s ease; }
+.rk-detail.is-open .rk-fold { grid-template-rows: 1fr; opacity: 1; }
+.rk-fold-in { min-height: 0; overflow: hidden; }
+.rk-fold-in > .rk-detail-box { margin: 4px 0 26px; }
 .rk-detail-box { display: flex; align-items: flex-start; gap: 40px; padding: 20px 24px; border-radius: 12px; background: var(--surface); box-shadow: inset 0 0 0 1px var(--border); }
 .rk-crits { flex: 1; display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 12px 32px; margin: 0; padding: 0; list-style: none; }
 .rk-crits li { display: flex; align-items: center; gap: 10px; min-width: 0; color: var(--text-2); font-size: 14.5px; }
@@ -1747,3 +1755,18 @@ button.file-chip { font-family: inherit; cursor: pointer; }
 .stage-next { display: flex; justify-content: flex-end; margin: 20px 0 24px; }
 .stage-go { gap: 8px; }
 @media print { .stage-next { display: none; } }
+/* 사이드바: 책갈피를 면접 전 밑에 들여 붙여 단계의 하위로 보이게 (사용자 2026-10-28) */
+.stage-nav { margin-bottom: 28px; padding-bottom: 0; border-bottom: 0; }
+.stage-nav .toc a { padding: 10px 14px 10px 20px; font-size: 16.5px; font-weight: 500; }
+.stage-nav .toc a.active { font-weight: 700; }
+/* 사이드바 맨 아래로 버튼 (사용자 2026-10-28) */
+.to-bottom { display: grid; place-items: center; width: 40px; height: 40px; margin: 10px 0 0 auto; border: 1px solid var(--border); border-radius: 50%; background: var(--surface); color: var(--text-2); cursor: pointer; transition: background .12s, color .12s; }
+.to-bottom:hover { background: var(--accent); border-color: var(--accent); color: #fff; }
+.to-bottom .i { width: 18px; height: 18px; transform: rotate(90deg); }
+@media print { .to-bottom { display: none; } }
+.stage-nav { gap: 34px; }
+/* 책갈피는 면접 전일 때 스르륵 펼치고 다른 단계로 가면 스르륵 접는다 (사용자 2026-10-28).
+   접혔을 때 위 margin이 nav의 gap 하나를 상쇄해 단계 버튼 사이가 그대로 34px */
+.stage-nav .toc { gap: 8px; max-height: 0; margin: -34px 0 0 27px; overflow: hidden; opacity: 0; border-left: 1px solid var(--border); }
+.stage-nav .toc.is-open { max-height: 260px; margin: -20px 0 14px 27px; opacity: 1; }
+.stage-nav.is-ready .toc { transition: max-height .32s ease, margin .32s ease, opacity .25s ease; }

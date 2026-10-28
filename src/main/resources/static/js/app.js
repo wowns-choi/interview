@@ -191,6 +191,8 @@
         el.hidden = el.getAttribute('data-only').split(' ').indexOf(name) < 0;
       });
       document.documentElement.setAttribute('data-stage', name);
+      var tocBox = document.getElementById('toc');
+      if (tocBox) tocBox.classList.toggle('is-open', name === 'before');
       // 숨어 있을 때 잰 칸 높이는 0이라, 보이고 나서 다시 잰다 (보고서 칸은 report.js가 stageshow를 받아 잰다)
       setTimeout(function () {
         document.querySelectorAll('.stage-pane:not([hidden]) textarea.answer').forEach(function (t) { if (window.autosize) window.autosize(t); });
@@ -199,11 +201,17 @@
       if (scroll) window.scrollTo(0, 0);
     };
     stageNav.addEventListener('click', function (e) {
-      var b = e.target.closest('[data-stage]');
+      // html에도 data-stage가 있어서 버튼으로 좁힌다 (책갈피 링크를 누르면 html까지 올라가 맨 위로 튀었다)
+      var b = e.target.closest('button[data-stage]');
       if (!b) return;
       var name = b.getAttribute('data-stage');
       history.replaceState(null, '', location.pathname + location.search + '#' + name);
       showStage(name, true);
+    });
+    // 사이드바 맨 아래로 (필수질문 체크·면접 후 버튼이 있는 끝)
+    var toBottom = document.getElementById('to-bottom');
+    if (toBottom) toBottom.addEventListener('click', function () {
+      window.scrollTo({ top: document.documentElement.scrollHeight, behavior: 'smooth' });
     });
     // 면접 질문지 밑 「면접 후」 같은 단계 넘김 버튼: 사이드바 단계 버튼을 누른 것과 같다
     document.addEventListener('click', function (e) {
@@ -214,6 +222,8 @@
     });
     var first = location.hash;
     showStage(stageOf(first), false);
+    // 처음 그릴 때는 바로 두고, 그 뒤 단계를 바꿀 때만 책갈피가 스르륵 열리고 닫힌다
+    requestAnimationFrame(function () { requestAnimationFrame(function () { stageNav.classList.add('is-ready'); }); });
     // 질문지 안의 자리(#extract 등)로 왔으면 그 자리로
     if (first && STAGES.indexOf(first.slice(1)) < 0 && first !== '#record') {
       var spot = document.getElementById(first.slice(1));
@@ -295,7 +305,7 @@
     if (rkPoll) setTimeout(function () { location.reload(); }, +rkPoll.getAttribute('data-poll'));
     // 줄을 누르면 그 지원자가 검사받은 평가 기준을 줄 아래에 펼친다. 지원자 화면으로는 끝의 「자세히」로 간다 (사용자 2026-10-28)
     var closeDetails = function () {
-      document.querySelectorAll('.rk-detail').forEach(function (d) { d.hidden = true; });
+      document.querySelectorAll('.rk-detail').forEach(function (d) { d.classList.remove('is-open'); d.hidden = true; });
       document.querySelectorAll('.rk-row.is-open').forEach(function (r) { r.classList.remove('is-open'); });
     };
     document.querySelectorAll('.rk-row').forEach(function (tr) {
@@ -304,8 +314,19 @@
       tr.classList.add('can-open');
       tr.addEventListener('click', function (e) {
         if (e.target.closest('a')) return;
-        d.hidden = !d.hidden;
-        tr.classList.toggle('is-open', !d.hidden);
+        var open = !d.classList.contains('is-open');
+        tr.classList.toggle('is-open', open);
+        if (open) {
+          d.hidden = false;
+          void d.offsetHeight; // 접힌 모습을 한 번 그린 뒤 펼쳐야 스르륵 열린다
+          d.classList.add('is-open');
+        } else {
+          d.classList.remove('is-open');
+        }
+      });
+      // 다 접히고 나서야 줄을 숨긴다 (그 사이 다시 펼쳤으면 그대로)
+      d.addEventListener('transitionend', function (e) {
+        if (e.propertyName === 'grid-template-rows' && !d.classList.contains('is-open')) d.hidden = true;
       });
     });
     // 면접 본 사람만·합격한 사람만: 화면에서만 거른다 (고른 것은 브라우저에 기억)
@@ -761,6 +782,8 @@
     var mark = function () {
       if (chosen) { links.forEach(function (l) { l.a.classList.toggle('active', l === chosen); }); return; }
       // 목차로 옮기면 영역 위가 scroll-padding-top(상단 바·고정 줄 아래)에 멈춘다. 그보다 조금 아래까지를 지금 영역으로 본다
+      // 면접 전 칸이 숨어 있으면 위치가 모두 0이라 마지막 항목이 잡힌다. 다시 보일 때(stageshow) 잰다
+      if (!links[0].target.getClientRects().length) return;
       var line = (parseFloat(getComputedStyle(document.documentElement).scrollPaddingTop) || 150) + 24;
       var current = links[0];
       links.forEach(function (l) { if (l.target.getBoundingClientRect().top <= line) current = l; });
@@ -770,6 +793,7 @@
     };
     if (links.length) {
       window.addEventListener('scroll', mark, { passive: true });
+      document.addEventListener('stageshow', function () { chosen = null; mark(); });
       ['wheel', 'touchstart', 'keydown', 'mousedown'].forEach(function (t) {
         window.addEventListener(t, function (e) { if (!(e.target.closest && e.target.closest('#toc'))) unchoose(); }, { passive: true });
       });

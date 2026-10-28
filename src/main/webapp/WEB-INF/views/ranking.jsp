@@ -109,7 +109,7 @@
               <c:if test="${not empty s}">
               <tr class="rk-detail" hidden>
                 <td colspan="10">
-                  <div class="rk-detail-box">
+                  <div class="rk-fold"><div class="rk-fold-in"><div class="rk-detail-box">
                     <ol class="rk-crits">
                       <c:forEach var="it" items="${s.items}" varStatus="is">
                         <c:set var="evK" value="${empty it.match ? 'UNCHECKED' : it.match}"/>
@@ -120,7 +120,7 @@
                       <span class="rk-detail-total">${s.totalText}<small> / ${s.max}</small></span>
                       <span class="rk-legend"><span><i class="rk-sq ev-DIRECT"></i>충족 1</span><span><i class="rk-sq ev-INDIRECT"></i>부분 충족 0.5</span><span><i class="rk-sq ev-NONE"></i>미확인 0</span></span>
                     </div>
-                  </div>
+                  </div></div></div>
                 </td>
               </tr>
               </c:if>

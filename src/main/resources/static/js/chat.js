@@ -155,6 +155,23 @@
     examples.classList.toggle('is-big', !log.children.length);
   }
 
+  // AI가 보는 자료 목록만 다시 불러온다 (대화는 그대로)
+  function refreshSources() {
+    fetch(url + '?stage=' + stage, { headers: { 'X-Requested-With': 'fetch' } })
+      .then(function (res) { return res.ok ? res.json() : null; })
+      .then(function (data) { if (data) renderSources(data.sources); });
+  }
+
+  // 화면 일부가 바뀌면(면접 기록 만들기, 질문지에 넣기 등) 자료도 바뀌었을 수 있다.
+  // 떠 있는 창은 바로, 따로 뜬 창은 이 숫자가 바뀐 것을 보고 다시 불러온다 (사용자 2026-10-28)
+  if (!isWindow) {
+    window.chatMaterialVer = 0;
+    document.addEventListener('partial', function () {
+      window.chatMaterialVer++;
+      if (dlg.open) refreshSources();
+    });
+  }
+
   function load() {
     log.innerHTML = '';
     src.innerHTML = '';
@@ -488,19 +505,25 @@
         return null;
       }
     };
+    // 지원자 화면이 자료를 바꾼 횟수 (다시 불러온 화면이면 처음부터 센다)
+    var openerVer = function () {
+      try { return window.opener.chatMaterialVer; } catch (e) { return null; }
+    };
     stage = openerStage() || 'BEFORE';
+    var ver = openerVer();
     load();
     input.focus();
     setInterval(function () {
       var s = openerStage();
       if (s === null) { window.close(); return; }
-      // 단계가 바뀌면 AI가 보는 자료와 예시만 다시 불러온다 (대화는 지원자마다 하나라 그대로)
-      if (s !== stage) {
+      var v = openerVer();
+      // 단계가 바뀌거나 지원자 화면의 내용이 바뀌면 AI가 보는 자료만 다시 불러온다 (대화는 지원자마다 하나라 그대로)
+      if (s !== stage || v !== ver) {
+        var stageChanged = s !== stage;
         stage = s;
-        fetch(url + '?stage=' + stage, { headers: { 'X-Requested-With': 'fetch' } })
-          .then(function (res) { return res.ok ? res.json() : null; })
-          .then(function (data) { if (data) renderSources(data.sources); });
-        if (!busy) renderExamples();
+        ver = v;
+        refreshSources();
+        if (stageChanged && !busy) renderExamples();
       }
     }, 1000);
   }

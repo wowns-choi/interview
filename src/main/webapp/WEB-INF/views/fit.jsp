@@ -35,26 +35,23 @@
     <%-- 단계: 면접 전 · 면접 후 · 보고서. 한 화면 안에서 바꾸고 주소 끝(#after)에 남긴다 (사용자 2026-10-28) --%>
     <nav class="stage-nav" id="stage-nav" aria-label="단계">
       <button type="button" data-stage="before"><span class="stage-no">1</span>면접 전</button>
+      <%-- 책갈피는 면접 전의 하위 항목으로 그 밑에 들여 붙인다 (사용자 2026-10-28: 단계와 위아래가 안 보였다) --%>
+      <div class="toc" id="toc">
+        <a href="#sec-profile">개인정보</a>
+        <a href="#sec-evidence">평가 기준 충족 여부</a>
+        <a href="#questions">면접 질문</a>
+      </div>
       <button type="button" data-stage="after"><span class="stage-no">2</span>면접 후</button>
       <button type="button" data-stage="report"><span class="stage-no">3</span>보고서</button>
     </nav>
-    <nav class="toc" id="toc" data-only="before">
-      <a href="#sec-profile">개인정보</a>
-      <a href="#sec-evidence">평가 기준 충족 여부</a>
-      <a href="#questions">면접 질문</a>
-    </nav>
-    <div class="op-side" id="op-side" data-only="before after">
-      <%-- 필수질문 체크: 질문지 맨 끝까지 내리지 않아도 되게 사이드바에 (사용자 2026-10-27) --%>
-      <c:if test="${not empty r.sections}">
-      <button type="button" class="side-btn must-side js-must-check" id="must-check" data-only="before">
-        <span class="op-ico"><svg class="i"><use href="#i-check"/></svg></span><span>필수질문 체크</span>
-      </button>
-      </c:if>
+    <div class="op-side" id="op-side">
       <%-- AI와 대화: 지금 단계의 자료를 보고 답한다 (예전 AI 의견 보기, 사용자 2026-10-28) --%>
-      <button type="button" class="op-btn" id="chat-btn">
+      <button type="button" class="op-btn" id="chat-btn" data-only="before after">
         <span class="op-ico"><svg class="i"><use href="#i-spark"/></svg></span>
         <span class="op-label">AI와 대화</span>
       </button>
+      <%-- 맨 아래로: 필수질문 체크·면접 후 버튼이 있는 끝까지 (사용자 2026-10-28, 사이드바의 필수질문 체크를 대신) --%>
+      <button type="button" class="to-bottom" id="to-bottom" title="맨 아래로" aria-label="맨 아래로"><svg class="i"><use href="#i-arrow-right"/></svg></button>
     </div>
   </aside>
   </c:if>
@@ -597,6 +594,7 @@
     </c:if>
   </div>
 </section>
+<div class="stage-next"><button type="button" class="btn btn-primary stage-go" data-go-stage="report">보고서<svg class="i"><use href="#i-arrow-right"/></svg></button></div>
 </div>
 
 <%-- 보고서: 저장된 보고서를 그대로 보인다. 최신 기록 반영은 「최신 기록으로 동기화」로만 (사용자 2026-10-28) --%>
