@@ -1314,7 +1314,7 @@ html.revealing .detail { opacity: 0; }
 @supports (appearance: base-select) {
   .pick-select select, .pick-bar-select { appearance: base-select; }
   .pick-select select::picker(select), .pick-bar-select::picker(select) {
-    appearance: base-select; min-width: max(100%, 240px); max-height: min(420px, 70vh); margin-top: 6px; padding: 6px;
+    appearance: base-select; width: max-content; min-width: max(anchor-size(width), 240px); max-width: min(560px, calc(100vw - 32px)); max-height: min(420px, 70vh); margin-top: 6px; padding: 6px;
     border: 1px solid var(--border); border-radius: 14px; background: var(--surface); box-shadow: var(--shadow-lg);
   }
   .pick-select select::picker-icon, .pick-bar-select::picker-icon { display: none; }
@@ -1329,6 +1329,13 @@ html.revealing .detail { opacity: 0; }
   .pick-select .cn-time, .pick-bar-select .cn-time { color: var(--muted); font-size: 14px; font-weight: 500; }
   .pick-select option:checked .cn-day, .pick-bar-select option:checked .cn-day { color: color-mix(in srgb, var(--accent) 75%, var(--surface)); }
   .pick-select option:checked .cn-time, .pick-bar-select option:checked .cn-time { color: color-mix(in srgb, var(--accent) 55%, var(--surface)); }
+  /* 닫힌 칸: 이름은 크게, 날짜·시각은 작고 옅게 (사용자 2026-10-28) */
+  .pick-select select > button, .pick-bar-select > button { display: inline; white-space: nowrap; margin-right: 8px; padding: 0; border: 0; background: none; color: inherit; font: inherit; letter-spacing: inherit; cursor: inherit; }
+  .pick-select selectedcontent .cn-day, .pick-select selectedcontent .cn-time { font-size: .45em; font-weight: 600; vertical-align: .25em; }
+  .pick-select selectedcontent .cn-day { margin-left: 14px; color: var(--muted); }
+  .pick-select selectedcontent .cn-time { color: color-mix(in srgb, var(--muted) 65%, var(--surface)); }
+  .pick-bar-select selectedcontent .cn-day, .pick-bar-select selectedcontent .cn-time { margin-left: 0; font-size: .85em; font-weight: 500; color: var(--muted); }
+  .pick-bar-select selectedcontent .cn-day { margin-left: 8px; }
   .pick-select option::checkmark, .pick-bar-select option::checkmark { order: 1; margin-left: auto; color: var(--accent); }
   .pick-select option:disabled, .pick-bar-select option:disabled { display: none; }
   /* 진행 중·실패한 지원자는 이름 오른쪽에 상태 */
@@ -1605,7 +1612,7 @@ button.file-chip { font-family: inherit; cursor: pointer; }
 @media print { .rp-mini.is-on::before { -webkit-print-color-adjust: exact; print-color-adjust: exact; } }
 
 /* ── 지원자 화면 단계: 면접 전 · 면접 후 · 보고서 (사용자 2026-10-28) ── */
-.stage-nav { display: grid; gap: 4px; margin-bottom: 14px; padding-bottom: 14px; border-bottom: 1px solid var(--border); }
+.stage-nav { display: grid; gap: 4px; margin-bottom: 32px; padding-bottom: 28px; border-bottom: 1px solid var(--border); }
 .stage-nav button {
   display: flex; align-items: center; gap: 12px; width: 100%; padding: 11px 14px; border: 0; border-radius: 12px;
   background: transparent; color: var(--muted); font: inherit; font-size: 18px; font-weight: 700; text-align: left; cursor: pointer; transition: background .12s, color .12s;
@@ -1637,6 +1644,11 @@ button.file-chip { font-family: inherit; cursor: pointer; }
 .chat-dialog[open] { display: flex; flex-direction: column; }
 .chat-dialog header { gap: 10px; justify-content: flex-start; margin-bottom: 12px; }
 .chat-dialog header h3 { margin: 0; }
+/* 창 분리로 띄운 팝업 (chat-window.jsp): 창 전체가 대화 */
+.chat-window-body { height: 100vh; margin: 0; overflow: hidden; background: var(--surface); }
+.chat-dialog.is-window { display: flex; flex-direction: column; position: static; width: auto; height: 100vh; min-width: 0; min-height: 0; max-width: none; max-height: none; padding: 18px 22px; border: 0; border-radius: 0; box-shadow: none; resize: none; }
+.chat-dialog.is-window header { display: flex; align-items: center; cursor: default; }
+.chat-dialog.is-window header h3 { font-size: 17px; font-weight: 800; }
 .chat-who { margin-left: 2px; color: var(--muted); font-size: 14.5px; font-weight: 600; }
 .chat-src { position: relative; margin-right: auto; }
 .chat-src[open] > summary { background: var(--hover); }

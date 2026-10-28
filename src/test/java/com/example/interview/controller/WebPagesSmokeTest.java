@@ -157,7 +157,8 @@ class WebPagesSmokeTest {
                         "<script>alert(1)</script>", "010-1111-2222", "부분 충족");
         // 개인정보 엄격 보호 모드: 한 명씩 올리고, 가린 이력서를 확인·수정한 뒤 검사
         assertThat(post("/settings/privacy", "strict=true", false).statusCode()).isEqualTo(302);
-        assertThat(get("/settings").body()).contains("개인정보 엄격 보호 모드", "name=\"strict\" value=\"true\" checked");
+        assertThat(get("/settings").body()).doesNotContain("action=\"/settings/privacy\"");
+        assertThat(get("/fit?position=" + positionId).body()).contains("개인정보 엄격 보호 모드", "name=\"strict\" value=\"true\" checked");
         assertThat(get("/fit?position=" + positionId).body()).contains("개인정보 가리기</span>").doesNotContain("id=\"bz-add\"");
         assertThat(get("/results/" + id).body()).contains("id=\"mask-view\"", "name=\"maskedText\"", "id=\"mask-edit\"", "data-mark=\"확인 대기\"")
                 .doesNotContain(">검사</button>", "010-1111-2222");
@@ -216,9 +217,10 @@ class WebPagesSmokeTest {
         assertThat(result.statusCode()).isEqualTo(200);
         String body = result.body();
         assertThat(body).contains("100만 건 배치 처리 시간을 어떻게 측정하셨나요?", "답변 기록", "id=\"stage-nav\"", "data-pane=\"after\"", "data-pane=\"report\"", "면접 기록 만들기",
-                "질문 추가", "kind kind-verify\">거짓말 판독기<", "id=\"chat-btn\"", "id=\"dlg-chat\"", "보고서 만들기", "id=\"must-check\"", "js-q-must", "id=\"iv-bar\"", "면접 본 날짜", "data-decision=\"PASS\"").doesNotContain("추출한 질문 <b>", "병목은 어디였나요?");
+                "질문 추가", "kind kind-verify\">거짓말 판독기<", "id=\"chat-btn\"", "/chat/window", "보고서 만들기", "id=\"must-check\"", "js-q-must", "id=\"iv-bar\"", "면접 본 날짜", "data-decision=\"PASS\"").doesNotContain("추출한 질문 <b>", "병목은 어디였나요?");
 
         assertThat(get("/results/" + id + "/chat?stage=BEFORE").body()).startsWith("{\"messages\":[],\"sources\":[{\"key\":\"posting\"");
+        assertThat(get("/results/" + id + "/chat/window").body()).contains("id=\"dlg-chat\"", "data-home=\"/results/" + id + "\"", "AI와 대화 - ");
 
         HttpResponse<String> addedQ = json("POST", "/results/" + id + "/questions", "{\"section\":\"기술 검증\",\"content\":\"추가 질문\"}");
         assertThat(addedQ.statusCode()).isEqualTo(200);
@@ -243,7 +245,7 @@ class WebPagesSmokeTest {
                 .statusCode()).isEqualTo(200);
         assertThat(get("/results/" + id).body()).contains("data-busy=\"보고서를 만드는 중\"");
         assertThat(post("/results/" + id + "/report", "", false).statusCode()).isEqualTo(302);
-        assertThat(get("/results/" + id).body()).as("있으면 누를 때마다 맞춘다").contains("data-busy=\"보고서를 맞추는 중\"");
+        assertThat(get("/results/" + id).body()).as("있으면 누를 때마다 맞춘다").contains("data-busy=\"보고서를 동기화하는 중\"", "최신 기록으로 동기화", "data-confirm=\"최신 기록으로 다시 채웁니다.");
         assertThat(get("/results/" + id).body()).contains("면접 결과 보고서", "value=\"2026-10-20T14:30\"", "측정은 nGrinder로 했다고 답함",
                 "파견 가능 여부", "직전연봉/희망연봉", "class=\"rp-box is-on\" data-decision=\"PASS\"", "면접관 추가", "data-list=\"certs\"", "data-f=\"position\"");
         assertThat(json("PUT", "/results/" + id + "/report", "{\"reportDate\":\"2026-10-23\",\"qaSource\":\"SHEET\","

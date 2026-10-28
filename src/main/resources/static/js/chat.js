@@ -1,9 +1,12 @@
 // ── AI와 대화 (사용자 2026-10-28, 예전 AI 의견 보기): 지금 단계(면접 전·면접 후)의 정해진 자료를 보고 답한다.
-//    자료는 고르지 않고 「AI가 보고 있는 자료」로 보여 주기만 한다. 예시 문구를 누르면 입력칸에 채운다 ──
+//    자료는 고르지 않고 「AI가 보는 자료」로 보여 주기만 한다.
+//    기본은 지원자 화면 안에 떠 있는 창이고, 제목 줄의 창 분리 버튼을 누르면 별도의 브라우저 창(팝업, chat-window.jsp)으로 옮긴다
+//    (사용자 2026-10-28). 팝업도 그 지원자 화면에 묶인다: 화면을 떠나면 닫히고, 단계는 화면을 따라간다 ──
 (function () {
   var dlg = document.getElementById('dlg-chat');
+  if (!dlg) return;
   var btn = document.getElementById('chat-btn');
-  if (!dlg || !btn) return;
+  var isWindow = dlg.classList.contains('is-window');
   var url = dlg.getAttribute('data-url');
   var log = document.getElementById('chat-log');
   var src = document.getElementById('chat-src');
@@ -166,114 +169,153 @@
       .catch(function (e) { toast(e.message || '대화를 불러오지 못했습니다.'); });
   }
 
-  // ── 떠 있는 창 (사용자 2026-10-28): 화면을 쓰면서 옆에 둘 수 있게 모달이 아니다.
-  //    제목 줄로 옮기고, 모서리로 크기를 바꾸고, ─ 로 오른쪽 아래에 접어 둔다. 자리와 크기는 이 브라우저에 기억한다 ──
-  var GEO_KEY = 'chatGeo';
-
-  function saveGeo() {
-    if (dlg.classList.contains('is-min') || !dlg.open) return;
-    var r = dlg.getBoundingClientRect();
-    try { localStorage.setItem(GEO_KEY, JSON.stringify({ x: r.left, y: r.top, w: r.width, h: r.height })); } catch (e) { /* 기억 못 해도 된다 */ }
-  }
-
-  function clampInto(x, y, w, h) {
-    var vw = window.innerWidth, vh = window.innerHeight;
-    w = Math.min(w, vw - 16);
-    h = Math.min(h, vh - 16);
-    return { x: Math.max(8, Math.min(x, vw - w - 8)), y: Math.max(8, Math.min(y, vh - h - 8)), w: w, h: h };
-  }
-
-  function placeWindow() {
-    var g = null;
-    try { g = JSON.parse(localStorage.getItem(GEO_KEY) || 'null'); } catch (e) { g = null; }
-    var vw = window.innerWidth, vh = window.innerHeight;
-    if (!g) {
-      var w = Math.min(860, vw - 48), h = Math.min(760, vh - 64);
-      g = { x: (vw - w) / 2, y: (vh - h) / 2, w: w, h: h };
+  if (!isWindow) {
+    // ── 떠 있는 창 (사용자 2026-10-28): 화면을 쓰면서 옆에 둘 수 있게 모달이 아니다.
+    //    제목 줄로 옮기고, 모서리로 크기를 바꾸고, ─ 로 오른쪽 아래에 접어 둔다. 자리와 크기는 이 브라우저에 기억한다 ──
+    var GEO_KEY = 'chatGeo';
+  
+    function saveGeo() {
+      if (dlg.classList.contains('is-min') || !dlg.open) return;
+      var r = dlg.getBoundingClientRect();
+      try { localStorage.setItem(GEO_KEY, JSON.stringify({ x: r.left, y: r.top, w: r.width, h: r.height })); } catch (e) { /* 기억 못 해도 된다 */ }
     }
-    g = clampInto(g.x, g.y, g.w, g.h);
-    dlg.style.left = g.x + 'px';
-    dlg.style.top = g.y + 'px';
-    dlg.style.width = g.w + 'px';
-    dlg.style.height = g.h + 'px';
-  }
-
-  function setMin(on) {
-    dlg.classList.toggle('is-min', on);
-    if (on) document.getElementById('chat-src-box').open = false;
-    else { scrollDown(); input.focus(); }
-  }
-
-  btn.addEventListener('click', function () {
-    if (dlg.open) {
-      // 이미 열려 있으면(접어 둔 것 포함) 대화를 다시 불러오지 않고 펼치기만 한다
-      setMin(false);
-      return;
+  
+    function clampInto(x, y, w, h) {
+      var vw = window.innerWidth, vh = window.innerHeight;
+      w = Math.min(w, vw - 16);
+      h = Math.min(h, vh - 16);
+      return { x: Math.max(8, Math.min(x, vw - w - 8)), y: Math.max(8, Math.min(y, vh - h - 8)), w: w, h: h };
     }
-    var name = document.documentElement.getAttribute('data-stage');
-    stage = name === 'after' ? 'AFTER' : 'BEFORE';
-    document.getElementById('chat-src-box').open = false;
-    dlg.classList.remove('is-min');
-    placeWindow();
-    dlg.show();
-    load();
-    input.focus();
-  });
-
-  document.getElementById('chat-min').addEventListener('click', function (e) {
-    e.stopPropagation();
-    setMin(true);
-  });
-
-  // 접힌 줄을 누르면 펼친다 (닫기 버튼은 제외)
-  dlg.addEventListener('click', function (e) {
-    if (dlg.classList.contains('is-min') && !e.target.closest('[data-close]')) setMin(false);
-  });
-
-  // 제목 줄을 끌어 옮긴다. 버튼과 자료 목록은 끌지 않는다
-  dlg.querySelector('header').addEventListener('pointerdown', function (e) {
-    if (e.button !== 0 || dlg.classList.contains('is-min') || e.target.closest('button, summary, details')) return;
-    var r = dlg.getBoundingClientRect();
-    var dx = e.clientX - r.left, dy = e.clientY - r.top;
-    var head = e.currentTarget;
-    head.setPointerCapture(e.pointerId);
-    dlg.classList.add('is-dragging');
-    function move(ev) {
-      var g = clampInto(ev.clientX - dx, ev.clientY - dy, r.width, r.height);
+  
+    function placeWindow() {
+      var g = null;
+      try { g = JSON.parse(localStorage.getItem(GEO_KEY) || 'null'); } catch (e) { g = null; }
+      var vw = window.innerWidth, vh = window.innerHeight;
+      if (!g) {
+        var w = Math.min(860, vw - 48), h = Math.min(760, vh - 64);
+        g = { x: (vw - w) / 2, y: (vh - h) / 2, w: w, h: h };
+      }
+      g = clampInto(g.x, g.y, g.w, g.h);
       dlg.style.left = g.x + 'px';
       dlg.style.top = g.y + 'px';
+      dlg.style.width = g.w + 'px';
+      dlg.style.height = g.h + 'px';
     }
-    function up() {
-      head.removeEventListener('pointermove', move);
-      head.removeEventListener('pointerup', up);
-      head.removeEventListener('pointercancel', up);
-      dlg.classList.remove('is-dragging');
-      saveGeo();
+  
+    function setMin(on) {
+      dlg.classList.toggle('is-min', on);
+      if (on) document.getElementById('chat-src-box').open = false;
+      else { scrollDown(); input.focus(); }
     }
-    head.addEventListener('pointermove', move);
-    head.addEventListener('pointerup', up);
-    head.addEventListener('pointercancel', up);
-  });
+  
+    btn.addEventListener('click', function () {
+      if (dlg.open) {
+        // 이미 열려 있으면(접어 둔 것 포함) 대화를 다시 불러오지 않고 펼치기만 한다
+        setMin(false);
+        return;
+      }
+      var name = document.documentElement.getAttribute('data-stage');
+      stage = name === 'after' ? 'AFTER' : 'BEFORE';
+      document.getElementById('chat-src-box').open = false;
+      dlg.classList.remove('is-min');
+      placeWindow();
+      dlg.show();
+      load();
+      input.focus();
+    });
+  
+    document.getElementById('chat-min').addEventListener('click', function (e) {
+      e.stopPropagation();
+      setMin(true);
+    });
+  
+    // 접힌 줄을 누르면 펼친다 (닫기 버튼은 제외)
+    dlg.addEventListener('click', function (e) {
+      if (dlg.classList.contains('is-min') && !e.target.closest('[data-close]')) setMin(false);
+    });
+  
+    // 제목 줄을 끌어 옮긴다. 버튼과 자료 목록은 끌지 않는다
+    dlg.querySelector('header').addEventListener('pointerdown', function (e) {
+      if (e.button !== 0 || dlg.classList.contains('is-min') || e.target.closest('button, summary, details')) return;
+      var r = dlg.getBoundingClientRect();
+      var dx = e.clientX - r.left, dy = e.clientY - r.top;
+      var head = e.currentTarget;
+      head.setPointerCapture(e.pointerId);
+      dlg.classList.add('is-dragging');
+      function move(ev) {
+        var g = clampInto(ev.clientX - dx, ev.clientY - dy, r.width, r.height);
+        dlg.style.left = g.x + 'px';
+        dlg.style.top = g.y + 'px';
+      }
+      function up() {
+        head.removeEventListener('pointermove', move);
+        head.removeEventListener('pointerup', up);
+        head.removeEventListener('pointercancel', up);
+        dlg.classList.remove('is-dragging');
+        saveGeo();
+      }
+      head.addEventListener('pointermove', move);
+      head.addEventListener('pointerup', up);
+      head.addEventListener('pointercancel', up);
+    });
+  
+    // 모서리로 크기를 바꾸면 기억한다
+    if (window.ResizeObserver) {
+      var resizeTimer;
+      new ResizeObserver(function () {
+        clearTimeout(resizeTimer);
+        resizeTimer = setTimeout(saveGeo, 250);
+      }).observe(dlg);
+    }
+  
+    // 창 크기가 줄면 화면 밖으로 나가지 않게 당겨 온다
+    window.addEventListener('resize', function () {
+      if (!dlg.open || dlg.classList.contains('is-min')) return;
+      var r = dlg.getBoundingClientRect();
+      var g = clampInto(r.left, r.top, r.width, r.height);
+      dlg.style.left = g.x + 'px';
+      dlg.style.top = g.y + 'px';
+    });
+  
+    dlg.addEventListener('close', function () { dlg.classList.remove('is-min'); });
 
-  // 모서리로 크기를 바꾸면 기억한다
-  if (window.ResizeObserver) {
-    var resizeTimer;
-    new ResizeObserver(function () {
-      clearTimeout(resizeTimer);
-      resizeTimer = setTimeout(saveGeo, 250);
-    }).observe(dlg);
+    // 창 분리: 지원자마다 이름 붙인 팝업으로 옮긴다. 이미 열려 있으면 그 창을 앞으로
+    var popup = null;
+    var openPopup = function () {
+      var w = 560, h = Math.min(820, screen.availHeight - 80);
+      var left = Math.max(0, (window.screenX || 0) + window.outerWidth - w - 40);
+      var top = Math.max(0, (window.screenY || 0) + 80);
+      popup = window.open(dlg.getAttribute('data-window'), 'chat-' + dlg.getAttribute('data-id'),
+        'popup=yes,width=' + w + ',height=' + h + ',left=' + left + ',top=' + top);
+      if (!popup) {
+        toast('팝업이 막혀 있습니다. 주소창 오른쪽에서 이 사이트의 팝업을 허용해 주세요.');
+        return false;
+      }
+      popup.focus();
+      return true;
+    };
+    document.getElementById('chat-pop').addEventListener('click', function () {
+      if (busy) { toast('답을 다 받은 뒤에 창을 분리할 수 있습니다.'); return; }
+      if (openPopup()) dlg.close();
+    });
+    // 팝업이 떠 있으면 「AI와 대화」는 그 창을 앞으로 가져온다
+    btn.addEventListener('click', function (e) {
+      if (popup && !popup.closed) {
+        e.stopImmediatePropagation();
+        popup.focus();
+      }
+    }, true);
+    // 팝업의 「화면 안으로」 버튼이 부른다: 팝업을 잊고 화면 안 창으로 다시 연다
+    window.chatDock = function () {
+      popup = null;
+      window.focus();
+      btn.click();
+    };
+    // 지원자 화면을 떠나면 팝업도 닫는다
+    addEventListener('pagehide', function () {
+      if (popup && !popup.closed) popup.close();
+    });
   }
-
-  // 창 크기가 줄면 화면 밖으로 나가지 않게 당겨 온다
-  window.addEventListener('resize', function () {
-    if (!dlg.open || dlg.classList.contains('is-min')) return;
-    var r = dlg.getBoundingClientRect();
-    var g = clampInto(r.left, r.top, r.width, r.height);
-    dlg.style.left = g.x + 'px';
-    dlg.style.top = g.y + 'px';
-  });
-
-  dlg.addEventListener('close', function () { dlg.classList.remove('is-min'); });
 
   // 자료 목록은 겉에 뜨는 창이라 바깥을 누르면 닫는다
   dlg.addEventListener('click', function (e) {
@@ -425,4 +467,41 @@
       .then(function (res) { if (!res.ok) throw new Error(); load(); })
       .catch(function () { toast('대화를 지우지 못했습니다.'); });
   });
+
+  // ── 팝업 창: 지원자 화면에 묶인다. 그 화면이 닫히거나 다른 곳으로 가면 닫고, 단계(면접 전·후)는 그 화면을 따라간다 ──
+  if (isWindow) {
+    var home = dlg.getAttribute('data-home');
+    // 화면 안으로: 지원자 화면의 떠 있는 창으로 돌려보내고 이 창은 닫는다 (사용자 2026-10-28)
+    document.getElementById('chat-dock').addEventListener('click', function () {
+      if (busy) { toast('답을 다 받은 뒤에 되돌릴 수 있습니다.'); return; }
+      try {
+        if (window.opener && window.opener.chatDock) window.opener.chatDock();
+      } catch (e) { /* 지원자 화면이 없으면 그냥 닫는다 */ }
+      window.close();
+    });
+    var openerStage = function () {
+      try {
+        var o = window.opener;
+        if (!o || o.closed || o.location.pathname !== home) return null;
+        return o.document.documentElement.getAttribute('data-stage') === 'after' ? 'AFTER' : 'BEFORE';
+      } catch (e) {
+        return null;
+      }
+    };
+    stage = openerStage() || 'BEFORE';
+    load();
+    input.focus();
+    setInterval(function () {
+      var s = openerStage();
+      if (s === null) { window.close(); return; }
+      // 단계가 바뀌면 AI가 보는 자료와 예시만 다시 불러온다 (대화는 지원자마다 하나라 그대로)
+      if (s !== stage) {
+        stage = s;
+        fetch(url + '?stage=' + stage, { headers: { 'X-Requested-With': 'fetch' } })
+          .then(function (res) { return res.ok ? res.json() : null; })
+          .then(function (data) { if (data) renderSources(data.sources); });
+        if (!busy) renderExamples();
+      }
+    }, 1000);
+  }
 })();

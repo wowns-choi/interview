@@ -98,6 +98,14 @@
 <c:if test="${staged}"><div class="stage-pane" data-pane="before"></c:if>
 <c:if test="${not busy}">
 <div class="iv-bar cand-bar">
+  <%-- 합격·불합격 도장은 면접 후와 같은 것을 면접 전 맨 위에도 둔다. 어느 쪽을 찍어도 둘 다 바뀐다 (사용자 2026-10-28) --%>
+  <c:if test="${staged}">
+  <div class="iv-decision" role="group" aria-label="합격 여부">
+    <button type="button" class="iv-stamp iv-pass${r.candidate.decision == 'PASS' ? ' is-on' : ''}" data-decision="PASS" aria-pressed="${r.candidate.decision == 'PASS'}"><span class="stamp-ink">합격</span></button>
+    <button type="button" class="iv-stamp iv-fail${r.candidate.decision == 'FAIL' ? ' is-on' : ''}" data-decision="FAIL" aria-pressed="${r.candidate.decision == 'FAIL'}"><span class="stamp-ink">불합격</span></button>
+  </div>
+  <span class="save-state" aria-live="polite"></span>
+  </c:if>
   <div class="cand-actions">
   <c:if test="${not empty r.candidate.maskedText and not reviewing}">
   <form method="post" action="<c:url value='/results/${r.candidate.id}/check'/>" data-busy="포지션 적합도를 검사하는 중"
@@ -589,12 +597,12 @@
 </section>
 </div>
 
-<%-- 보고서: 저장된 보고서를 그대로 보인다. 최신 기록 반영은 「최신 기록으로 맞추기」로만 (사용자 2026-10-28) --%>
+<%-- 보고서: 저장된 보고서를 그대로 보인다. 최신 기록 반영은 「최신 기록으로 동기화」로만 (사용자 2026-10-28) --%>
 <div class="stage-pane" data-pane="report" hidden>
   <div class="rp-bar">
     <span class="save-state" id="rp-state" aria-live="polite"></span>
-    <form method="post" action="<c:url value='/results/${r.candidate.id}/report'/>" data-busy="${empty report ? '보고서를 만드는 중' : '보고서를 맞추는 중'}">
-      <button type="submit" class="btn ${empty report ? 'btn-primary' : 'btn-ghost'} btn-sm"><svg class="i"><use href="#i-file"/></svg>${empty report ? '보고서 만들기' : '최신 기록으로 맞추기'}</button>
+    <form method="post" action="<c:url value='/results/${r.candidate.id}/report'/>" data-busy="${empty report ? '보고서를 만드는 중' : '보고서를 동기화하는 중'}"<c:if test="${not empty report}"> data-confirm="최신 기록으로 다시 채웁니다.&#10;지원자 정보·자격증·질의응답을 직접 고친 내용은 사라집니다. (면접관 의견은 그대로)&#10;&#10;계속할까요?"</c:if>>
+      <button type="submit" class="btn ${empty report ? 'btn-primary' : 'btn-ghost'} btn-sm"><svg class="i"><use href="#i-file"/></svg>${empty report ? '보고서 만들기' : '최신 기록으로 동기화'}</button>
     </form>
     <c:if test="${not empty report}">
     <button type="button" class="btn btn-primary btn-sm" id="rp-pdf" data-title="면접결과보고서_<c:out value='${r.candidate.displayName}'/>"><svg class="i"><use href="#i-download"/></svg>PDF 저장</button>
@@ -610,8 +618,9 @@
 </div>
 
 <%-- AI와 대화: 지금 단계의 정해진 자료를 보고 답한다. 자료는 고르지 않고 보여 주기만 한다 (사용자 2026-10-28) --%>
-<%-- 모달이 아니라 떠 있는 창: 제목 줄을 끌어 옮기고, 오른쪽 아래 모서리로 크기를 바꾸고, ─ 로 오른쪽 아래에 접어 둔다 (사용자 2026-10-28) --%>
-<dialog class="pf-dialog chat-dialog" id="dlg-chat" data-url="<c:url value='/results/${r.candidate.id}/chat'/>">
+<%-- 모달이 아닌 떠 있는 창: 제목 줄로 옮기고, 모서리로 크기를 바꾸고, ─ 로 접어 두고, 창 분리 버튼으로 별도 브라우저 창(chat-window.jsp)으로 옮긴다 (사용자 2026-10-28) --%>
+<dialog class="pf-dialog chat-dialog" id="dlg-chat" data-url="<c:url value='/results/${r.candidate.id}/chat'/>"
+        data-window="<c:url value='/results/${r.candidate.id}/chat/window'/>" data-id="${r.candidate.id}">
   <header>
     <h3>AI와 대화 <span class="chat-who">- <span data-cand-name><c:out value="${r.candidate.displayName}"/></span></span></h3>
     <details class="chat-src" id="chat-src-box">
@@ -619,6 +628,7 @@
       <ul class="chat-src-list" id="chat-src"></ul>
     </details>
     <button type="button" class="btn btn-ghost btn-sm" id="chat-reset">새 대화</button>
+    <button type="button" class="icon-btn" id="chat-pop" title="별도 창으로 분리"><svg class="i" viewBox="0 0 24 24"><path d="M14 4h6v6M20 4l-8 8M18 14v4a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
     <button type="button" class="icon-btn" id="chat-min" title="옆으로 치워 두기"><svg class="i" viewBox="0 0 24 24"><path d="M6 12h12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg></button>
     <button type="button" class="icon-btn" data-close title="닫기"><svg class="i"><use href="#i-x"/></svg></button>
   </header>

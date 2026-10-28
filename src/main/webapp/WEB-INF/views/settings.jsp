@@ -21,12 +21,6 @@
   </form>
 </section>
 
-<section class="stage set-card">
-  <form class="set-head set-toggle" method="post" action="<c:url value='/settings/privacy'/>">
-    <h2>개인정보 엄격 보호 모드</h2>
-    <label class="switch"><input type="checkbox" name="strict" value="true" ${strictPrivacy ? 'checked' : ''} onchange="this.form.requestSubmit()"><span class="switch-track"></span></label>
-  </form>
-</section>
 
 <section class="stage set-card">
   <header class="set-head">

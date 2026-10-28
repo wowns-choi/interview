@@ -75,6 +75,12 @@
 
   // 지원자 고르기 항목: 이름 · 등록 시각. 이름과 시각이 같으면(한 번에 여러 명) 먼저 올린 순서로 (2), (3)을 붙인다
   window.candLabel = function (select) {
+    // 닫힌 칸에도 이름·날짜·시각을 나눠 보이도록 고른 항목을 그대로 비춰 주는 칸을 둔다 (꾸밀 수 있는 select에서만, 사용자 2026-10-28)
+    if (window.CSS && CSS.supports('appearance', 'base-select') && !select.querySelector('selectedcontent')) {
+      var shown = document.createElement('button');
+      shown.appendChild(document.createElement('selectedcontent'));
+      select.insertBefore(shown, select.firstChild);
+    }
     var seen = {};
     var opts = Array.prototype.filter.call(select.options, function (o) { return o.hasAttribute('data-name'); });
     for (var i = opts.length - 1; i >= 0; i--) { // 목록은 최근 것이 위
@@ -98,6 +104,10 @@
       o.textContent = '';
       o.appendChild(line);
     }
+    // 닫힌 칸은 항목을 바꿀 때만 다시 비추므로, 글을 고친 뒤에는 직접 맞춘다
+    var sc = select.querySelector('selectedcontent');
+    var cur = select.options[select.selectedIndex];
+    if (sc && cur) sc.replaceChildren.apply(sc, Array.prototype.map.call(cur.childNodes, function (n) { return n.cloneNode(true); }));
   };
   document.querySelectorAll('#cand-list, select[data-cand-copy]').forEach(window.candLabel);
 
@@ -126,6 +136,8 @@
     if (!sel.closest('.pick-select')) return; // 사이드바의 지원자 고르기는 칸 폭 그대로
     // 고른 이름 길이에 맞춘다 (select 폭은 보통 가장 긴 option 기준이라 제목 크기 글자가 잘린다)
     var fit = function () {
+      // 닫힌 칸이 고른 항목을 그대로 비추면(꾸밀 수 있는 select) 글 크기가 제각각이라 내용에 맞춘다
+      if (sel.querySelector('selectedcontent')) { sel.style.width = 'max-content'; return; }
       var probe = document.createElement('span');
       var cs = getComputedStyle(sel);
       probe.style.cssText = 'position:absolute;visibility:hidden;white-space:pre;font:' + cs.font + ';letter-spacing:' + cs.letterSpacing;
@@ -638,7 +650,8 @@
   //    날짜 칸은 면접 질문지 제목 줄에 있고 질문지가 부분 갱신되면 새로 그려지므로 이벤트는 문서에서 받는다 ──
   var iv = document.getElementById('iv-bar');
   if (iv) {
-    var ivButtons = iv.querySelectorAll('[data-decision]');
+    // 도장은 면접 후와 면접 전 맨 위 두 곳에 있다. 어느 쪽을 찍어도 둘 다 맞춘다 (사용자 2026-10-28)
+    var ivButtons = document.querySelectorAll('.iv-stamp[data-decision]');
     var dateValue = function () {
       var el = document.getElementById('iv-date');
       return el ? el.value : (iv.getAttribute('data-date') || '');
@@ -646,7 +659,7 @@
     // 날짜 없이 "면접봤어요"만 체크해 둔 예전 기록은 날짜를 고치기 전까지 그대로 둔다
     var legacy = iv.getAttribute('data-interviewed') === 'true' && !dateValue();
     var decision = function () {
-      var on = iv.querySelector('[data-decision].is-on');
+      var on = iv.querySelector('.iv-stamp.is-on');
       return on ? on.getAttribute('data-decision') : '';
     };
     var show = function (d) {
@@ -659,8 +672,7 @@
         b.setAttribute('aria-pressed', on);
       });
     };
-    var ivSave = function (stateId) {
-      var state = document.getElementById(stateId);
+    var ivSave = function (state) {
       var before = { interviewed: legacy || !!dateValue() || !!decision(), date: dateValue(), decision: decision() };
       state.textContent = '저장 중';
       state.classList.remove('err');
@@ -684,7 +696,7 @@
       if (e.target.id !== 'iv-date') return;
       e.target.classList.remove('is-missing');
       legacy = false;
-      ivSave('iv-date-state');
+      ivSave(document.getElementById('iv-date-state'));
     });
     document.addEventListener('ivdecision', function (e) {
       if (e.detail.from !== 'stamp') show({ date: dateValue(), decision: e.detail.decision });
@@ -692,13 +704,17 @@
     ivButtons.forEach(function (b) {
       b.addEventListener('click', function () {
         var on = !b.classList.contains('is-on');
-        ivButtons.forEach(function (x) { x.classList.remove('is-on'); x.setAttribute('aria-pressed', false); });
-        b.classList.toggle('is-on', on);
-        b.setAttribute('aria-pressed', on);
+        var d = on ? b.getAttribute('data-decision') : '';
+        ivButtons.forEach(function (x) {
+          var xOn = x.getAttribute('data-decision') === d;
+          x.classList.toggle('is-on', xOn);
+          x.setAttribute('aria-pressed', xOn);
+          x.classList.remove('is-stamped');
+        });
         // 찍을 때만 도장 내려찍는 움직임
         b.classList.remove('is-stamped');
         if (on) { void b.offsetWidth; b.classList.add('is-stamped'); }
-        ivSave('iv-state');
+        ivSave(b.closest('.iv-bar').querySelector('.save-state'));
       });
     });
   }

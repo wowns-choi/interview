@@ -28,7 +28,6 @@ public class SettingsController {
     public String page(Model model) {
         model.addAttribute("apiKey", apiKeys);
         model.addAttribute("ollama", ollama.status());
-        model.addAttribute("strictPrivacy", privacyMode.isStrict());
         return "settings";
     }
 

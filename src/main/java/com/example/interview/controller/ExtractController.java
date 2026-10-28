@@ -337,6 +337,13 @@ public class ExtractController {
         return "redirect:/results/" + id + "#extract";
     }
 
+    /** AI와 대화 팝업 창 (사용자 2026-10-28). 지원자 화면의 버튼으로 연다 */
+    @GetMapping("/results/{id}/chat/window")
+    public String chatWindow(@PathVariable Long id, Model model) {
+        model.addAttribute("r", reportService.report(id));
+        return "chat-window";
+    }
+
     /** AI와 대화: 지금 단계의 대화와 AI가 보는 자료 */
     @GetMapping("/results/{id}/chat")
     @ResponseBody
