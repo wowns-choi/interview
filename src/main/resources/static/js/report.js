@@ -92,6 +92,10 @@
     rp.querySelectorAll('textarea').forEach(autosize);
     renumber();
   });
+  // 지원자 화면의 보고서 단계가 보일 때 (숨어 있을 때는 높이를 잴 수 없다)
+  document.addEventListener('stageshow', function (e) {
+    if (e.detail === 'report') rp.querySelectorAll('textarea').forEach(autosize);
+  });
 
   rp.addEventListener('input', function (e) {
     if (e.target.tagName === 'TEXTAREA') autosize(e.target);
@@ -187,10 +191,17 @@
     flush().then(function () { form.requestSubmit(submitter && submitter.form === form ? submitter : undefined); });
   }, true);
 
-  document.getElementById('rp-pdf').addEventListener('click', function () {
+  // PDF: 지원자 화면 안이라 보고서 종이만 인쇄하고, 파일 이름이 되는 제목을 잠시 바꾼다
+  var pdf = document.getElementById('rp-pdf');
+  if (pdf) pdf.addEventListener('click', function () {
     flush().then(function () {
       rp.querySelectorAll('textarea').forEach(autosize);
+      var title = document.title;
+      document.title = pdf.getAttribute('data-title') || title;
+      document.body.classList.add('print-report');
       window.print();
+      document.body.classList.remove('print-report');
+      document.title = title;
     });
   });
 
@@ -209,6 +220,14 @@
   if (!box) return;
   var state = document.getElementById('rp-state');
   var buttons = box.querySelectorAll('[data-decision]');
+  // 면접 날짜는 면접 전 단계 질문지 제목 줄에서 바뀔 수 있으니 그 칸을 먼저 본다
+  function dateNow() {
+    var el = document.getElementById('iv-date');
+    return el ? el.value : box.getAttribute('data-date');
+  }
+  document.addEventListener('ivdecision', function (e) {
+    if (e.detail.from !== 'report') show(e.detail.decision);
+  });
   function show(decision) {
     buttons.forEach(function (b) {
       var on = b.getAttribute('data-decision') === decision;
@@ -227,12 +246,14 @@
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'fetch' },
         body: JSON.stringify({ interviewed: box.getAttribute('data-interviewed') === 'true',
-          date: box.getAttribute('data-date'), decision: decision })
+          date: dateNow(), decision: decision })
       }).then(function (res) {
         return res.ok ? res.json() : res.text().then(function (t) { throw new Error(t); });
       }).then(function (saved) {
         box.setAttribute('data-interviewed', saved.interviewed);
         show(saved.decision);
+        // 같은 화면 면접 후 단계의 도장도 맞춘다
+        document.dispatchEvent(new CustomEvent('ivdecision', { detail: { decision: saved.decision, from: 'report' } }));
         state.textContent = '저장됨';
       }).catch(function (e) {
         show(before ? before.getAttribute('data-decision') : '');

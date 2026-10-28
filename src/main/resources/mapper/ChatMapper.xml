@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.example.interview.mapper.ChatMapper">
+
+    <insert id="insert" useGeneratedKeys="true" keyProperty="id" keyColumn="id">
+        INSERT INTO ai_chat (candidate_id, stage, role, content)
+        VALUES (#{candidateId}, #{stage}, #{role}, #{content})
+    </insert>
+
+    <select id="find" resultType="com.example.interview.domain.ChatMessage">
+        SELECT * FROM ai_chat WHERE candidate_id = #{candidateId} ORDER BY id
+    </select>
+
+    <delete id="delete">
+        DELETE FROM ai_chat WHERE candidate_id = #{candidateId}
+    </delete>
+</mapper>

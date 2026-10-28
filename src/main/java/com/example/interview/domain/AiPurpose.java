@@ -2,8 +2,10 @@ package com.example.interview.domain;
 
 public enum AiPurpose {
     PII_DETECT, CRITERIA_EXTRACT, EVIDENCE, EDUCATION_EVAL, TIMELINE, QUESTION, ARRANGE,
-    /** AI 의견 참고: 뽑는다면·안 뽑는다면 그 이유 (결정은 하지 않는다) */
+    /** 예전 AI 의견 참고 (뽑는다면·안 뽑는다면). 2026-10-28에 AI와 대화로 바뀌었다. 예전 로그 행에만 남는다 */
     OPINION,
+    /** AI와 대화: 면접 전·면접 후 자료를 주고 면접관이 자유롭게 묻는다 */
+    CHAT,
     /** 예전 자동 답변 채우기. ai_call_log의 예전 행만 쓴다 */
     AUTO_ANSWER,
     /** 면접 녹음본으로 질문-답변 목록 만들기 */

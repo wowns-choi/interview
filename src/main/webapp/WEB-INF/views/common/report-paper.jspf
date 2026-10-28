@@ -1,16 +1,5 @@
-<%@ page contentType="text/html; charset=UTF-8" pageEncoding="UTF-8" %>
-<%@ taglib prefix="c" uri="jakarta.tags.core" %>
-<c:set var="pageTitle" value="면접결과보고서_${candidate.displayName}"/>
-<c:set var="activeTab" value="fit"/>
-<%@ include file="common/header.jspf" %>
-
-<%-- 화면에서만 보이는 도구 줄. 영역별 버튼은 각 영역 제목 옆에 둔다 --%>
-<div class="rp-bar">
-  <a class="rp-back" href="<c:url value='/results/${candidate.id}'/>"><svg class="i"><use href="#i-arrow-right"/></svg><c:out value="${candidate.displayName}"/></a>
-  <span class="save-state" id="rp-state" aria-live="polite"></span>
-  <button type="button" class="btn btn-primary btn-sm" id="rp-pdf"><svg class="i"><use href="#i-download"/></svg>PDF 저장</button>
-</div>
-
+<%@ page pageEncoding="UTF-8" %>
+<%-- 면접 결과 보고서 종이. 지원자 화면의 보고서 단계에 들어간다 (candidate, position, report, hasRecord) --%>
 <article class="rp-paper" id="rp" data-url="<c:url value='/results/${candidate.id}/report'/>" data-source="${report.qaSource}">
   <header class="rp-head">
     <h1 class="rp-title">면접 결과 보고서</h1>
@@ -155,5 +144,3 @@
   </div>
 </template>
 
-<script src="<c:url value='/js/report.js'/>?v=${applicationScope.assetVersion}"></script>
-<%@ include file="common/footer.jspf" %>

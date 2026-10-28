@@ -94,7 +94,125 @@ public class AiClient {
         List<Map<String, Object>> messages = new ArrayList<>();
         messages.add(Map.of("role", "system", "content", systemPrompt));
         messages.add(Map.of("role", "user", "content", userContent(userContent, images)));
-        return withRetry(purpose, refId, messages, () -> send(purpose, refId, messages), type, validator);
+        return withRetry(purpose, refId, messages, () -> send(purpose, refId, messages, true), type, validator);
+    }
+
+    /**
+     * 대화: JSON이 아니라 글로, 스트림으로 받는다 (사용자 2026-10-28). 받는 대로 onDelta에 조각을 넘기고 다 받은 글을 돌려준다.
+     * turns는 role(user, assistant)과 content. 아무 조각도 받기 전에 실패했을 때만 한 번 다시 보낸다.
+     */
+    public String chatStream(AiPurpose purpose, Long refId, String systemPrompt, List<Map<String, String>> turns,
+            Consumer<String> onDelta) {
+        if (!apiKeys.isSet()) {
+            throw new AiCallException("AI API 키가 설정되지 않았습니다. 설정 탭에서 GPT API 키를 넣으세요.");
+        }
+        List<Map<String, Object>> messages = new ArrayList<>();
+        messages.add(Map.of("role", "system", "content", systemPrompt));
+        turns.forEach(t -> messages.add(Map.of("role", t.get("role"), "content", t.get("content"))));
+        boolean[] started = { false };
+        Consumer<String> sink = d -> {
+            started[0] = true;
+            onDelta.accept(d);
+        };
+        try {
+            return sendStream(purpose, refId, messages, sink).strip();
+        } catch (AiCallException first) {
+            if (started[0]) {
+                throw first;
+            }
+            log.warn("AI 대화 실패, 한 번 더 보낸다 (refId={}): {}", refId, first.getMessage());
+            return sendStream(purpose, refId, messages, sink).strip();
+        }
+    }
+
+    /** stream: true. 응답은 "data: {...}" 줄들이고 "data: [DONE]"으로 끝난다. 마지막 조각에 usage가 온다 */
+    private String sendStream(AiPurpose purpose, Long refId, List<Map<String, Object>> messages, Consumer<String> onDelta) {
+        Map<String, Object> body = new LinkedHashMap<>();
+        body.put("model", props.modelFor(purpose));
+        body.put("messages", messages);
+        body.put(props.maxTokensParam(), props.maxTokensFor(purpose));
+        body.put("stream", true);
+        body.put("stream_options", Map.of("include_usage", true));
+
+        AiCallLog callLog = new AiCallLog();
+        callLog.setPurpose(purpose);
+        callLog.setRefId(refId);
+        callLog.setModel(props.modelFor(purpose));
+        callLog.setSuccessYn("N");
+        traceRequest("GPT 요청", purpose, refId, props.modelFor(purpose), messages);
+        long start = System.currentTimeMillis();
+        StringBuilder text = new StringBuilder();
+        String[] finishReason = { "" };
+        try {
+            restClient.post()
+                    .uri("/chat/completions")
+                    .header("Authorization", "Bearer " + apiKeys.get())
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .accept(MediaType.TEXT_EVENT_STREAM)
+                    .body(body)
+                    .exchange((req, res) -> {
+                        if (res.getStatusCode().isError()) {
+                            String err = new String(res.getBody().readAllBytes(), java.nio.charset.StandardCharsets.UTF_8);
+                            throw new AiCallException("AI API 오류 HTTP " + res.getStatusCode().value() + ": " + abbreviate(err));
+                        }
+                        try (java.io.BufferedReader reader = new java.io.BufferedReader(
+                                new java.io.InputStreamReader(res.getBody(), java.nio.charset.StandardCharsets.UTF_8))) {
+                            String line;
+                            while ((line = reader.readLine()) != null) {
+                                if (!line.startsWith("data:")) {
+                                    continue;
+                                }
+                                String data = line.substring(5).strip();
+                                if (data.equals("[DONE]")) {
+                                    break;
+                                }
+                                JsonNode chunk = objectMapper.readTree(data);
+                                JsonNode usage = chunk.path("usage");
+                                if (usage.isObject()) {
+                                    callLog.setInputTokens(usage.path("prompt_tokens").asInt());
+                                    callLog.setOutputTokens(usage.path("completion_tokens").asInt());
+                                }
+                                JsonNode choice = chunk.path("choices").path(0);
+                                String delta = choice.path("delta").path("content").asString(null);
+                                if (delta != null && !delta.isEmpty()) {
+                                    text.append(delta);
+                                    onDelta.accept(delta);
+                                }
+                                String fr = choice.path("finish_reason").asString(null);
+                                if (fr != null && !fr.isEmpty()) {
+                                    finishReason[0] = fr;
+                                }
+                            }
+                        }
+                        return null;
+                    });
+            callLog.setLatencyMs(elapsed(start));
+            TRACE.info("[GPT 응답] purpose={} refId={} model={} {}ms 토큰 입력={} 출력={} finish_reason={}\n{}",
+                    purpose, refId, callLog.getModel(), callLog.getLatencyMs(), callLog.getInputTokens(),
+                    callLog.getOutputTokens(), finishReason[0], text);
+            if (text.isEmpty()) {
+                throw new AiCallException("AI 응답에 텍스트가 없습니다. (finish_reason=" + finishReason[0] + ")");
+            }
+            callLog.setSuccessYn("Y");
+            if ("length".equals(finishReason[0])) {
+                callLog.setErrorMessage("finish_reason=length (출력 토큰 한도 도달)");
+            }
+            return text.toString();
+        } catch (AiCallException e) {
+            callLog.setLatencyMs(elapsed(start));
+            callLog.setErrorMessage(e.getMessage());
+            throw e;
+        } catch (RuntimeException e) {
+            callLog.setLatencyMs(elapsed(start));
+            callLog.setErrorMessage(e.getClass().getSimpleName() + ": " + e.getMessage());
+            throw new AiCallException("AI 호출 실패: " + e.getMessage(), e);
+        } finally {
+            try {
+                callLogger.log(callLog);
+            } catch (RuntimeException logError) {
+                log.error("ai_call_log 저장 실패", logError);
+            }
+        }
     }
 
     /**
@@ -143,12 +261,12 @@ public class AiClient {
         return parts;
     }
 
-    private String send(AiPurpose purpose, Long refId, List<Map<String, Object>> messages) {
+    private String send(AiPurpose purpose, Long refId, List<Map<String, Object>> messages, boolean json) {
         Map<String, Object> body = new LinkedHashMap<>();
         body.put("model", props.modelFor(purpose));
         body.put("messages", messages);
         body.put(props.maxTokensParam(), props.maxTokensFor(purpose));
-        if (props.jsonMode()) {
+        if (json && props.jsonMode()) {
             body.put("response_format", Map.of("type", "json_object"));
         }
 

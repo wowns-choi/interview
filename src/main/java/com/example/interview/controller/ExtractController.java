@@ -30,10 +30,12 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.ResponseBody;
 import org.springframework.web.multipart.MultipartFile;
 import org.springframework.web.multipart.MultipartHttpServletRequest;
+import org.springframework.web.servlet.mvc.method.annotation.StreamingResponseBody;
 import org.springframework.web.servlet.mvc.support.RedirectAttributes;
 
 import com.example.interview.ai.AiCallException;
 import com.example.interview.domain.Candidate;
+import com.example.interview.domain.ChatMessage;
 import com.example.interview.domain.EvalCriterion;
 import com.example.interview.domain.Position;
 import com.example.interview.domain.CandidateFile;
@@ -48,7 +50,8 @@ import com.example.interview.service.CareerEvalService;
 import com.example.interview.service.CustomQuestionTypeService;
 import com.example.interview.service.ExtractionService;
 import com.example.interview.service.InterviewRecordService;
-import com.example.interview.service.OpinionService;
+import com.example.interview.service.ChatService;
+import com.example.interview.service.InterviewReportService;
 import com.example.interview.service.PositionService;
 import com.example.interview.service.PrivacyModeService;
 import com.example.interview.service.RankingService;
@@ -76,7 +79,7 @@ public class ExtractController {
 
     private final PositionService positionService;
     private final ExtractionService extractionService;
-    private final OpinionService opinionService;
+    private final ChatService chatService;
     private final ReportService reportService;
     private final RankingService rankingService;
     private final BatchCheckService batchCheckService;
@@ -280,7 +283,9 @@ public class ExtractController {
         model.addAttribute("r", r);
         model.addAttribute("record", InterviewRecordService.parse(r.getCandidate().getRecordJson()));
         model.addAttribute("hasReport", r.getCandidate().getReportJson() != null);
-        model.addAttribute("opinionRunning", opinionService.isRunning(id));
+        // 보고서 단계: 저장된 보고서를 그대로 (맞추기는 그 안의 버튼으로만)
+        model.addAttribute("report", InterviewReportService.parse(r.getCandidate().getReportJson()));
+        model.addAttribute("hasRecord", InterviewRecordService.parse(r.getCandidate().getRecordJson()) != null);
         model.addAttribute("candFiles", candidateService.files(id));
         model.addAttribute("customTypes", customQuestionTypeService.list());
         addFit(model, r.getPosition().getId());
@@ -332,17 +337,59 @@ public class ExtractController {
         return "redirect:/results/" + id + "#extract";
     }
 
-    /** AI 의견은 뒤에서 받는다. 화면은 상태를 물어 끝나면 알린다 */
-    @PostMapping("/results/{id}/opinion")
-    public ResponseEntity<Void> askOpinion(@PathVariable Long id) {
-        opinionService.start(id);
-        return ResponseEntity.accepted().build();
+    /** AI와 대화: 지금 단계의 대화와 AI가 보는 자료 */
+    @GetMapping("/results/{id}/chat")
+    @ResponseBody
+    public Map<String, Object> chat(@PathVariable Long id, @RequestParam(defaultValue = "BEFORE") String stage) {
+        Map<String, Object> m = new LinkedHashMap<>();
+        m.put("messages", chatService.history(id).stream().map(ExtractController::chatJson).toList());
+        m.put("sources", chatService.sources(id, stage));
+        return m;
     }
 
-    @GetMapping("/results/{id}/opinion/status")
-    @ResponseBody
-    public Map<String, String> opinionStatus(@PathVariable Long id) {
-        return opinionService.status(id);
+    /**
+     * {"stage": "BEFORE" | "AFTER", "message": "..."} → AI의 답을 스트림으로 (사용자 2026-10-28).
+     * 한 줄에 JSON 하나(NDJSON): {"d": 조각}…, 끝에 {"done": true, "content": 전체} 또는 {"error": 메시지}.
+     * 빈 질문 같은 검사 오류는 스트림을 열기 전에 일반 오류로 돌려준다.
+     */
+    @PostMapping("/results/{id}/chat")
+    public ResponseEntity<StreamingResponseBody> sendChat(@PathVariable Long id, @RequestBody Map<String, String> body) {
+        ChatService.Prepared prepared = chatService.prepare(id, body.get("stage"), body.get("message"));
+        StreamingResponseBody stream = out -> {
+            java.util.function.Consumer<Map<String, Object>> write = m -> {
+                try {
+                    out.write((CHAT_JSON.writeValueAsString(m) + "\n").getBytes(java.nio.charset.StandardCharsets.UTF_8));
+                    out.flush();
+                } catch (java.io.IOException e) {
+                    throw new java.io.UncheckedIOException(e);
+                }
+            };
+            try {
+                ChatMessage reply = chatService.answer(prepared, d -> write.accept(Map.of("d", d)));
+                write.accept(Map.of("done", true, "content", reply.getContent()));
+            } catch (BusinessException e) {
+                write.accept(Map.of("error", e.getMessage()));
+            }
+        };
+        return ResponseEntity.ok()
+                .contentType(MediaType.parseMediaType("application/x-ndjson;charset=UTF-8"))
+                .header("X-Accel-Buffering", "no")
+                .body(stream);
+    }
+
+    private static final tools.jackson.databind.json.JsonMapper CHAT_JSON = tools.jackson.databind.json.JsonMapper.builder().build();
+
+    @DeleteMapping("/results/{id}/chat")
+    public ResponseEntity<Void> resetChat(@PathVariable Long id) {
+        chatService.reset(id);
+        return ResponseEntity.noContent().build();
+    }
+
+    private static Map<String, Object> chatJson(ChatMessage msg) {
+        Map<String, Object> m = new LinkedHashMap<>();
+        m.put("role", msg.getRole());
+        m.put("content", msg.getContent());
+        return m;
     }
 
     @PostMapping("/results/{id}/questions/merge")

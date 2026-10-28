@@ -32,23 +32,28 @@
 <div class="split fit-split${empty r or not r.fitChecked ? ' is-single' : ''}">
   <c:if test="${not empty r and r.fitChecked}">
   <aside class="side">
-    <nav class="toc" id="toc">
+    <%-- 단계: 면접 전 · 면접 후 · 보고서. 한 화면 안에서 바꾸고 주소 끝(#after)에 남긴다 (사용자 2026-10-28) --%>
+    <nav class="stage-nav" id="stage-nav" aria-label="단계">
+      <button type="button" data-stage="before"><span class="stage-no">1</span>면접 전</button>
+      <button type="button" data-stage="after"><span class="stage-no">2</span>면접 후</button>
+      <button type="button" data-stage="report"><span class="stage-no">3</span>보고서</button>
+    </nav>
+    <nav class="toc" id="toc" data-only="before">
       <a href="#sec-profile">개인정보</a>
       <a href="#sec-evidence">평가 기준 충족 여부</a>
       <a href="#questions">면접 질문</a>
     </nav>
-    <%-- AI 의견: 누르면 뒤에서 받고(다른 일을 해도 된다), 끝나면 알린다. 받았으면 누를 때 창으로 연다 --%>
-    <div class="op-side" id="op-side" data-state="${opinionRunning ? 'RUNNING' : (empty r.opinion ? 'NONE' : 'DONE')}"
-         data-start="<c:url value='/results/${r.candidate.id}/opinion'/>" data-status="<c:url value='/results/${r.candidate.id}/opinion/status'/>">
+    <div class="op-side" id="op-side" data-only="before after">
       <%-- 필수질문 체크: 질문지 맨 끝까지 내리지 않아도 되게 사이드바에 (사용자 2026-10-27) --%>
       <c:if test="${not empty r.sections}">
-      <button type="button" class="side-btn must-side js-must-check" id="must-check">
+      <button type="button" class="side-btn must-side js-must-check" id="must-check" data-only="before">
         <span class="op-ico"><svg class="i"><use href="#i-check"/></svg></span><span>필수질문 체크</span>
       </button>
       </c:if>
-      <button type="button" class="op-btn" id="op-btn">
+      <%-- AI와 대화: 지금 단계의 자료를 보고 답한다 (예전 AI 의견 보기, 사용자 2026-10-28) --%>
+      <button type="button" class="op-btn" id="chat-btn">
         <span class="op-ico"><svg class="i"><use href="#i-spark"/></svg></span>
-        <span class="op-label">${opinionRunning ? 'AI 의견 추출 중…' : (empty r.opinion ? 'AI 의견 받기' : 'AI 의견 보기')}</span>
+        <span class="op-label">AI와 대화</span>
       </button>
     </div>
   </aside>
@@ -88,14 +93,11 @@
 <c:set var="pf" value="${r.profile}"/>
 <c:set var="showProfile" value="${r.fitChecked and ((not empty pf and pf.filled) or not empty position.requiredExperience)}"/>
 <c:set var="renameBtn"><c:if test="${not busy}"><button type="button" class="icon-btn" id="cand-rename" title="이름 바꾸기"><svg class="i"><use href="#i-pencil"/></svg></button></c:if></c:set>
-<%-- 면접 기록: 면접관이 직접 체크한다 (AI는 합격·불합격을 정하지 않는다) --%>
-<div class="iv-bar" id="iv-bar" data-url="<c:url value='/results/${r.candidate.id}/interview'/>" data-interviewed="${r.candidate.interviewed}" data-date="${r.candidate.interviewDate}">
-  <div class="iv-decision" role="group" aria-label="합격 여부">
-    <button type="button" class="iv-stamp iv-pass${r.candidate.decision == 'PASS' ? ' is-on' : ''}" data-decision="PASS" aria-pressed="${r.candidate.decision == 'PASS'}"><span class="stamp-ink">합격</span></button>
-    <button type="button" class="iv-stamp iv-fail${r.candidate.decision == 'FAIL' ? ' is-on' : ''}" data-decision="FAIL" aria-pressed="${r.candidate.decision == 'FAIL'}"><span class="stamp-ink">불합격</span></button>
-  </div>
-  <span class="save-state" id="iv-state" aria-live="polite"></span>
-  <c:if test="${not busy}">
+<%-- 단계 화면은 적합도 검사가 끝나야 생긴다. 그 전에는 지금처럼 한 화면 --%>
+<c:set var="staged" value="${r.fitChecked}"/>
+<c:if test="${staged}"><div class="stage-pane" data-pane="before"></c:if>
+<c:if test="${not busy}">
+<div class="iv-bar cand-bar">
   <div class="cand-actions">
   <c:if test="${not empty r.candidate.maskedText and not reviewing}">
   <form method="post" action="<c:url value='/results/${r.candidate.id}/check'/>" data-busy="포지션 적합도를 검사하는 중"
@@ -113,8 +115,8 @@
     <button type="submit" class="btn btn-ghost btn-sm btn-danger-text">삭제</button>
   </form>
   </div>
-  </c:if>
 </div>
+</c:if>
 <%-- 가린 이력서(외부 AI가 본 글) 보기와 지원자가 낸 원본 파일 (가리지 않은 원본). 버튼 하나로 모아 누르면 목록이 열린다 (사용자 2026-10-27) --%>
 <c:set var="showMasked" value="${not empty r.candidate.maskedText and not reviewing}"/>
 <c:if test="${not empty candFiles or not empty r.candidate.maskedText}">
@@ -401,13 +403,9 @@
 <section class="stage" id="questions">
   <header class="stage-head">
     <h2>면접 질문지</h2>
-    <div class="qtabs" role="tablist">
-      <button type="button" role="tab" class="qtab" data-qtab="sheet" aria-selected="true">면접전(타이핑)</button>
-      <button type="button" role="tab" class="qtab" data-qtab="record" aria-selected="false">면접후(녹음본)<c:if test="${not empty record}"> <b>${fn:length(record.items)}</b></c:if></button>
-    </div>
     <label class="iv-date">면접 본 날짜<input type="datetime-local" id="iv-date" value="${r.candidate.interviewDate}"><span class="save-state" id="iv-date-state" aria-live="polite"></span></label>
   </header>
-  <div class="qpane" data-qpane="sheet">
+  <div class="qpane">
   <%-- 질문 추출: 버튼 → 창에서 유형 이름을 적고(기본 네 유형, 직접 적은 유형) 추출. 여러 번 추출해 쌓고, 질문지에 넣는다 --%>
   <dialog class="pf-dialog qx-dialog" id="dlg-extract">
     <header><h3>면접 질문 추출</h3><button type="button" class="icon-btn" data-close title="닫기"><svg class="i"><use href="#i-x"/></svg></button></header>
@@ -473,7 +471,7 @@
   <div class="iq-board" id="iq-board">
     <c:forEach var="sec" items="${r.sections}">
       <section class="iq-sec" data-section="<c:out value='${sec.section}'/>">
-        <h3 class="iq-sec-name"><c:out value="${sec.section}"/></h3>
+        <h3 class="iq-sec-name"><span class="iq-sec-title"><c:out value="${sec.section}"/></span><span class="row-actions iq-sec-tools"><button type="button" class="icon-btn js-sec-rename" title="카테고리 이름 바꾸기"><svg class="i"><use href="#i-pencil"/></svg></button><button type="button" class="icon-btn danger js-sec-del" title="카테고리 삭제"><svg class="i"><use href="#i-trash"/></svg></button></span></h3>
         <ol class="iq-list">
           <c:forEach var="qv" items="${sec.questions}">
             <c:set var="q" value="${qv.question}"/>
@@ -522,6 +520,8 @@
         <button type="button" class="add-row js-q-add"><svg class="i"><use href="#i-plus"/></svg>질문 추가</button>
       </section>
     </c:forEach>
+    <%-- 카테고리는 질문마다 붙은 이름이라, 질문이 없는 새 카테고리는 질문을 넣어야 저장된다 (사용자 2026-10-28) --%>
+    <button type="button" class="add-row add-sec js-sec-add"><svg class="i"><use href="#i-plus"/></svg>카테고리 추가</button>
   </div>
   <%-- 질문지 끝에도 같은 버튼: 면접을 마칠 때 바로 보이게 --%>
   <div class="must-check">
@@ -530,9 +530,26 @@
   </c:if>
   </div>
 
-  <%-- 면접 기록: 녹음본만 보고 만든 질문-답변 (녹음본 순서). 질문지 답변과 섞지 않는다 --%>
-  <div class="qpane" data-qpane="record" id="record" hidden>
-    <form class="aa rec-form" id="rec-form" method="post" data-partial="#questions" enctype="multipart/form-data" action="<c:url value='/results/${r.candidate.id}/record'/>"
+</section>
+</c:if>
+<c:if test="${staged}">
+</div>
+
+<%-- 면접 후: 합격·불합격 도장과 녹음본으로 만든 면접 기록 (사용자 2026-10-28) --%>
+<div class="stage-pane" data-pane="after" hidden>
+<%-- 면접관이 직접 체크한다 (AI는 합격·불합격을 정하지 않는다) --%>
+<div class="iv-bar" id="iv-bar" data-url="<c:url value='/results/${r.candidate.id}/interview'/>" data-interviewed="${r.candidate.interviewed}" data-date="${r.candidate.interviewDate}">
+  <div class="iv-decision" role="group" aria-label="합격 여부">
+    <button type="button" class="iv-stamp iv-pass${r.candidate.decision == 'PASS' ? ' is-on' : ''}" data-decision="PASS" aria-pressed="${r.candidate.decision == 'PASS'}"><span class="stamp-ink">합격</span></button>
+    <button type="button" class="iv-stamp iv-fail${r.candidate.decision == 'FAIL' ? ' is-on' : ''}" data-decision="FAIL" aria-pressed="${r.candidate.decision == 'FAIL'}"><span class="stamp-ink">불합격</span></button>
+  </div>
+  <span class="save-state" id="iv-state" aria-live="polite"></span>
+</div>
+<%-- 녹음본만 보고 만든 질문-답변 (녹음본 순서). 질문지 답변과 섞지 않는다 --%>
+<section class="stage" id="record-stage">
+  <header class="stage-head"><h2>면접 기록</h2><c:if test="${not empty record}"><span class="count">${fn:length(record.items)}</span></c:if></header>
+  <div id="record">
+    <form class="aa rec-form" id="rec-form" method="post" data-partial="#record" enctype="multipart/form-data" action="<c:url value='/results/${r.candidate.id}/record'/>"
           data-busy="녹음본으로 면접 기록을 만드는 중" data-busy-sub="녹음본이 길면 몇 분 걸립니다"
           <c:if test="${not empty record}">data-confirm="면접 기록을 새로 만듭니다. 지금 기록은 바뀝니다." hidden</c:if>>
       <textarea name="transcript" class="aa-text" rows="8" placeholder="녹음본 글을 붙여넣거나 파일을 끌어다 놓으세요"><c:out value="${r.candidate.transcript}"/></textarea>
@@ -570,48 +587,49 @@
     </c:if>
   </div>
 </section>
-</c:if>
+</div>
 
-<%-- AI 의견 참고: 뽑는다면·안 뽑는다면 그 이유. 결정은 면접관이 한다.
-     사이드바 버튼(#op-side)으로 뒤에서 받고, 끝나면 이 창으로 본다 (사용자 2026-10-27) --%>
-<c:if test="${qOpen}">
-<dialog class="pf-dialog op-dialog" id="dlg-opinion">
+<%-- 보고서: 저장된 보고서를 그대로 보인다. 최신 기록 반영은 「최신 기록으로 맞추기」로만 (사용자 2026-10-28) --%>
+<div class="stage-pane" data-pane="report" hidden>
+  <div class="rp-bar">
+    <span class="save-state" id="rp-state" aria-live="polite"></span>
+    <form method="post" action="<c:url value='/results/${r.candidate.id}/report'/>" data-busy="${empty report ? '보고서를 만드는 중' : '보고서를 맞추는 중'}">
+      <button type="submit" class="btn ${empty report ? 'btn-primary' : 'btn-ghost'} btn-sm"><svg class="i"><use href="#i-file"/></svg>${empty report ? '보고서 만들기' : '최신 기록으로 맞추기'}</button>
+    </form>
+    <c:if test="${not empty report}">
+    <button type="button" class="btn btn-primary btn-sm" id="rp-pdf" data-title="면접결과보고서_<c:out value='${r.candidate.displayName}'/>"><svg class="i"><use href="#i-download"/></svg>PDF 저장</button>
+    </c:if>
+  </div>
+  <c:choose>
+    <c:when test="${empty report}"><p class="rp-none">아직 보고서가 없습니다.</p></c:when>
+    <c:otherwise>
+      <c:set var="candidate" value="${r.candidate}"/>
+      <%@ include file="common/report-paper.jspf" %>
+    </c:otherwise>
+  </c:choose>
+</div>
+
+<%-- AI와 대화: 지금 단계의 정해진 자료를 보고 답한다. 자료는 고르지 않고 보여 주기만 한다 (사용자 2026-10-28) --%>
+<%-- 모달이 아니라 떠 있는 창: 제목 줄을 끌어 옮기고, 오른쪽 아래 모서리로 크기를 바꾸고, ─ 로 오른쪽 아래에 접어 둔다 (사용자 2026-10-28) --%>
+<dialog class="pf-dialog chat-dialog" id="dlg-chat" data-url="<c:url value='/results/${r.candidate.id}/chat'/>">
   <header>
-    <h3>AI 의견 참고</h3>
-    <c:if test="${not empty r.opinion}"><span class="op-at"><c:out value="${r.opinion.askedAt}"/></span></c:if>
-    <button type="button" class="btn btn-ghost btn-sm op-again" id="op-again">다시 받기</button>
+    <h3>AI와 대화 <span class="chat-who">- <span data-cand-name><c:out value="${r.candidate.displayName}"/></span></span></h3>
+    <details class="chat-src" id="chat-src-box">
+      <summary class="chat-src-cap">AI가 보는 자료 <span class="chat-src-n" id="chat-src-n"></span></summary>
+      <ul class="chat-src-list" id="chat-src"></ul>
+    </details>
+    <button type="button" class="btn btn-ghost btn-sm" id="chat-reset">새 대화</button>
+    <button type="button" class="icon-btn" id="chat-min" title="옆으로 치워 두기"><svg class="i" viewBox="0 0 24 24"><path d="M6 12h12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg></button>
     <button type="button" class="icon-btn" data-close title="닫기"><svg class="i"><use href="#i-x"/></svg></button>
   </header>
-  <c:if test="${not empty r.opinion}">
-    <div class="op-grid">
-      <div class="op-col is-yes">
-        <h3>뽑는다면</h3>
-        <c:choose>
-          <c:when test="${empty r.opinion.hireReasons}"><p class="op-empty">없음</p></c:when>
-          <c:otherwise>
-            <ul class="op-list">
-              <c:forEach var="p" items="${r.opinion.hireReasons}">
-                <li><p class="op-point"><c:out value="${p.point}"/></p><c:if test="${not empty p.basis}"><p class="op-basis"><c:out value="${p.basis}"/></p></c:if></li>
-              </c:forEach>
-            </ul>
-          </c:otherwise>
-        </c:choose>
-      </div>
-      <div class="op-col is-no">
-        <h3>안 뽑는다면</h3>
-        <c:choose>
-          <c:when test="${empty r.opinion.noHireReasons}"><p class="op-empty">없음</p></c:when>
-          <c:otherwise>
-            <ul class="op-list">
-              <c:forEach var="p" items="${r.opinion.noHireReasons}">
-                <li><p class="op-point"><c:out value="${p.point}"/></p><c:if test="${not empty p.basis}"><p class="op-basis"><c:out value="${p.basis}"/></p></c:if></li>
-              </c:forEach>
-            </ul>
-          </c:otherwise>
-        </c:choose>
-      </div>
-    </div>
-  </c:if>
+  <div class="chat-log" id="chat-log"></div>
+  <div class="chat-examples" id="chat-examples"
+       data-before="제공된 정보들을 토대로 채용해야 할 이유와 채용하지 말아야 할 이유를 각각 정리해 주세요.|이력서에서 서로 맞지 않거나 과장된 것으로 보이는 내용이 있다면 짚어 주세요.|이 포지션 기준으로 지원자의 핵심 강점과 우려되는 점을 하나씩 알려 주세요."
+       data-after="제공된 정보들을 토대로 채용해야 할 이유와 채용하지 말아야 할 이유를 각각 정리해 주세요.|이력서 내용과 면접에서의 답변이 일치하지 않는 부분이 있다면 짚어 주세요.|면접 답변 중 구체적이고 설득력 있었던 부분과 부족했던 부분을 정리해 주세요."></div>
+  <form class="chat-form" id="chat-form">
+    <textarea id="chat-input" rows="2" maxlength="4000" placeholder="이 지원자에 대해 물어보세요"></textarea>
+    <button type="submit" class="btn btn-primary" id="chat-send">보내기</button>
+  </form>
 </dialog>
 </c:if>
   </c:otherwise>
@@ -644,6 +662,10 @@
 <div class="toast" id="toast" role="status" hidden></div>
 
 <script src="<c:url value='/js/extract.js'/>?v=${applicationScope.assetVersion}"></script>
+<c:if test="${not empty r and r.fitChecked}">
+<script src="<c:url value='/js/report.js'/>?v=${applicationScope.assetVersion}"></script>
+<script src="<c:url value='/js/chat.js'/>?v=${applicationScope.assetVersion}"></script>
+</c:if>
 </c:otherwise>
 </c:choose>
 <%@ include file="common/footer.jspf" %>

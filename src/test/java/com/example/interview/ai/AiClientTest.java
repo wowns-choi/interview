@@ -83,6 +83,41 @@ class AiClientTest {
     }
 
     @Test
+    void chatStreamPassesDeltasAndLogsUsage() {
+        String sse = """
+                data: {"choices":[{"delta":{"role":"assistant","content":""}}]}
+
+                data: {"choices":[{"delta":{"content":"뽑는다면 "}}]}
+
+                data: {"choices":[{"delta":{"content":"**배치**"},"finish_reason":null}]}
+
+                data: {"choices":[{"delta":{},"finish_reason":"stop"}]}
+
+                data: {"choices":[],"usage":{"prompt_tokens":300,"completion_tokens":12}}
+
+                data: [DONE]
+
+                """;
+        server.expect(requestTo("http://ai.test/v1/chat/completions"))
+                .andExpect(jsonPath("$.stream").value(true))
+                .andExpect(jsonPath("$.response_format").doesNotExist())
+                .andExpect(jsonPath("$.messages[1].role").value("user"))
+                .andRespond(withSuccess(sse, MediaType.TEXT_EVENT_STREAM));
+
+        List<String> deltas = new java.util.ArrayList<>();
+        String text = client.chatStream(AiPurpose.CHAT, 7L, "시스템", List.of(java.util.Map.of("role", "user", "content", "왜?")),
+                deltas::add);
+
+        assertThat(deltas).containsExactly("뽑는다면 ", "**배치**");
+        assertThat(text).isEqualTo("뽑는다면 **배치**");
+        AiCallLog log = capturedLogs(1).get(0);
+        assertThat(log.getSuccessYn()).isEqualTo("Y");
+        assertThat(log.getInputTokens()).isEqualTo(300);
+        assertThat(log.getOutputTokens()).isEqualTo(12);
+        server.verify();
+    }
+
+    @Test
     void educationEvalUsesTheReasoningModel() {
         server.expect(requestTo("http://ai.test/v1/chat/completions"))
                 .andExpect(jsonPath("$.model").value("test-reasoning-model"))

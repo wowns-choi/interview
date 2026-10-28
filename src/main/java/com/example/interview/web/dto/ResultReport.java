@@ -5,7 +5,6 @@ import java.util.List;
 import java.util.Map;
 
 import com.example.interview.ai.dto.CareerEvalResult;
-import com.example.interview.ai.dto.OpinionResult;
 import com.example.interview.domain.Candidate;
 import com.example.interview.domain.CandidateProfile;
 import com.example.interview.domain.Evidence;
@@ -28,8 +27,6 @@ public class ResultReport {
     List<SectionView> sections;
     /** 추출만 해 두고 아직 질문지에 넣지 않은 질문. 유형별로 묶는다 */
     List<SectionView> extracted;
-    /** AI 의견 참고. 아직 묻지 않았으면 null */
-    OpinionResult opinion;
     Map<Long, Evidence> evidenceById;
     AiUsageSummary usage;
 

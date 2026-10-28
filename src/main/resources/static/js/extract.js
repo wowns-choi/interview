@@ -853,6 +853,12 @@
         api('DELETE', resultBase + '/questions/' + row.dataset.id).then(function () { removeRow(row); toast('삭제했습니다'); });
       } else if (btn.classList.contains('js-q-add')) {
         addQuestion(btn.closest('.iq-sec'));
+      } else if (btn.classList.contains('js-sec-rename')) {
+        renameSection(btn.closest('.iq-sec'));
+      } else if (btn.classList.contains('js-sec-del')) {
+        deleteSection(btn.closest('.iq-sec'));
+      } else if (btn.classList.contains('js-sec-add')) {
+        addSection(btn);
       } else if (btn.classList.contains('js-q-check') && row.dataset.id) {
         var checked = !row.classList.contains('is-checked');
         setChecked(row, checked);
@@ -954,8 +960,59 @@
       });
     }
 
+    // ── 카테고리 (사용자 2026-10-28): 질문지의 카테고리는 질문마다 붙은 이름이라, 바꾸면 순서 저장으로 그 질문들의 이름이 바뀐다.
+    //    이 지원자 질문지에만 적용되고 공통 질문 설정은 그대로다 ──
+    function sectionNames(except) {
+      return Array.prototype.filter.call(board.querySelectorAll('.iq-sec'), function (s) { return s !== except; })
+        .map(function (s) { return s.dataset.section; });
+    }
+
+    function nameSection(sec, value, onCancel) {
+      var title = sec.querySelector('.iq-sec-title');
+      editInline(title, [{ value: value, placeholder: '카테고리 이름을 입력하고 Enter', className: 'iq-sec-input' }], {
+        onSave: function (v) {
+          if (sectionNames(sec).indexOf(v[0]) >= 0) {
+            toast('같은 이름의 카테고리가 있습니다');
+            return Promise.reject();
+          }
+          var old = sec.dataset.section;
+          sec.dataset.section = v[0];
+          title.textContent = v[0];
+          if (!sec.querySelector('.iq[data-id]')) return Promise.resolve();
+          return saveOrder().then(function () { toast('저장했습니다'); }, function (err) {
+            sec.dataset.section = old;
+            title.textContent = old;
+            throw err;
+          });
+        },
+        onCancel: onCancel
+      });
+    }
+
+    function renameSection(sec) {
+      nameSection(sec, sec.dataset.section);
+    }
+
+    function deleteSection(sec) {
+      if (sec.querySelector('.iq')) {
+        toast('질문을 다른 카테고리로 옮기거나 지운 뒤에 삭제할 수 있습니다');
+        return;
+      }
+      sec.remove();
+    }
+
+    function addSection(btn) {
+      var sec = board.querySelector('.iq-sec').cloneNode(true);
+      sec.querySelector('.iq-list').innerHTML = '';
+      sec.dataset.section = '';
+      sec.querySelector('.iq-sec-title').textContent = '';
+      board.insertBefore(sec, btn);
+      // 이름을 정하지 않고 닫으면 없던 일로 한다
+      nameSection(sec, '', function () { if (!sec.dataset.section) sec.remove(); });
+    }
+
     function snapshot() {
-      return Array.prototype.map.call(board.querySelectorAll('.iq-sec'), function (s) {
+      return Array.prototype.filter.call(board.querySelectorAll('.iq-sec'), function (s) { return s.dataset.section; }).map(function (s) {
         return {
           section: s.dataset.section,
           questionIds: Array.prototype.filter.call(s.querySelectorAll('.iq'), function (q) { return q.dataset.id; })
@@ -1024,7 +1081,7 @@
   }
 })();
 
-// ── 면접 질문지 탭(질문지 / 면접 기록), 입력 칸 열고 닫기, 고른 파일 이름 ──
+// ── 입력 칸 열고 닫기, 면접 기록(녹음본) 폼의 고른 파일 이름 ──
 (function () {
   document.addEventListener('click', function (e) {
     var btn = e.target.closest('[data-open]');
@@ -1038,32 +1095,14 @@
     }
   });
 
-  initTabs(true);
-  document.addEventListener('partial', function () { initTabs(false); });
+  initRecord();
+  document.addEventListener('partial', initRecord);
 
-  function initTabs(first) {
-  var tabs = document.querySelectorAll('[data-qtab]');
-  if (tabs.length) {
-    var showTab = function (name) {
-      tabs.forEach(function (t) { t.setAttribute('aria-selected', t.getAttribute('data-qtab') === name); });
-      document.querySelectorAll('[data-qpane]').forEach(function (p) { p.hidden = p.getAttribute('data-qpane') !== name; });
-      if (window.autosize) document.querySelectorAll('[data-qpane="' + name + '"] textarea.answer').forEach(window.autosize);
-      try { localStorage.setItem('qTab', name); } catch (err) { /* 무시 */ }
-    };
-    tabs.forEach(function (t) {
-      t.addEventListener('click', function () { showTab(t.getAttribute('data-qtab')); });
-    });
-    var start = 'sheet';
-    try { start = localStorage.getItem('qTab') || 'sheet'; } catch (err) { /* 무시 */ }
-    if (first && location.hash === '#record') start = 'record';
-    // 질문 추출·질문지로 돌아오면 타이핑 탭
-    if (first && (location.hash === '#extract' || location.hash === '#questions')) start = 'sheet';
-    showTab(start === 'record' ? 'record' : 'sheet');
-    if (first && location.hash === '#record') document.getElementById('questions').scrollIntoView();
-  }
-
+  function initRecord() {
   var form = document.getElementById('rec-form');
-  if (!form) return;
+  // 다른 영역만 새로 그려졌으면 폼은 그대로라 다시 묶지 않는다
+  if (!form || form.dataset.bound) return;
+  form.dataset.bound = '1';
   var file = form.querySelector('input[type=file]');
   var text = form.querySelector('textarea');
   var dropped = form.querySelector('.aa-dropped');

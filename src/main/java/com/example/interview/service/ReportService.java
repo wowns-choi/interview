@@ -9,7 +9,6 @@ import java.util.stream.Collectors;
 
 import org.springframework.stereotype.Service;
 
-import com.example.interview.ai.dto.OpinionResult;
 import com.example.interview.config.AiProperties;
 import com.example.interview.resume.QuoteVerifier;
 import com.example.interview.domain.Candidate;
@@ -86,7 +85,6 @@ public class ReportService {
                 evidenceByCriterion(criteria, evidences),
                 questionSheet(questions, criterionNames, oldTemplateTexts(questions)),
                 extractedByType(questions, criterionNames),
-                parseOpinion(candidate.getOpinionJson()),
                 evidenceById,
                 usage(candidateId, position.getId()));
     }
@@ -170,17 +168,6 @@ public class ReportService {
                     + summary.getOutputTokens() / 1_000_000.0 * aiProperties.outputPricePer1m());
         }
         return summary;
-    }
-
-    static OpinionResult parseOpinion(String json) {
-        if (json == null || json.isBlank()) {
-            return null;
-        }
-        try {
-            return JSON.readValue(json, OpinionResult.class);
-        } catch (JacksonException e) {
-            return null;
-        }
     }
 
     static CandidateProfile parseProfile(String json) {

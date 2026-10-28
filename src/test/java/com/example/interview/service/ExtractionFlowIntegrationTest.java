@@ -31,7 +31,7 @@ import com.example.interview.ai.dto.CareerEvalResult;
 import com.example.interview.ai.dto.CareerMeetsResult;
 import com.example.interview.ai.dto.CriteriaResult;
 import com.example.interview.ai.dto.EvidenceResult;
-import com.example.interview.ai.dto.OpinionResult;
+import com.example.interview.domain.ChatMessage;
 import com.example.interview.ai.dto.PiiExtract;
 import com.example.interview.ai.dto.PiiExtracts;
 import com.example.interview.ai.dto.PiiResult;
@@ -83,7 +83,7 @@ public class ExtractionFlowIntegrationTest {
     @Autowired
     ReportService reportService;
     @Autowired
-    OpinionService opinionService;
+    ChatService chatService;
     @Autowired
     InterviewRecordService interviewRecordService;
     @Autowired
@@ -340,7 +340,7 @@ public class ExtractionFlowIntegrationTest {
     }
 
     @Test
-    void opinionGetsAnswersButNoPersonalDataAndARecheckClearsIt() {
+    void chatSeesStageMaterialButNoPersonalDataAndKeepsHistory() {
         stubAi(aiClient, templateMapper, sectionMapper);
         when(pdfTextExtractor.extract(any())).thenReturn(RESUME);
         Long id = extractionService.uploadResume(startPosition(positionService, "백엔드 개발자"), List.of(pdf()));
@@ -351,35 +351,46 @@ public class ExtractionFlowIntegrationTest {
                 .map(QuestionView::getQuestion).filter(q -> q.getOrigin() == QuestionOrigin.CUSTOM).findFirst().orElseThrow();
         extractionService.saveAnswer(id, custom.getId(), "nGrinder로 p95를 측정했다고 답함");
 
-        OpinionResult.Point point = new OpinionResult.Point();
-        point.setPoint("대용량 배치 개선 경험이 면접 답변으로 확인됨");
-        point.setBasis("면접 답변");
-        OpinionResult opinion = new OpinionResult();
-        opinion.setHireReasons(List.of(point));
-        opinion.setNoHireReasons(List.of());
-        org.mockito.ArgumentCaptor<String> input = org.mockito.ArgumentCaptor.forClass(String.class);
-        when(aiClient.call(eq(AiPurpose.OPINION), anyLong(), anyString(), input.capture(), eq(OpinionResult.class), any()))
-                .thenReturn(opinion);
+        @SuppressWarnings("unchecked")
+        org.mockito.ArgumentCaptor<List<java.util.Map<String, String>>> turns = org.mockito.ArgumentCaptor.forClass(List.class);
+        org.mockito.ArgumentCaptor<String> system = org.mockito.ArgumentCaptor.forClass(String.class);
+        when(aiClient.chatStream(eq(AiPurpose.CHAT), anyLong(), system.capture(), turns.capture(), any()))
+                .thenReturn("뽑는다면 배치 개선 경험 때문입니다.", "두 번째 답");
 
-        // 뒤에서 받는다: 상태를 물어 끝났는지 안다
-        assertThat(opinionService.status(id)).containsEntry("state", "NONE");
-        opinionService.start(id);
-        long until = System.currentTimeMillis() + 5000;
-        while (!"DONE".equals(opinionService.status(id).get("state")) && System.currentTimeMillis() < until) {
-            Thread.onSpinWait();
-        }
-        assertThat(opinionService.status(id)).containsEntry("state", "DONE").doesNotContainKey("error");
+        // 면접 전: 공고·조건·평가 기준·가린 이력서·질문지 답변. 면접 기록은 없다. 개인정보는 보내지 않는다
+        assertThat(chatService.sources(id, "BEFORE")).extracting(m -> m.get("key"))
+                .containsExactly("posting", "profile", "evidence", "sheet");
+        chatService.send(id, "BEFORE", "뽑는다면 왜 뽑을래?");
+        // 프롬프트 설명이 아니라 붙인 자료만 본다
+        assertThat(system.getValue().substring(system.getValue().lastIndexOf("# 자료"))).contains("<job_posting>", "<profile>", "경력 조건", "<resume>", "<criteria>",
+                "<interview_sheet>", "Q. " + custom.getContent(), "A. nGrinder로 p95를 측정했다고 답함")
+                .doesNotContain("<interview_record>", "홍길동", "010-1111-2222", "가나커머스", "5,000만원");
 
-        assertThat(input.getValue()).contains("<conditions>", "경력 조건", "<criteria>", "Q. " + custom.getContent(),
-                "A. nGrinder로 p95를 측정했다고 답함", "답변을 기록한 질문 1개")
-                .doesNotContain("홍길동", "010-1111-2222", "가나커머스", "5,000만원");
-        OpinionResult saved = reportService.report(id).getOpinion();
-        assertThat(saved.getHireReasons()).extracting(OpinionResult.Point::getPoint).containsExactly("대용량 배치 개선 경험이 면접 답변으로 확인됨");
-        assertThat(saved.getAskedAt()).isNotBlank();
+        // 이어서 물으면 앞의 대화가 같이 간다
+        chatService.send(id, "BEFORE", "더 자세히");
+        assertThat(turns.getValue()).extracting(m -> m.get("role")).containsExactly("user", "assistant", "user");
+        assertThat(chatService.history(id)).extracting(ChatMessage::getRole).containsExactly("USER", "AI", "USER", "AI");
 
-        // 근거가 바뀌면 이전 의견은 지운다
-        extractionService.checkFit(id, null);
-        assertThat(reportService.report(id).getOpinion()).isNull();
+        // 면접 후에서도 같은 대화를 이어 가고, 면접 기록이 자료에 더해진다
+        assertThat(chatService.sources(id, "AFTER")).extracting(m -> m.get("key")).contains("record");
+        chatService.send(id, "AFTER", "면접 답변까지 보면?");
+        assertThat(turns.getValue()).hasSize(5);
+        assertThat(system.getValue()).contains("<interview_record>", "녹음본으로 만든 면접 기록이 없습니다");
+        assertThat(chatService.history(id)).hasSize(6);
+
+        assertThatThrownBy(() -> chatService.send(id, "BEFORE", "  ")).isInstanceOf(BusinessException.class);
+        chatService.reset(id);
+        assertThat(chatService.history(id)).isEmpty();
+
+        // 녹음본으로 만든 기록이 있으면 면접 전 대화도 그걸 본다
+        InterviewRecordResult ai = new InterviewRecordResult();
+        ai.setItems(List.of(recordItem("INTERVIEWER", "주문 배치 규모는 어느 정도였나요?", "하루 30만 건이라고 답함.", null)));
+        when(aiClient.call(eq(AiPurpose.INTERVIEW_RECORD), anyLong(), anyString(), anyString(), eq(InterviewRecordResult.class), any()))
+                .thenReturn(ai);
+        interviewRecordService.create(id, "참석자 1 00:10\n배치 규모는요\n참석자 2 00:15\n하루 30만 건입니다", null);
+        assertThat(chatService.sources(id, "BEFORE")).extracting(m -> m.get("key")).contains("record");
+        chatService.send(id, "BEFORE", "녹음본까지 보면?");
+        assertThat(system.getValue()).contains("<interview_record>", "하루 30만 건이라고 답함.");
     }
 
     @Test

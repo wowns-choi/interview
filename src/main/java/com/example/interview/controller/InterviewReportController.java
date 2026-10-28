@@ -2,7 +2,6 @@ package com.example.interview.controller;
 
 import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Controller;
-import org.springframework.ui.Model;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -12,13 +11,11 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.multipart.MultipartFile;
 import org.springframework.web.servlet.mvc.support.RedirectAttributes;
 
-import com.example.interview.domain.Candidate;
 import com.example.interview.domain.InterviewRecord;
 import com.example.interview.domain.InterviewReport;
 import com.example.interview.service.CandidateService;
 import com.example.interview.service.InterviewRecordService;
 import com.example.interview.service.InterviewReportService;
-import com.example.interview.service.PositionService;
 
 import lombok.RequiredArgsConstructor;
 
@@ -28,7 +25,6 @@ import lombok.RequiredArgsConstructor;
 public class InterviewReportController {
 
     private final CandidateService candidateService;
-    private final PositionService positionService;
     private final InterviewRecordService recordService;
     private final InterviewReportService reportService;
 
@@ -37,27 +33,20 @@ public class InterviewReportController {
             @RequestParam(required = false) MultipartFile file, RedirectAttributes ra) {
         InterviewRecord record = recordService.create(id, transcript, file);
         ra.addFlashAttribute("message", "질문-답변 " + record.getItems().size() + "개를 정리했습니다.");
-        return "redirect:/results/" + id + "#record";
+        return "redirect:/results/" + id + "#after";
     }
 
+    /** 보고서는 지원자 화면의 보고서 단계에 있다 (사용자 2026-10-28). 예전 주소는 그리로 보낸다 */
     @GetMapping("/results/{id}/report")
-    public String report(@PathVariable Long id, Model model) {
-        Candidate candidate = candidateService.get(id);
-        InterviewReport report = InterviewReportService.parse(candidate.getReportJson());
-        if (report == null) {
-            return "redirect:/results/" + id;
-        }
-        model.addAttribute("candidate", candidate);
-        model.addAttribute("position", positionService.get(candidate.getPositionId()));
-        model.addAttribute("report", report);
-        model.addAttribute("hasRecord", InterviewRecordService.parse(candidate.getRecordJson()) != null);
-        return "report";
+    public String report(@PathVariable Long id) {
+        candidateService.get(id);
+        return "redirect:/results/" + id + "#report";
     }
 
     @PostMapping("/results/{id}/report")
     public String createReport(@PathVariable Long id) {
         reportService.create(id);
-        return "redirect:/results/" + id + "/report";
+        return "redirect:/results/" + id + "#report";
     }
 
     @PutMapping("/results/{id}/report")
@@ -69,6 +58,6 @@ public class InterviewReportController {
     @PostMapping("/results/{id}/report/source")
     public String useSource(@PathVariable Long id, @RequestParam String source) {
         reportService.useSource(id, source);
-        return "redirect:/results/" + id + "/report";
+        return "redirect:/results/" + id + "#report";
     }
 }

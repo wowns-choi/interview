@@ -158,83 +158,49 @@
     box.appendChild(document.createTextNode(text.slice(last)));
   }
 
-  // ── AI 의견: 사이드바 버튼으로 뒤에서 받고, 3초마다 물어 끝나면 알린다. 받았으면 누를 때 창으로 연다 ──
-  var opSide = document.getElementById('op-side');
-  if (opSide) {
-    var opLabel = opSide.querySelector('.op-label');
-    var opTimer = null;
-    var OP_LABELS = { NONE: 'AI 의견 받기', RUNNING: 'AI 의견 추출 중…', DONE: 'AI 의견 보기' };
-    // 받는 동안은 버튼 글자가 「추출 중…」과 「완료되면 알려드릴게요!」를 번갈아 보인다 (알림 대신, 사용자 2026-10-27)
-    var opSwap = null;
-    var opSet = function (state) {
-      opSide.setAttribute('data-state', state);
-      opLabel.textContent = OP_LABELS[state];
-      opLabel.classList.remove('is-out');
-      clearInterval(opSwap);
-      if (state !== 'RUNNING') return;
-      var alt = false;
-      opSwap = setInterval(function () {
-        opLabel.classList.add('is-out');
-        setTimeout(function () {
-          alt = !alt;
-          opLabel.textContent = alt ? '완료되면 알려드릴게요!' : OP_LABELS.RUNNING;
-          opLabel.classList.remove('is-out');
-        }, 200);
-      }, 2600);
+  // ── 지원자 화면 단계: 면접 전 · 면접 후 · 보고서. 한 화면 안에서 바꾸고 주소 끝(#after)에 남긴다 (사용자 2026-10-28) ──
+  var stageNav = document.getElementById('stage-nav');
+  if (stageNav) {
+    var STAGES = ['before', 'after', 'report'];
+    // 예전 주소의 #record(녹음본)는 면접 후, #extract·#questions 같은 질문지 자리는 면접 전
+    var stageOf = function (hash) {
+      var h = (hash || '').replace('#', '');
+      if (STAGES.indexOf(h) >= 0) return h;
+      return h === 'record' ? 'after' : 'before';
     };
-    var opStart = function () {
-      fetch(opSide.getAttribute('data-start'), { method: 'POST', headers: { 'X-Requested-With': 'fetch' } })
-        .then(function (res) {
-          if (!res.ok) return res.text().then(function (t) { throw new Error(t); });
-          opSide.classList.remove('is-new');
-          opSet('RUNNING');
-          opPoll();
-        })
-        .catch(function (err) { showToast(err.message || 'AI 의견을 받지 못했습니다.', true); });
-    };
-    var opPoll = function () { clearTimeout(opTimer); opTimer = setTimeout(opCheck, 3000); };
-    // 끝나면 이 페이지를 다시 받아 의견 창만 바꿔 끼운다
-    var opRefresh = function () {
-      return fetch(location.pathname).then(function (res) { return res.text(); }).then(function (html) {
-        var neu = new DOMParser().parseFromString(html, 'text/html').getElementById('dlg-opinion');
-        var old = document.getElementById('dlg-opinion');
-        if (neu && old) old.replaceChildren.apply(old, Array.prototype.slice.call(neu.childNodes));
+    var showStage = function (name, scroll) {
+      stageNav.querySelectorAll('[data-stage]').forEach(function (b) {
+        var on = b.getAttribute('data-stage') === name;
+        b.classList.toggle('is-on', on);
+        b.setAttribute('aria-current', on ? 'step' : 'false');
       });
+      document.querySelectorAll('.stage-pane').forEach(function (p) { p.hidden = p.getAttribute('data-pane') !== name; });
+      document.querySelectorAll('[data-only]').forEach(function (el) {
+        el.hidden = el.getAttribute('data-only').split(' ').indexOf(name) < 0;
+      });
+      document.documentElement.setAttribute('data-stage', name);
+      // 숨어 있을 때 잰 칸 높이는 0이라, 보이고 나서 다시 잰다 (보고서 칸은 report.js가 stageshow를 받아 잰다)
+      setTimeout(function () {
+        document.querySelectorAll('.stage-pane:not([hidden]) textarea.answer').forEach(function (t) { if (window.autosize) window.autosize(t); });
+        document.dispatchEvent(new CustomEvent('stageshow', { detail: name }));
+      }, 0);
+      if (scroll) window.scrollTo(0, 0);
     };
-    var opCheck = function () {
-      fetch(opSide.getAttribute('data-status'), { headers: { 'X-Requested-With': 'fetch' } })
-        .then(function (res) { return res.json(); })
-        .then(function (s) {
-          if (s.state === 'RUNNING') { opPoll(); return; }
-          if (s.error) {
-            opSet(s.state);
-            showToast(s.error, true);
-            return;
-          }
-          return opRefresh().then(function () {
-            opSet(s.state);
-            opSide.classList.add('is-new');
-            showToast('AI 의견이 나왔어요. 눌러서 확인하세요.', false, 3500);
-          });
-        })
-        .catch(opPoll);
-    };
-    document.getElementById('op-btn').addEventListener('click', function () {
-      var state = opSide.getAttribute('data-state');
-      if (state === 'RUNNING') return;
-      if (state === 'DONE') {
-        opSide.classList.remove('is-new');
-        document.getElementById('dlg-opinion').showModal();
-        return;
-      }
-      opStart();
+    stageNav.addEventListener('click', function (e) {
+      var b = e.target.closest('[data-stage]');
+      if (!b) return;
+      var name = b.getAttribute('data-stage');
+      history.replaceState(null, '', location.pathname + location.search + '#' + name);
+      showStage(name, true);
     });
-    document.addEventListener('click', function (e) {
-      if (!e.target.closest('#op-again')) return;
-      document.getElementById('dlg-opinion').close();
-      opStart();
-    });
-    if (opSide.getAttribute('data-state') === 'RUNNING') { opSet('RUNNING'); opPoll(); }
+    var first = location.hash;
+    showStage(stageOf(first), false);
+    // 질문지 안의 자리(#extract 등)로 왔으면 그 자리로
+    if (first && STAGES.indexOf(first.slice(1)) < 0 && first !== '#record') {
+      var spot = document.getElementById(first.slice(1));
+      if (spot) spot.scrollIntoView();
+    }
+    window.addEventListener('hashchange', function () { showStage(stageOf(location.hash), false); });
   }
 
   // ── 첨부 파일 목록: 바깥을 누르거나 항목을 고르면 닫는다 ──
@@ -259,7 +225,8 @@
       return;
     }
     if (e.target.closest('dialog [data-close]')) { e.target.closest('dialog').close(); return; }
-    if (e.target.tagName === 'DIALOG') e.target.close(); // 바깥(배경) 누름
+    // 바깥(배경) 누름. 떠 있는 창(AI와 대화)은 모달이 아니라 여백·모서리를 눌러도 닫지 않는다
+    if (e.target.tagName === 'DIALOG' && e.target.matches(':modal')) e.target.close();
   });
   document.addEventListener('keydown', function (e) {
     if (e.key === 'Enter' && e.target.matches('div[data-dialog]')) e.target.click();
@@ -639,7 +606,9 @@
     var reveal = shown || detail.hasAttribute('data-reveal');
     if (!reveal) root.classList.remove('revealing');
     if (reveal) {
-      Array.prototype.forEach.call(detail.children, function (el, i) { el.style.setProperty('--i', i); });
+      // 단계로 나뉘었으면 면접 전 영역의 카드들이 차례로 올라온다
+      var pane = detail.querySelector('.stage-pane[data-pane="before"]') || detail;
+      Array.prototype.forEach.call(pane.children, function (el, i) { el.style.setProperty('--i', i); });
       detail.querySelectorAll('.ev').forEach(function (el, j) { el.style.setProperty('--j', j); });
       var profile = detail.querySelector('.profile');
       if (profile) profile.classList.add('is-stamping');
@@ -704,6 +673,8 @@
       }).then(function (saved) {
         show(saved);
         state.textContent = '저장됨';
+        // 같은 화면 보고서 단계의 합격 여부도 맞춘다
+        document.dispatchEvent(new CustomEvent('ivdecision', { detail: { decision: saved.decision, from: 'stamp' } }));
       }).catch(function (e) {
         state.textContent = e.message || '저장하지 못했습니다';
         state.classList.add('err');
@@ -714,6 +685,9 @@
       e.target.classList.remove('is-missing');
       legacy = false;
       ivSave('iv-date-state');
+    });
+    document.addEventListener('ivdecision', function (e) {
+      if (e.detail.from !== 'stamp') show({ date: dateValue(), decision: e.detail.decision });
     });
     ivButtons.forEach(function (b) {
       b.addEventListener('click', function () {

@@ -215,10 +215,10 @@ class WebPagesSmokeTest {
         HttpResponse<String> result = get("/results/" + id);
         assertThat(result.statusCode()).isEqualTo(200);
         String body = result.body();
-        assertThat(body).contains("100만 건 배치 처리 시간을 어떻게 측정하셨나요?", "답변 기록", "data-qtab=\"record\"", ">면접전(타이핑)<", "면접 기록 만들기",
-                "질문 추가", "kind kind-verify\">거짓말 판독기<", "AI 의견 참고", "id=\"op-side\" data-state=\"NONE\"", "AI 의견 받기</span>", "id=\"must-check\"", "js-q-must", "id=\"iv-bar\"", "면접 본 날짜", "data-decision=\"PASS\"").doesNotContain("추출한 질문 <b>", "병목은 어디였나요?");
+        assertThat(body).contains("100만 건 배치 처리 시간을 어떻게 측정하셨나요?", "답변 기록", "id=\"stage-nav\"", "data-pane=\"after\"", "data-pane=\"report\"", "면접 기록 만들기",
+                "질문 추가", "kind kind-verify\">거짓말 판독기<", "id=\"chat-btn\"", "id=\"dlg-chat\"", "보고서 만들기", "id=\"must-check\"", "js-q-must", "id=\"iv-bar\"", "면접 본 날짜", "data-decision=\"PASS\"").doesNotContain("추출한 질문 <b>", "병목은 어디였나요?");
 
-        assertThat(get("/results/" + id + "/opinion/status").body()).isEqualTo("{\"state\":\"NONE\"}");
+        assertThat(get("/results/" + id + "/chat?stage=BEFORE").body()).startsWith("{\"messages\":[],\"sources\":[{\"key\":\"posting\"");
 
         HttpResponse<String> addedQ = json("POST", "/results/" + id + "/questions", "{\"section\":\"기술 검증\",\"content\":\"추가 질문\"}");
         assertThat(addedQ.statusCode()).isEqualTo(200);
@@ -238,19 +238,19 @@ class WebPagesSmokeTest {
         assertThat(post("/results/" + id + "/questions/999999/answer", "answer=x", true).statusCode()).isEqualTo(404);
 
         // 합격자 보고서: 질문지 답변을 복사해 만들고, 화면에서 고친 것을 통째로 저장한다
-        assertThat(get("/results/" + id + "/report").statusCode()).as("만들기 전에는 지원자 화면으로").isEqualTo(302);
+        assertThat(get("/results/" + id + "/report").headers().firstValue("Location").orElse("")).as("예전 보고서 주소는 보고서 단계로").endsWith("/results/" + id + "#report");
         assertThat(json("PATCH", "/results/" + id + "/interview", "{\"interviewed\":true,\"date\":\"2026-10-20T14:30\",\"decision\":\"PASS\"}")
                 .statusCode()).isEqualTo(200);
-        assertThat(get("/results/" + id).body()).contains("id=\"iv-report\"", "data-busy=\"보고서를 만드는 중\"");
+        assertThat(get("/results/" + id).body()).contains("data-busy=\"보고서를 만드는 중\"");
         assertThat(post("/results/" + id + "/report", "", false).statusCode()).isEqualTo(302);
         assertThat(get("/results/" + id).body()).as("있으면 누를 때마다 맞춘다").contains("data-busy=\"보고서를 맞추는 중\"");
-        assertThat(get("/results/" + id + "/report").body()).contains("면접 결과 보고서", "value=\"2026-10-20T14:30\"", "측정은 nGrinder로 했다고 답함",
+        assertThat(get("/results/" + id).body()).contains("면접 결과 보고서", "value=\"2026-10-20T14:30\"", "측정은 nGrinder로 했다고 답함",
                 "파견 가능 여부", "직전연봉/희망연봉", "class=\"rp-box is-on\" data-decision=\"PASS\"", "면접관 추가", "data-list=\"certs\"", "data-f=\"position\"");
         assertThat(json("PUT", "/results/" + id + "/report", "{\"reportDate\":\"2026-10-23\",\"qaSource\":\"SHEET\","
                 + "\"info\":[{\"label\":\"성명\",\"value\":\"<b>x</b>\"}],\"qa\":[{\"kind\":\"CANDIDATE\",\"question\":\"복지는요?\",\"answer\":\"안내함\"}],"
                 + "\"opinions\":[{\"team\":\"플랫폼팀\",\"name\":\"김면접\",\"content\":\"기술 깊이가 좋음\"}]}").statusCode()).isEqualTo(204);
-        assertThat(get("/results/" + id + "/report").body()).contains("&lt;b&gt;x&lt;/b&gt;", "플랫폼팀", "기술 깊이가 좋음", "복지는요?")
-                .doesNotContain("<b>x</b>", "측정은 nGrinder로 했다고 답함");
+        assertThat(get("/results/" + id).body()).contains("&lt;b&gt;x&lt;/b&gt;", "플랫폼팀", "기술 깊이가 좋음", "복지는요?")
+                .doesNotContain("<b>x</b>");
 
         // 답변을 적으면 체크되고, 번호를 눌러 풀거나 다시 체크한다
         String answeredId = m.group(2);
