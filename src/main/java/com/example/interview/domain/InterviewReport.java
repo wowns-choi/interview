@@ -26,6 +26,8 @@ public class InterviewReport {
     private String position;
     private String qaSource = RECORD;
     private List<InfoRow> info = new ArrayList<>();
+    /** 자격증 (지원자 정보와 따로, 사용자 2026-10-28) */
+    private List<InfoRow> certs = new ArrayList<>();
     private List<QaItem> qa = new ArrayList<>();
     private List<Opinion> opinions = new ArrayList<>();
     /** 파견 가능 여부·입사 가능 시기·희망연봉을 찾을 때 보낸 내용의 해시. 같으면 다시 묻지 않고 found를 쓴다 */
@@ -37,6 +39,7 @@ public class InterviewReport {
     public static class Found {
         private String dispatch = "";
         private String startDate = "";
+        private String lastSalary = "";
         private String desiredSalary = "";
     }
 
@@ -58,6 +61,8 @@ public class InterviewReport {
         private String team = "";
         private String name = "";
         private String content = "";
+        /** 이 면접관의 합불: PASS, FAIL, 정하지 않았으면 "" (사용자 2026-10-28) */
+        private String decision = "";
     }
 
     @JsonIgnore
@@ -77,12 +82,18 @@ public class InterviewReport {
             r.setLabel(r.getLabel() == null ? "" : r.getLabel().strip());
             r.setValue(r.getValue() == null ? "" : r.getValue().strip());
         });
+        certs = certs == null ? new ArrayList<>() : new ArrayList<>(certs.stream().filter(r -> r != null).toList());
+        certs.forEach(r -> {
+            r.setLabel(r.getLabel() == null ? "" : r.getLabel().strip());
+            r.setValue(r.getValue() == null ? "" : r.getValue().strip());
+        });
         qa = qa == null ? new ArrayList<>() : new ArrayList<>(qa.stream().filter(q -> q != null).toList());
         opinions = opinions == null ? new ArrayList<>() : new ArrayList<>(opinions.stream().filter(o -> o != null).toList());
         opinions.forEach(o -> {
             o.setTeam(o.getTeam() == null ? "" : o.getTeam().strip());
             o.setName(o.getName() == null ? "" : o.getName().strip());
             o.setContent(o.getContent() == null ? "" : o.getContent().strip());
+            o.setDecision("PASS".equals(o.getDecision()) || "FAIL".equals(o.getDecision()) ? o.getDecision() : "");
         });
         reportDate = reportDate == null ? "" : reportDate.strip();
         interviewDate = interviewDate == null ? "" : interviewDate.strip();

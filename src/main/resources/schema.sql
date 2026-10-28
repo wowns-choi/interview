@@ -100,6 +100,8 @@ ALTER TABLE candidate ADD COLUMN IF NOT EXISTS opinion_json TEXT;
 -- 면접 기록 (면접관이 직접 체크): 면접 봤는지, 면접 날짜, 합격·불합격(PASS, FAIL, 정하지 않았으면 NULL)
 ALTER TABLE candidate ADD COLUMN IF NOT EXISTS interviewed BOOLEAN NOT NULL DEFAULT FALSE;
 ALTER TABLE candidate ADD COLUMN IF NOT EXISTS interview_date DATE;
+-- 면접일에 시각(분)까지 (사용자 2026-10-28). 예전 날짜는 그날 0시가 된다
+ALTER TABLE candidate ALTER COLUMN interview_date SET DATA TYPE TIMESTAMP;
 ALTER TABLE candidate ADD COLUMN IF NOT EXISTS decision VARCHAR(10);
 -- 면접 녹음본 원문(가리지 않음), 녹음본으로 만든 질문-답변 목록, 합격자 보고서 (모두 JSON)
 ALTER TABLE candidate ADD COLUMN IF NOT EXISTS transcript TEXT;

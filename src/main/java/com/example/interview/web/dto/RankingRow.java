@@ -1,7 +1,8 @@
 package com.example.interview.web.dto;
 
-import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
+import java.util.Locale;
 
 import com.example.interview.domain.CandidateStatus;
 
@@ -24,12 +25,26 @@ public class RankingRow {
     Integer relevantMonths;
     /** 면접관이 남긴 면접 기록 */
     boolean interviewed;
-    LocalDate interviewDate;
+    LocalDateTime interviewDate;
     /** PASS, FAIL, null */
     String decision;
     /** 자격증 (로컬 AI가 옮겨 적은 목록에서 코드로 찾는다) */
     boolean infoEngineer;
     boolean sqld;
+
+    /** 지원자 비교의 면접 꼬리표: 면접 날짜와 시·분. 0시 0분(시각을 넣기 전 기록)이면 날짜만 */
+    public String getInterviewText() {
+        if (interviewDate == null) {
+            return "";
+        }
+        String pattern = interviewDate.toLocalTime().equals(java.time.LocalTime.MIDNIGHT) ? "M월 d일" : "M월 d일 ah시 m분";
+        return interviewDate.format(DateTimeFormatter.ofPattern(pattern, Locale.KOREAN));
+    }
+
+    /** 지원자 고르기에서 같은 이름을 가르는 등록 시각 (적합도 검사 버튼을 누른 때) */
+    public String getCreatedText() {
+        return createdAt == null ? "" : createdAt.format(DateTimeFormatter.ofPattern("M월 d일 ah시 m분 s초", Locale.KOREAN));
+    }
 
     /** 다수 검사가 진행 중인지 (대기, 가리는 중, 검사 중) */
     public boolean isInProgress() {

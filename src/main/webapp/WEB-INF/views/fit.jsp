@@ -40,6 +40,12 @@
     <%-- AI 의견: 누르면 뒤에서 받고(다른 일을 해도 된다), 끝나면 알린다. 받았으면 누를 때 창으로 연다 --%>
     <div class="op-side" id="op-side" data-state="${opinionRunning ? 'RUNNING' : (empty r.opinion ? 'NONE' : 'DONE')}"
          data-start="<c:url value='/results/${r.candidate.id}/opinion'/>" data-status="<c:url value='/results/${r.candidate.id}/opinion/status'/>">
+      <%-- 필수질문 체크: 질문지 맨 끝까지 내리지 않아도 되게 사이드바에 (사용자 2026-10-27) --%>
+      <c:if test="${not empty r.sections}">
+      <button type="button" class="side-btn must-side js-must-check" id="must-check">
+        <span class="op-ico"><svg class="i"><use href="#i-check"/></svg></span><span>필수질문 체크</span>
+      </button>
+      </c:if>
       <button type="button" class="op-btn" id="op-btn">
         <span class="op-ico"><svg class="i"><use href="#i-spark"/></svg></span>
         <span class="op-label">${opinionRunning ? 'AI 의견 추출 중…' : (empty r.opinion ? 'AI 의견 받기' : 'AI 의견 보기')}</span>
@@ -399,7 +405,7 @@
       <button type="button" role="tab" class="qtab" data-qtab="sheet" aria-selected="true">면접전(타이핑)</button>
       <button type="button" role="tab" class="qtab" data-qtab="record" aria-selected="false">면접후(녹음본)<c:if test="${not empty record}"> <b>${fn:length(record.items)}</b></c:if></button>
     </div>
-    <label class="iv-date">면접 본 날짜<input type="date" id="iv-date" value="${r.candidate.interviewDate}"><span class="save-state" id="iv-date-state" aria-live="polite"></span></label>
+    <label class="iv-date">면접 본 날짜<input type="datetime-local" id="iv-date" value="${r.candidate.interviewDate}"><span class="save-state" id="iv-date-state" aria-live="polite"></span></label>
   </header>
   <div class="qpane" data-qpane="sheet">
   <%-- 질문 추출: 버튼 → 창에서 유형 이름을 적고(기본 네 유형, 직접 적은 유형) 추출. 여러 번 추출해 쌓고, 질문지에 넣는다 --%>
@@ -517,9 +523,9 @@
       </section>
     </c:forEach>
   </div>
+  <%-- 질문지 끝에도 같은 버튼: 면접을 마칠 때 바로 보이게 --%>
   <div class="must-check">
-    <button type="button" class="btn" id="must-check">필수질문 체크</button>
-    <p class="must-result" id="must-result" aria-live="polite" hidden></p>
+    <button type="button" class="side-btn js-must-check"><span class="op-ico"><svg class="i"><use href="#i-check"/></svg></span><span>필수질문 체크</span></button>
   </div>
   </c:if>
   </div>

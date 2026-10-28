@@ -601,8 +601,9 @@
       });
       document.querySelectorAll('#cand-list, select[data-cand-copy]').forEach(function (candList) {
         Array.prototype.forEach.call(candList.options, function (o) {
-          if (o.value === url) o.textContent = name;
+          if (o.value === url) o.setAttribute('data-name', name);
         });
+        if (window.candLabel) window.candLabel(candList);
         candList.dispatchEvent(new Event('refit'));
       });
       if (title && url === positionBase) {
@@ -884,9 +885,7 @@
     }
 
     // 필수질문 체크: 필수 질문 중 번호를 체크하지 않은 것과 면접 본 날짜를 비워 둔 것을 알려 주고 그리로 간다
-    var mustCheck = document.getElementById('must-check');
-    if (mustCheck) {
-      var mustResult = document.getElementById('must-result');
+    document.querySelectorAll('.js-must-check').forEach(function (mustCheck) {
       mustCheck.addEventListener('click', function () {
         var rows = Array.prototype.slice.call(board.querySelectorAll('.q-row'));
         var missing = [];
@@ -910,13 +909,11 @@
         } else if (!noDate) {
           lines.push(total ? '필수 질문 ' + total + '개를 모두 물었습니다.' : '필수 질문이 없습니다.');
         }
-        mustResult.hidden = false;
-        mustResult.classList.toggle('is-bad', noDate || missing.length > 0);
-        mustResult.textContent = lines.join(' ');
+        if (window.showToast) window.showToast(lines.join(' '), noDate || missing.length > 0, 4500);
         var first = noDate ? date : missing.length ? missing[0].row : null;
         if (first) first.scrollIntoView({ behavior: 'smooth', block: 'center' });
       });
-    }
+    });
 
     // 추출한 질문: 다 지우면 합치기 버튼도 필요 없으니 새로 그린다
     function removeRow(row) {

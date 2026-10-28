@@ -248,9 +248,9 @@ public class ExtractionFlowIntegrationTest {
         assertThat(rankingService.rank(positionId)).extracting("rank", "state").containsExactly(org.assertj.core.groups.Tuple.tuple(null, "STALE"));
 
         // 면접 기록: 날짜나 합격을 고르면 면접 본 것으로 저장하고, 지원자 비교에서도 보인다
-        candidateService.updateInterview(id, false, java.time.LocalDate.of(2026, 10, 22), "PASS");
+        candidateService.updateInterview(id, false, java.time.LocalDateTime.of(2026, 10, 22, 14, 30), "PASS");
         assertThat(candidateService.get(id)).extracting("interviewed", "interviewDate", "decision")
-                .containsExactly(true, java.time.LocalDate.of(2026, 10, 22), "PASS");
+                .containsExactly(true, java.time.LocalDateTime.of(2026, 10, 22, 14, 30), "PASS");
         assertThat(rankingService.rank(positionId)).extracting("interviewed", "decision")
                 .containsExactly(org.assertj.core.groups.Tuple.tuple(true, "PASS"));
         assertThatThrownBy(() -> candidateService.updateInterview(id, true, null, "보류"))
@@ -424,6 +424,7 @@ public class ExtractionFlowIntegrationTest {
         ReportInfoResult info = new ReportInfoResult();
         info.setDispatch("가능");
         info.setStartDate("합격 후 2주 뒤");
+        info.setLastSalary("4,000만원");
         info.setDesiredSalary("4,500만원");
         org.mockito.ArgumentCaptor<String> infoInput = org.mockito.ArgumentCaptor.forClass(String.class);
         when(aiClient.call(eq(AiPurpose.REPORT_INFO), anyLong(), anyString(), infoInput.capture(), eq(ReportInfoResult.class), any()))
@@ -435,14 +436,16 @@ public class ExtractionFlowIntegrationTest {
         assertThat(report.getQa()).extracting(QaItem::getQuestion).containsExactly(
                 "자기소개를 부탁드립니다.", "주문 배치 규모는 어느 정도였나요?", "입사 후 처음 맡는 업무는 무엇인가요?");
         assertThat(report.getInfo()).extracting(InterviewReport.InfoRow::getLabel).containsExactly(
-                "성명", "나이", "경력", "학력", "정보처리기사", "SQLD", "파견 가능 여부", "입사 가능 시기", "희망연봉");
+                "성명", "나이", "경력", "학력", "파견 가능 여부", "입사 가능 시기", "직전연봉/희망연봉");
         assertThat(report.getInfo()).extracting(InterviewReport.InfoRow::getValue)
-                .contains("홍길동", "총 2년 11개월 (포지션 관련 2년 6개월)", "있음", "없음", "가능", "합격 후 2주 뒤", "4,500만원");
+                .contains("홍길동", "총 2년 11개월 (포지션 관련 2년 6개월)", "가능", "합격 후 2주 뒤", "4,000만원 / 4,500만원");
+        assertThat(report.getCerts()).extracting(InterviewReport.InfoRow::getLabel, InterviewReport.InfoRow::getValue)
+                .containsExactly(tuple("정보처리기사", "있음"), tuple("SQLD", "없음"));
         assertThat(report.getOpinions()).hasSize(1);
 
         // 보고서 버튼을 다시 누르면 지금 기록에 맞춘다: 고친 정보는 되돌리고, 면접관 의견·지원 포지션은 남기고,
         // 면접 내용이 그대로면 GPT에 다시 묻지 않는다
-        report.getInfo().removeIf(r -> r.getLabel().equals("희망연봉"));
+        report.getInfo().removeIf(r -> r.getLabel().equals("직전연봉/희망연봉"));
         report.getInfo().get(0).setValue("고친 이름");
         report.getOpinions().get(0).setContent("기술 깊이가 좋음");
         report.setPosition("백엔드 (보고서에서 고침)");
@@ -450,7 +453,7 @@ public class ExtractionFlowIntegrationTest {
         report = interviewReportService.create(id);
         verify(aiClient, org.mockito.Mockito.times(1)).call(eq(AiPurpose.REPORT_INFO), anyLong(), anyString(), anyString(), any(), any());
         assertThat(report.getInfo()).extracting(InterviewReport.InfoRow::getLabel, InterviewReport.InfoRow::getValue)
-                .contains(tuple("성명", "홍길동"), tuple("희망연봉", "4,500만원"));
+                .contains(tuple("성명", "홍길동"), tuple("직전연봉/희망연봉", "4,000만원 / 4,500만원"));
         assertThat(report.getOpinions()).extracting(InterviewReport.Opinion::getContent).containsExactly("기술 깊이가 좋음");
         assertThat(report.getPosition()).isEqualTo("백엔드 (보고서에서 고침)");
         assertThat(report.getQa()).hasSize(3);
@@ -466,7 +469,7 @@ public class ExtractionFlowIntegrationTest {
         report = interviewReportService.create(id);
         verify(aiClient, org.mockito.Mockito.times(2)).call(eq(AiPurpose.REPORT_INFO), anyLong(), anyString(), anyString(), any(), any());
         assertThat(report.getInfo()).extracting(InterviewReport.InfoRow::getLabel, InterviewReport.InfoRow::getValue)
-                .contains(tuple("파견 가능 여부", "가능 (수도권)"), tuple("입사 가능 시기", ""), tuple("희망연봉", "5,800만원"));
+                .contains(tuple("파견 가능 여부", "가능 (수도권)"), tuple("입사 가능 시기", ""), tuple("직전연봉/희망연봉", "- / 5,800만원"));
 
         // 보고서를 고쳐도 면접 기록은 그대로
         report.getQa().get(0).setAnswer("보고서에서 고친 답");

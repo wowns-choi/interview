@@ -1,7 +1,7 @@
 package com.example.interview.service;
 
 import java.io.IOException;
-import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.util.List;
 
 import org.springframework.stereotype.Service;
@@ -119,7 +119,7 @@ public class CandidateService {
      * @param decision PASS, FAIL 또는 null(정하지 않음)
      * @return 저장한 값
      */
-    public Candidate updateInterview(Long id, boolean interviewed, LocalDate interviewDate, String decision) {
+    public Candidate updateInterview(Long id, boolean interviewed, LocalDateTime interviewDate, String decision) {
         Candidate c = get(id);
         String d = decision == null || decision.isBlank() ? null : decision.strip();
         if (d != null && !d.equals("PASS") && !d.equals("FAIL")) {

@@ -13,6 +13,9 @@ public class ReportInfoResult {
     /** 입사 가능 시기 */
     @JsonProperty("start_date")
     private String startDate;
+    /** 직전연봉 */
+    @JsonProperty("last_salary")
+    private String lastSalary;
     /** 희망연봉 */
     @JsonProperty("desired_salary")
     private String desiredSalary;
@@ -20,6 +23,7 @@ public class ReportInfoResult {
     public void validate() {
         dispatch = dispatch == null ? "" : dispatch.strip();
         startDate = startDate == null ? "" : startDate.strip();
+        lastSalary = lastSalary == null ? "" : lastSalary.strip();
         desiredSalary = desiredSalary == null ? "" : desiredSalary.strip();
     }
 }

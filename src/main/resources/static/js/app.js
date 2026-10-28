@@ -73,7 +73,36 @@
     return partialLoad(fetch(location.pathname, { headers: { Accept: 'text/html' } }), selectors);
   };
 
+  // 지원자 고르기 항목: 이름 · 등록 시각. 이름과 시각이 같으면(한 번에 여러 명) 먼저 올린 순서로 (2), (3)을 붙인다
+  window.candLabel = function (select) {
+    var seen = {};
+    var opts = Array.prototype.filter.call(select.options, function (o) { return o.hasAttribute('data-name'); });
+    for (var i = opts.length - 1; i >= 0; i--) { // 목록은 최근 것이 위
+      var o = opts[i];
+      var at = o.getAttribute('data-at');
+      var label = o.getAttribute('data-name') + ' · ' + at;
+      seen[label] = (seen[label] || 0) + 1;
+      // 이름 · 날짜 · 시각을 색으로 나눈다 (새 목록 스타일에서만 보인다, 나머지는 글자 그대로)
+      var cut = at.indexOf('일 ') + 1;
+      var line = document.createElement('span');
+      line.className = 'cn';
+      [['cn-name', o.getAttribute('data-name')], [null, ' '], ['cn-day', cut > 0 ? at.slice(0, cut) : at],
+        [null, ' '], ['cn-time', (cut > 0 ? at.slice(cut + 1) : '') + (seen[label] > 1 ? ' (' + seen[label] + ')' : '')]]
+        .forEach(function (p) {
+          if (!p[0]) { line.appendChild(document.createTextNode(p[1])); return; }
+          var s = document.createElement('span');
+          s.className = p[0];
+          s.textContent = p[1];
+          line.appendChild(s);
+        });
+      o.textContent = '';
+      o.appendChild(line);
+    }
+  };
+  document.querySelectorAll('#cand-list, select[data-cand-copy]').forEach(window.candLabel);
+
   var toastTimer = null;
+  window.showToast = function (msg, isError, ms) { showToast(msg, isError, ms); };
   function showToast(msg, isError, ms) {
     if (!msg) return;
     var el = document.getElementById('toast');
@@ -249,8 +278,8 @@
   if (rk) {
     var rkBase = rk.getAttribute('data-base');
     var rkSave = function (path, body) {
-      // 물결이 다 찰 때까지 기다렸다가 새로 그린다
-      var waved = new Promise(function (ok) { setTimeout(ok, 600); });
+      // 불이 켜지는 걸 보여 주고 새로 그린다
+      var waved = new Promise(function (ok) { setTimeout(ok, 450); });
       return fetch(rkBase + path, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'fetch' },
@@ -274,14 +303,20 @@
         document.querySelectorAll('.rk-row.is-' + fold.getAttribute('data-rk-fold')).forEach(function (tr) { tr.hidden = !open; });
       });
     });
-    // 평가 기준 열: 마우스를 올린 열 전체를 옅게 칠한다
+    // 평가 기준 열: 마우스를 올린 열 전체와 위 번호표의 그 줄을 함께 강조한다
     var rkTable = document.querySelector('table.rk');
     if (rkTable) {
+      var keyItems = document.querySelectorAll('#rk-key li');
       var markCol = function (idx) {
         rkTable.querySelectorAll('tr').forEach(function (tr) {
           tr.querySelectorAll('.rk-c').forEach(function (cell, i) { cell.classList.toggle('is-col', i === idx); });
         });
+        keyItems.forEach(function (li, i) { li.classList.toggle('is-on', i === idx); });
       };
+      keyItems.forEach(function (li, i) {
+        li.addEventListener('mouseenter', function () { markCol(i); });
+        li.addEventListener('mouseleave', function () { markCol(-1); });
+      });
       rkTable.addEventListener('mouseover', function (e) {
         var cell = e.target.closest('.rk-c');
         markCol(cell ? Array.prototype.indexOf.call(cell.parentNode.querySelectorAll('.rk-c'), cell) : -1);
@@ -373,8 +408,14 @@
     } catch (e) { /* 저장소를 못 쓰면 끈 채로 */ }
     filters.forEach(function (f) { f.addEventListener('change', applyFilters); });
     applyFilters();
-    // 기억해 둔 칩을 켜 놓을 때는 물결 없이, 그 뒤 누를 때만 물결
-    requestAnimationFrame(function () { requestAnimationFrame(function () { rk.classList.add('is-live'); }); });
+    // 전구 깜빡임은 방금 켠 칩에만
+    rk.querySelectorAll('.fchip input').forEach(function (box) {
+      box.addEventListener('change', function () {
+        var chip = box.closest('.fchip');
+        chip.classList.remove('is-flick');
+        if (box.checked) { void chip.offsetWidth; chip.classList.add('is-flick'); }
+      });
+    });
   }
 
   // ── 평가 기준 추출 왼쪽 포지션 목록: 끝까지 내리면 다음 묶음을 이어 붙인다 ──
@@ -558,10 +599,12 @@
           o.setAttribute('data-mark', row.status === 'FAILED' ? '실패' : row.label);
           o.setAttribute('data-mark-kind', row.inProgress ? 'progress' : row.status === 'UPLOADED' ? 'wait' : 'failed');
         }
-        o.textContent = row.name;
+        o.setAttribute('data-name', row.name);
+        o.setAttribute('data-at', row.at);
         o.selected = String(row.id) === current;
         candList.appendChild(o);
       });
+      window.candLabel(candList);
       candList.dispatchEvent(new Event('refit'));
     };
     var poll = function () {

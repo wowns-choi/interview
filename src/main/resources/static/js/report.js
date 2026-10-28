@@ -26,16 +26,19 @@
       });
     });
     return {
-      reportDate: rp.querySelector('[data-f="reportDate"]').value,
       interviewDate: rp.querySelector('[data-f="interviewDate"]').value,
       position: rp.querySelector('[data-f="position"]').value,
       qaSource: rp.getAttribute('data-source'),
       info: Array.prototype.map.call(rp.querySelectorAll('[data-list="info"] .rp-item'), function (el) {
         return { label: val(el, 'label'), value: val(el, 'value') };
       }),
+      certs: Array.prototype.map.call(rp.querySelectorAll('[data-list="certs"] .rp-item'), function (el) {
+        return { label: val(el, 'label'), value: val(el, 'value') };
+      }),
       qa: qa,
       opinions: Array.prototype.map.call(rp.querySelectorAll('[data-list="opinions"] .rp-item'), function (el) {
-        return { team: val(el, 'team'), name: val(el, 'name'), content: val(el, 'content') };
+        var on = el.querySelector('.rp-mini.is-on');
+        return { team: val(el, 'team'), name: val(el, 'name'), content: val(el, 'content'), decision: on ? on.getAttribute('data-v') : '' };
       })
     };
   }
@@ -95,10 +98,19 @@
     changed(false);
   });
   rp.addEventListener('change', function (e) {
-    if (e.target.type === 'date') changed(true);
+    if (e.target.type === 'date' || e.target.type === 'datetime-local') changed(true);
   });
 
   rp.addEventListener('click', function (e) {
+    // 면접관마다 합격·불합격: 같은 것을 다시 누르면 지운다
+    var mini = e.target.closest('.rp-mini');
+    if (mini) {
+      var was = mini.classList.contains('is-on');
+      mini.parentElement.querySelectorAll('.rp-mini').forEach(function (b) { b.classList.remove('is-on'); });
+      if (!was) mini.classList.add('is-on');
+      changed(true);
+      return;
+    }
     var del = e.target.closest('.rp-del');
     if (del) {
       del.closest('.rp-item').remove();
@@ -145,8 +157,8 @@
     if (over === dragging) return;
     if (over && over.parentElement === list) {
       var r = over.getBoundingClientRect();
-      // 지원자 정보는 두 칸씩 놓이므로 가로 위치로, 나머지는 세로 위치로 앞뒤를 정한다
-      var after = group === 'info' ? e.clientX > r.left + r.width / 2 : e.clientY > r.top + r.height / 2;
+      // 지원자 정보·자격증은 두 칸씩 놓이므로 가로 위치로, 나머지는 세로 위치로 앞뒤를 정한다
+      var after = list.classList.contains('rp-info') ? e.clientX > r.left + r.width / 2 : e.clientY > r.top + r.height / 2;
       list.insertBefore(dragging, after ? over.nextSibling : over);
     } else if (!over) {
       list.appendChild(dragging);

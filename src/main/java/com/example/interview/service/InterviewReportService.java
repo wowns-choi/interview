@@ -77,7 +77,8 @@ public class InterviewReportService {
         report.setQa(qa(source, record, sheet));
 
         String input = infoInput(c, record, sheet);
-        String key = input == null ? null : sha256(input);
+        // 앞의 "v2": 찾는 항목이 바뀌면(직전연봉 추가, 2026-10-28) 예전 답을 쓰지 않고 한 번 다시 묻는다
+        String key = input == null ? null : sha256("v2|" + input);
         InterviewReport.Found found;
         if (key == null) {
             found = null;
@@ -94,6 +95,7 @@ public class InterviewReportService {
         report.setFound(found);
         report.setInfo(info(c, ReportService.parseProfile(c.getProfileJson()), CareerEvalService.parse(c.getCareerEvalJson()),
                 found, LocalDate.now()));
+        report.setCerts(certs(CareerEvalService.parse(c.getCareerEvalJson())));
 
         if (old != null) {
             report.setPosition(old.getPosition());
@@ -184,6 +186,7 @@ public class InterviewReportService {
         InterviewReport.Found f = new InterviewReport.Found();
         f.setDispatch(r.getDispatch());
         f.setStartDate(r.getStartDate());
+        f.setLastSalary(r.getLastSalary());
         f.setDesiredSalary(r.getDesiredSalary());
         return f;
     }
@@ -239,17 +242,32 @@ public class InterviewReportService {
 
     static List<InterviewReport.InfoRow> info(Candidate c, CandidateProfile profile, CareerEvalResult eval,
             InterviewReport.Found interview, LocalDate today) {
-        CareerEvalResult.Certificates certs = eval == null ? null : eval.getCertificates();
         List<InterviewReport.InfoRow> rows = new ArrayList<>();
         rows.add(InterviewReport.InfoRow.of("성명", c.getDisplayName()));
         rows.add(InterviewReport.InfoRow.of("나이", profile == null ? "" : age(profile.getBirth(), today)));
         rows.add(InterviewReport.InfoRow.of("경력", career(profile, eval)));
         rows.add(InterviewReport.InfoRow.of("학력", education(profile, eval)));
-        rows.add(InterviewReport.InfoRow.of("정보처리기사", certs == null ? "" : has(certs.getInfoEngineer())));
-        rows.add(InterviewReport.InfoRow.of("SQLD", certs == null ? "" : has(certs.getSqld())));
         rows.add(InterviewReport.InfoRow.of("파견 가능 여부", interview == null ? "" : interview.getDispatch()));
         rows.add(InterviewReport.InfoRow.of("입사 가능 시기", interview == null ? "" : interview.getStartDate()));
-        rows.add(InterviewReport.InfoRow.of("희망연봉", interview == null ? "" : interview.getDesiredSalary()));
+        rows.add(InterviewReport.InfoRow.of("직전연봉/희망연봉", interview == null ? "" : salaries(interview.getLastSalary(), interview.getDesiredSalary())));
+        return rows;
+    }
+
+    /** 한 칸에 "직전 / 희망". 하나만 찾았으면 다른 쪽은 "-" */
+    private static String salaries(String last, String desired) {
+        last = last == null ? "" : last.strip();
+        desired = desired == null ? "" : desired.strip();
+        if (last.isBlank() && desired.isBlank()) {
+            return "";
+        }
+        return (last.isBlank() ? "-" : last) + " / " + (desired.isBlank() ? "-" : desired);
+    }
+
+    static List<InterviewReport.InfoRow> certs(CareerEvalResult eval) {
+        CareerEvalResult.Certificates certs = eval == null ? null : eval.getCertificates();
+        List<InterviewReport.InfoRow> rows = new ArrayList<>();
+        rows.add(InterviewReport.InfoRow.of("정보처리기사", certs == null ? "" : has(certs.getInfoEngineer())));
+        rows.add(InterviewReport.InfoRow.of("SQLD", certs == null ? "" : has(certs.getSqld())));
         return rows;
     }
 

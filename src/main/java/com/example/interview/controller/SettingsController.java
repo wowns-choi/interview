@@ -33,10 +33,13 @@ public class SettingsController {
     }
 
     @PostMapping("/privacy")
-    public String savePrivacy(@RequestParam(defaultValue = "false") boolean strict, RedirectAttributes ra) {
+    public String savePrivacy(@RequestParam(defaultValue = "false") boolean strict,
+                              @RequestParam(defaultValue = "") String back, RedirectAttributes ra) {
         privacyMode.setStrict(strict);
         ra.addFlashAttribute("message", strict ? "개인정보 엄격 보호 모드를 켰습니다." : "개인정보 엄격 보호 모드를 껐습니다.");
-        return "redirect:/settings";
+        // 적합도 검사 화면의 스위치는 그 화면으로 돌아간다. 이 앱 안의 경로만 받는다
+        boolean local = back.startsWith("/") && !back.startsWith("//") && !back.contains("\\");
+        return "redirect:" + (local ? back : "/settings");
     }
 
     @PostMapping("/api-key")

@@ -18,8 +18,7 @@
 
   <table class="rp-meta">
     <tr>
-      <th>보고서 작성일</th><td><input type="date" data-f="reportDate" value="<c:out value='${report.reportDate}'/>"></td>
-      <th>면접일</th><td><input type="date" data-f="interviewDate" value="<c:out value='${report.interviewDate}'/>"></td>
+      <th>면접일</th><td colspan="3"><input type="datetime-local" data-f="interviewDate" value="<c:out value='${report.interviewDate}'/>"></td>
     </tr>
     <tr>
       <th>지원 포지션</th><td colspan="3"><input type="text" data-f="position" value="<c:out value='${report.position == null ? position.title : report.position}'/>"></td>
@@ -42,9 +41,25 @@
     <button type="button" class="rp-add" data-add="info"><svg class="i"><use href="#i-plus"/></svg>항목 추가</button>
   </section>
 
+  <%-- 자격증: 지원자 정보와 따로 (사용자 2026-10-28) --%>
+  <section class="rp-sec">
+    <div class="rp-h"><h2><span class="rp-h-no">2</span>자격증</h2></div>
+    <div class="rp-info" data-list="certs">
+      <c:forEach var="row" items="${report.certs}">
+        <div class="rp-cell rp-item">
+          <span class="rp-handle" title="끌어서 옮기기"><svg class="i"><use href="#i-grip"/></svg></span>
+          <input class="rp-label" data-k="label" value="<c:out value='${row.label}'/>" placeholder="자격증">
+          <textarea class="rp-value" data-k="value" rows="1"><c:out value="${row.value}"/></textarea>
+          <button type="button" class="rp-del" title="삭제"><svg class="i"><use href="#i-trash"/></svg></button>
+        </div>
+      </c:forEach>
+    </div>
+    <button type="button" class="rp-add" data-add="certs"><svg class="i"><use href="#i-plus"/></svg>자격증 추가</button>
+  </section>
+
   <section class="rp-sec">
     <div class="rp-h">
-      <h2><span class="rp-h-no">2</span>질문과 답변</h2>
+      <h2><span class="rp-h-no">3</span>질문과 답변</h2>
       <div class="rp-tools">
         <form class="rp-seg" method="post" data-partial="#rp" action="<c:url value='/results/${candidate.id}/report/source'/>"
               data-confirm="질문과 답변을 다시 가져옵니다. 보고서에서 고친 질문과 답변은 사라집니다.">
@@ -74,7 +89,7 @@
   </section>
 
   <section class="rp-sec">
-    <div class="rp-h"><h2><span class="rp-h-no">3</span>면접관 의견</h2></div>
+    <div class="rp-h"><h2><span class="rp-h-no">4</span>면접관 의견</h2></div>
     <div class="rp-ops" data-list="opinions">
       <c:forEach var="op" items="${report.opinions}">
         <div class="rp-op rp-item">
@@ -82,6 +97,7 @@
           <div class="rp-op-who">
             <label><span>팀</span><input data-k="team" value="<c:out value='${op.team}'/>"></label>
             <label><span>성명</span><input data-k="name" value="<c:out value='${op.name}'/>"></label>
+            <div class="rp-op-dec"><button type="button" class="rp-mini${op.decision == 'PASS' ? ' is-on' : ''}" data-v="PASS">합격</button><button type="button" class="rp-mini${op.decision == 'FAIL' ? ' is-on' : ''}" data-v="FAIL">불합격</button></div>
           </div>
           <textarea data-k="content" rows="3" placeholder="의견"><c:out value="${op.content}"/></textarea>
           <button type="button" class="rp-del" title="삭제"><svg class="i"><use href="#i-trash"/></svg></button>
@@ -92,7 +108,7 @@
   </section>
 
   <section class="rp-sec">
-    <div class="rp-h"><h2><span class="rp-h-no">4</span>합격 여부</h2></div>
+    <div class="rp-h"><h2><span class="rp-h-no">5</span>합격 여부</h2></div>
     <%-- 지원자의 합격 여부를 그대로 고친다 (적합도 검사 화면의 결과와 같은 값) --%>
     <div class="rp-result" id="rp-result" data-url="<c:url value='/results/${candidate.id}/interview'/>"
          data-interviewed="${candidate.interviewed}" data-date="${candidate.interviewDate}">
@@ -106,6 +122,14 @@
   <div class="rp-cell rp-item">
     <span class="rp-handle" title="끌어서 옮기기"><svg class="i"><use href="#i-grip"/></svg></span>
     <input class="rp-label" data-k="label" placeholder="항목">
+    <textarea class="rp-value" data-k="value" rows="1"></textarea>
+    <button type="button" class="rp-del" title="삭제"><svg class="i"><use href="#i-trash"/></svg></button>
+  </div>
+</template>
+<template id="tpl-certs">
+  <div class="rp-cell rp-item">
+    <span class="rp-handle" title="끌어서 옮기기"><svg class="i"><use href="#i-grip"/></svg></span>
+    <input class="rp-label" data-k="label" placeholder="자격증">
     <textarea class="rp-value" data-k="value" rows="1"></textarea>
     <button type="button" class="rp-del" title="삭제"><svg class="i"><use href="#i-trash"/></svg></button>
   </div>
@@ -124,6 +148,7 @@
     <div class="rp-op-who">
       <label><span>팀</span><input data-k="team"></label>
       <label><span>성명</span><input data-k="name"></label>
+      <div class="rp-op-dec"><button type="button" class="rp-mini" data-v="PASS">합격</button><button type="button" class="rp-mini" data-v="FAIL">불합격</button></div>
     </div>
     <textarea data-k="content" rows="3" placeholder="의견"></textarea>
     <button type="button" class="rp-del" title="삭제"><svg class="i"><use href="#i-trash"/></svg></button>

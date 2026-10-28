@@ -117,7 +117,7 @@ class WebPagesSmokeTest {
                 .doesNotContain("필수", "우대", "type=\"file\" id=\"resume\"", "<dt>연봉</dt>");
         // 적합도 검사: 포지션은 고르기만, 평가항목은 읽기 전용
         String fitPage = get("/fit?position=" + positionId).body();
-        assertThat(fitPage).contains("name=\"applicant-1\"", "data-nav", "selected", "class=\"pick-new is-active\"", "지원자 추가", "id=\"bz-go\"")
+        assertThat(fitPage).contains("name=\"applicant-1\"", "data-nav", "selected", "class=\"pick-new is-active\"", "지원자 추가", "id=\"bz-go\"", "class=\"pick-strict\"")
                 .doesNotContain("평가 기준 추가", "js-crit-edit", "class=\"pick-crit\"", "(1인)", "(다수)", "id=\"resume\"");
         assertThat(get("/fit").body()).contains("name=\"applicant-1\"");
         HttpResponse<String> crit = json("POST", "/positions/" + positionId + "/criteria",
@@ -239,13 +239,13 @@ class WebPagesSmokeTest {
 
         // 합격자 보고서: 질문지 답변을 복사해 만들고, 화면에서 고친 것을 통째로 저장한다
         assertThat(get("/results/" + id + "/report").statusCode()).as("만들기 전에는 지원자 화면으로").isEqualTo(302);
-        assertThat(json("PATCH", "/results/" + id + "/interview", "{\"interviewed\":true,\"date\":\"2026-10-20\",\"decision\":\"PASS\"}")
+        assertThat(json("PATCH", "/results/" + id + "/interview", "{\"interviewed\":true,\"date\":\"2026-10-20T14:30\",\"decision\":\"PASS\"}")
                 .statusCode()).isEqualTo(200);
         assertThat(get("/results/" + id).body()).contains("id=\"iv-report\"", "data-busy=\"보고서를 만드는 중\"");
         assertThat(post("/results/" + id + "/report", "", false).statusCode()).isEqualTo(302);
         assertThat(get("/results/" + id).body()).as("있으면 누를 때마다 맞춘다").contains("data-busy=\"보고서를 맞추는 중\"");
-        assertThat(get("/results/" + id + "/report").body()).contains("면접 결과 보고서", "value=\"2026-10-20\"", "측정은 nGrinder로 했다고 답함",
-                "파견 가능 여부", "희망연봉", "class=\"rp-box is-on\" data-decision=\"PASS\"", "면접관 추가", "data-f=\"position\"");
+        assertThat(get("/results/" + id + "/report").body()).contains("면접 결과 보고서", "value=\"2026-10-20T14:30\"", "측정은 nGrinder로 했다고 답함",
+                "파견 가능 여부", "직전연봉/희망연봉", "class=\"rp-box is-on\" data-decision=\"PASS\"", "면접관 추가", "data-list=\"certs\"", "data-f=\"position\"");
         assertThat(json("PUT", "/results/" + id + "/report", "{\"reportDate\":\"2026-10-23\",\"qaSource\":\"SHEET\","
                 + "\"info\":[{\"label\":\"성명\",\"value\":\"<b>x</b>\"}],\"qa\":[{\"kind\":\"CANDIDATE\",\"question\":\"복지는요?\",\"answer\":\"안내함\"}],"
                 + "\"opinions\":[{\"team\":\"플랫폼팀\",\"name\":\"김면접\",\"content\":\"기술 깊이가 좋음\"}]}").statusCode()).isEqualTo(204);

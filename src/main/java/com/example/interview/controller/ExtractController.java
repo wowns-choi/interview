@@ -2,6 +2,7 @@ package com.example.interview.controller;
 
 import java.nio.charset.StandardCharsets;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.time.format.DateTimeParseException;
 import java.util.ArrayList;
 import java.util.Comparator;
@@ -257,6 +258,7 @@ public class ExtractController {
                     Map<String, Object> m = new LinkedHashMap<>();
                     m.put("id", row.getCandidateId());
                     m.put("name", row.getDisplayName());
+                    m.put("at", row.getCreatedText());
                     m.put("state", row.getState());
                     m.put("status", row.getStatus().name());
                     m.put("inProgress", row.isInProgress());
@@ -355,14 +357,15 @@ public class ExtractController {
         return Map.of("name", candidateService.rename(id, body.get("name")));
     }
 
-    /** 면접 기록: {"interviewed": true, "date": "2026-10-22" 또는 "", "decision": "PASS" | "FAIL" | ""} */
+    /** 면접 기록: {"interviewed": true, "date": "2026-10-22T14:30" 또는 "", "decision": "PASS" | "FAIL" | ""} */
     @PatchMapping("/results/{id}/interview")
     @ResponseBody
     public Map<String, Object> updateInterview(@PathVariable Long id, @RequestBody Map<String, Object> body) {
         Object date = body.get("date");
-        LocalDate day;
+        LocalDateTime day;
         try {
-            day = date == null || date.toString().isBlank() ? null : LocalDate.parse(date.toString());
+            String s = date == null ? "" : date.toString().strip();
+            day = s.isEmpty() ? null : s.length() == 10 ? LocalDate.parse(s).atStartOfDay() : LocalDateTime.parse(s);
         } catch (DateTimeParseException e) {
             throw new BusinessException("날짜 형식이 아닙니다.");
         }

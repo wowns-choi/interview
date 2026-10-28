@@ -29,7 +29,7 @@
 </div>
 </c:if>
 
-<section class="stage">
+<section class="stage rk-stage">
   <c:choose>
     <c:when test="${empty rows}">
       <div class="empty-box">아직 이력서가 없습니다. <a href="<c:url value='/fit?position=${position.id}'/>">이력서 올리기</a></div>
@@ -41,10 +41,10 @@
             <tr>
               <th class="rk-no"></th>
               <th class="rk-name">지원자</th>
-              <th class="rk-total">평가 기준 충족</th>
               <th class="rk-cnd">경력</th>
               <th class="rk-cnd">학력</th>
-              <c:forEach var="c" items="${criteria}" varStatus="cs"><th class="rk-c${cs.first ? ' rk-first' : ''}${cs.last ? ' rk-last' : ''}" title="<c:out value='${c.name}'/>"><span class="rk-cwrap"><span class="rk-cname"><c:out value="${c.name}"/></span></span></th></c:forEach>
+              <c:forEach var="c" items="${criteria}" varStatus="cs"><th class="rk-c${cs.first ? ' rk-first' : ''}${cs.last ? ' rk-last' : ''}"><span class="rk-cnum" data-name="<c:out value='${c.name}'/>">${cs.count}</span></th></c:forEach>
+              <th class="rk-total">평가 기준 충족</th>
             </tr>
           </thead>
           <tbody>
@@ -60,22 +60,22 @@
                 </c:choose>
               </c:if>
               <c:set var="s" value="${row.score}"/>
-              <tr class="rk-row is-${row.state}"${row.state != 'RANKED' ? ' hidden' : ''} data-interviewed="${row.interviewed}" data-decision="${row.decision}" data-engineer="${row.infoEngineer}" data-sqld="${row.sqld}" data-href="<c:url value='/results/${row.candidateId}'/>">
+              <tr class="rk-row is-${row.state}"${row.state != 'RANKED' ? ' hidden' : ''} data-interviewed="${not empty row.interviewDate}" data-decision="${row.decision}" data-engineer="${row.infoEngineer}" data-sqld="${row.sqld}" data-href="<c:url value='/results/${row.candidateId}'/>">
                 <td class="rk-no">${empty row.rank ? '' : row.rank}</td>
-                <td class="rk-name"><a href="<c:url value='/results/${row.candidateId}'/>"><c:out value="${row.displayName}"/></a><c:if test="${not empty row.exclusion}"><small class="rk-why">${row.exclusion}</small></c:if><c:if test="${row.infoEngineer}"><span class="rk-cert">정보처리기사</span></c:if><c:if test="${row.sqld}"><span class="rk-cert">SQLD</span></c:if><c:if test="${row.interviewed}"><span class="rk-iv">면접<c:if test="${not empty row.interviewDate}"> ${row.interviewDate.monthValue}.${row.interviewDate.dayOfMonth}</c:if></span></c:if><c:if test="${not empty row.decision}"><span class="rk-dec is-${row.decision}">${row.decision == 'PASS' ? '합격' : '불합격'}</span></c:if></td>
+                <td class="rk-name"><a href="<c:url value='/results/${row.candidateId}'/>"><c:out value="${row.displayName}"/></a><c:if test="${not empty row.exclusion}"><small class="rk-why">${row.exclusion}</small></c:if><c:if test="${row.infoEngineer}"><span class="rk-cert">정보처리기사</span></c:if><c:if test="${row.sqld}"><span class="rk-cert">SQLD</span></c:if><span class="rk-iv${empty row.interviewDate ? ' is-none' : ''}">${empty row.interviewDate ? '면접 전' : '면접 '.concat(row.interviewText)}</span><c:if test="${not empty row.decision}"><span class="rk-dec is-${row.decision}">${row.decision == 'PASS' ? '합격' : '불합격'}</span></c:if></td>
                 <c:choose>
                   <c:when test="${empty s}">
-                    <td class="rk-total"><span class="muted">${row.statusLabel}</span></td>
-                    <td colspan="${2 + fn:length(criteria)}"></td>
+                    <td class="rk-pending" colspan="${2 + fn:length(criteria)}"><span class="muted">${row.statusLabel}</span></td>
+                    <td class="rk-total"></td>
                   </c:when>
                   <c:otherwise>
-                    <td class="rk-total"><span class="rk-score">${s.totalText}<small> / ${s.max}</small></span><span class="rk-bar"><span style="width: ${s.percent}%"></span></span></td>
                     <td class="rk-cnd"><span class="rk-cond is-${s.career == 1 ? 'met' : 'unmet'}">${s.career == 1 ? '충족' : '미충족'}</span></td>
                     <td class="rk-cnd"><span class="rk-cond is-${s.education == 1 ? 'met' : 'unmet'}">${s.education == 1 ? '충족' : '미충족'}</span></td>
                     <c:forEach var="it" items="${s.items}" varStatus="is">
                       <c:set var="evK" value="${empty it.match ? 'UNCHECKED' : it.match}"/>
                       <td class="rk-c${is.first ? ' rk-first' : ''}${is.last ? ' rk-last' : ''}"><i class="rk-sq ev-${evK}" title="${is.count}. <c:out value='${it.name}'/> · ${empty it.match ? '검사 전' : it.match == 'DIRECT' ? '충족' : it.match == 'INDIRECT' ? '부분 충족' : '미확인'}"></i></td>
                     </c:forEach>
+                    <td class="rk-total"><span class="rk-score">${s.totalText}<small> / ${s.max}</small></span></td>
                   </c:otherwise>
                 </c:choose>
               </tr>

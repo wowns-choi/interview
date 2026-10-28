@@ -1,6 +1,5 @@
 package com.example.interview.domain;
 
-import java.time.LocalDate;
 import java.time.LocalDateTime;
 
 import lombok.Data;
@@ -21,7 +20,7 @@ public class Candidate {
     private String opinionJson;
     /** 면접을 봤는지 (면접관이 체크) */
     private boolean interviewed;
-    private LocalDate interviewDate;
+    private LocalDateTime interviewDate;
     /** PASS, FAIL. 정하지 않았으면 null. 면접관이 정한다 (AI는 정하지 않는다) */
     private String decision;
     /** 면접 녹음본을 글로 옮긴 것. 가리지 않고 그대로 저장한다 (사용자 결정) */
