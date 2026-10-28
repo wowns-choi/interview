@@ -250,6 +250,18 @@ public class ExtractController {
         return "redirect:/fit?position=" + id;
     }
 
+    /** 지원자 비교: 평가 기준이 바뀐 지원자를 지금 기준으로 다시 검사 (사용자 2026-10-28) */
+    @PostMapping("/positions/{id}/recheck")
+    public String recheck(@PathVariable Long id, RedirectAttributes ra) {
+        try {
+            int n = batchCheckService.recheckChanged(id);
+            ra.addFlashAttribute("message", n == 0 ? "다시 검사할 지원자가 없습니다." : n + "명을 다시 검사합니다.");
+        } catch (BusinessException e) {
+            ra.addFlashAttribute("error", e.getMessage());
+        }
+        return "redirect:/ranking?position=" + id;
+    }
+
     /** 적합도 검사 화면의 지원자 목록 (다수 검사 진행 상황을 새로 그릴 때) */
     @GetMapping("/positions/{id}/candidates")
     @ResponseBody
@@ -512,6 +524,10 @@ public class ExtractController {
             model.addAttribute("excludedCount", rows.stream().filter(r -> "EXCLUDED".equals(r.getState())).count());
             model.addAttribute("uncheckedCount", rows.stream().filter(r -> "UNCHECKED".equals(r.getState())).count());
             model.addAttribute("staleCount", rows.stream().filter(r -> "STALE".equals(r.getState())).count());
+            java.util.Set<Long> changed = new java.util.HashSet<>(rankingService.changedCandidates(id));
+            model.addAttribute("changedIds", changed);
+            model.addAttribute("changedCount", changed.size());
+            model.addAttribute("rankBusy", rows.stream().anyMatch(RankingRow::isInProgress));
         }
         return "ranking";
     }

@@ -29,6 +29,8 @@ public class Candidate {
     private String recordJson;
     /** 합격자 보고서 (InterviewReport JSON). 원래 기록과 따로 고친다 */
     private String reportJson;
+    /** 적합도 검사를 한 때의 평가 기준 목록 (EvalCriterion JSON 배열). 지원자 화면과 점수는 이 목록대로. 그 전에 검사했으면 null */
+    private String criteriaJson;
     private CandidateStatus status = CandidateStatus.UPLOADED;
     private String errorMessage;
     private LocalDateTime createdAt;

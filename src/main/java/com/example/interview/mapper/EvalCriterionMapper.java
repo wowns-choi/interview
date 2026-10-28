@@ -10,6 +10,8 @@ import com.example.interview.domain.EvalCriterion;
 public interface EvalCriterionMapper {
     List<EvalCriterion> findByPositionId(Long positionId);
 
+    List<EvalCriterion> findAllByPositionId(Long positionId);
+
     EvalCriterion findById(Long id);
 
     int maxSortOrder(Long positionId);

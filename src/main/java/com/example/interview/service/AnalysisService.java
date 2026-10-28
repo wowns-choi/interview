@@ -60,14 +60,15 @@ public class AnalysisService {
     private final TransactionTemplate transactionTemplate;
 
     /**
-     * 근거를 새로 찾는다. 이전 근거에 기대던 질문지도 함께 지운다.
+     * 근거를 새로 찾는다. 질문지·추출한 질문과 답변은 남기고 예전 근거와의 연결만 끊는다
+     * (사용자 2026-10-28: 사람이 적은 답변은 다시 만들 수 없다). 질문지가 있으면 DONE, 없으면 ANALYZED.
      *
      * @return 같은 호출에서 계산한 총 경력·관련 경력 (저장은 CareerEvalService가 한다)
      */
     public EvidenceResult.Career analyzeEvidence(Long candidateId) {
         Candidate candidate = candidateService.get(candidateId);
         Position position = positionService.get(candidate.getPositionId());
-        List<EvalCriterion> criteria = criteria(candidate);
+        List<EvalCriterion> criteria = criteria(positionService.criteria(candidate.getPositionId()));
 
         candidateMapper.updateStatus(candidateId, CandidateStatus.ANALYZING, null);
         try {
@@ -75,10 +76,12 @@ public class AnalysisService {
             List<Evidence> evidences = analysis.evidences();
             transactionTemplate.executeWithoutResult(status -> {
                 evidenceMapper.deleteByCandidateId(candidateId);
-                questionMapper.deleteByCandidateId(candidateId);
+                questionMapper.clearEvidence(candidateId);
                 candidateMapper.updateOpinion(candidateId, null);
+                candidateMapper.updateCriteria(candidateId, ReportService.criteriaJson(criteria));
                 evidences.forEach(evidenceMapper::insert);
-                candidateMapper.updateStatus(candidateId, CandidateStatus.ANALYZED, null);
+                boolean sheet = questionMapper.findByCandidateId(candidateId).stream().anyMatch(InterviewQuestion::isMerged);
+                candidateMapper.updateStatus(candidateId, sheet ? CandidateStatus.DONE : CandidateStatus.ANALYZED, null);
             });
             return analysis.career();
         } catch (RuntimeException e) {
@@ -255,8 +258,13 @@ public class AnalysisService {
         });
     }
 
+    /** 질문 추출·배치는 이 지원자를 검사한 때의 기준으로 (근거가 그 기준에 달려 있다) */
     private List<EvalCriterion> criteria(Candidate candidate) {
-        List<EvalCriterion> criteria = positionService.criteria(candidate.getPositionId());
+        return criteria(ReportService.checkedCriteria(candidate, positionService.allCriteria(candidate.getPositionId()),
+                evidenceMapper.findByCandidateId(candidate.getId())));
+    }
+
+    private static List<EvalCriterion> criteria(List<EvalCriterion> criteria) {
         if (criteria.isEmpty()) {
             throw new BusinessException("평가 기준이 없습니다.");
         }

@@ -122,6 +122,11 @@ public class PositionService {
         return criterionMapper.findByPositionId(positionId);
     }
 
+    /** 지운 표시한 기준까지 (ReportService.checkedCriteria) */
+    public List<EvalCriterion> allCriteria(Long positionId) {
+        return criterionMapper.findAllByPositionId(positionId);
+    }
+
     public List<Long> imageIds(Long positionId) {
         return imageMapper.findIdsByPositionId(positionId);
     }

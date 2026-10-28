@@ -96,6 +96,16 @@ public class FitScore {
         return getMax() == 0 ? 0 : Math.round(getTotal() / getMax() * 1000) / 10.0;
     }
 
+    /** 100점 만점 정수 (사용자 2026-10-28: 지원자마다 검사한 기준 수가 달라도 비교할 수 있게). 7개 중 5.5 → 79 */
+    public long getScore100() {
+        return getMax() == 0 ? 0 : Math.round(getTotal() / getMax() * 100);
+    }
+
+    /** 순위용: 반올림하지 않은 비율 */
+    public double getRatio() {
+        return getMax() == 0 ? 0 : getTotal() / getMax();
+    }
+
     /** "8.5", "9" */
     public String getTotalText() {
         double t = getTotal();

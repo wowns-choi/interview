@@ -205,6 +205,13 @@
       history.replaceState(null, '', location.pathname + location.search + '#' + name);
       showStage(name, true);
     });
+    // 면접 질문지 밑 「면접 후」 같은 단계 넘김 버튼: 사이드바 단계 버튼을 누른 것과 같다
+    document.addEventListener('click', function (e) {
+      var go = e.target.closest('[data-go-stage]');
+      if (!go) return;
+      var b = stageNav.querySelector('[data-stage="' + go.getAttribute('data-go-stage') + '"]');
+      if (b) b.click();
+    });
     var first = location.hash;
     showStage(stageOf(first), false);
     // 질문지 안의 자리(#extract 등)로 왔으면 그 자리로
@@ -278,30 +285,29 @@
     });
     document.querySelectorAll('[data-rk-fold]').forEach(function (fold) {
       fold.addEventListener('click', function () {
+        closeDetails();
         var open = fold.classList.toggle('is-open');
         document.querySelectorAll('.rk-row.is-' + fold.getAttribute('data-rk-fold')).forEach(function (tr) { tr.hidden = !open; });
       });
     });
-    // 평가 기준 열: 마우스를 올린 열 전체와 위 번호표의 그 줄을 함께 강조한다
-    var rkTable = document.querySelector('table.rk');
-    if (rkTable) {
-      var keyItems = document.querySelectorAll('#rk-key li');
-      var markCol = function (idx) {
-        rkTable.querySelectorAll('tr').forEach(function (tr) {
-          tr.querySelectorAll('.rk-c').forEach(function (cell, i) { cell.classList.toggle('is-col', i === idx); });
-        });
-        keyItems.forEach(function (li, i) { li.classList.toggle('is-on', i === idx); });
-      };
-      keyItems.forEach(function (li, i) {
-        li.addEventListener('mouseenter', function () { markCol(i); });
-        li.addEventListener('mouseleave', function () { markCol(-1); });
+    // 다시 검사 중인 지원자가 있으면 잠시 뒤 새로 그린다 (끝나면 멈춘다)
+    var rkPoll = document.querySelector('.rk-stage[data-poll]');
+    if (rkPoll) setTimeout(function () { location.reload(); }, +rkPoll.getAttribute('data-poll'));
+    // 줄을 누르면 그 지원자가 검사받은 평가 기준을 줄 아래에 펼친다. 지원자 화면으로는 끝의 「자세히」로 간다 (사용자 2026-10-28)
+    var closeDetails = function () {
+      document.querySelectorAll('.rk-detail').forEach(function (d) { d.hidden = true; });
+      document.querySelectorAll('.rk-row.is-open').forEach(function (r) { r.classList.remove('is-open'); });
+    };
+    document.querySelectorAll('.rk-row').forEach(function (tr) {
+      var d = tr.nextElementSibling;
+      if (!d || !d.classList.contains('rk-detail')) return;
+      tr.classList.add('can-open');
+      tr.addEventListener('click', function (e) {
+        if (e.target.closest('a')) return;
+        d.hidden = !d.hidden;
+        tr.classList.toggle('is-open', !d.hidden);
       });
-      rkTable.addEventListener('mouseover', function (e) {
-        var cell = e.target.closest('.rk-c');
-        markCol(cell ? Array.prototype.indexOf.call(cell.parentNode.querySelectorAll('.rk-c'), cell) : -1);
-      });
-      rkTable.addEventListener('mouseleave', function () { markCol(-1); });
-    }
+    });
     // 면접 본 사람만·합격한 사람만: 화면에서만 거른다 (고른 것은 브라우저에 기억)
     var filters = rk.querySelectorAll('[data-rk-filter]');
     var applyFilters = function () {
@@ -319,10 +325,11 @@
       document.querySelectorAll('.rk-group').forEach(function (g) {
         var left = false;
         for (var n = g.nextElementSibling; n && !n.classList.contains('rk-group'); n = n.nextElementSibling) {
-          if (!n.classList.contains('is-filtered')) left = true;
+          if (n.classList.contains('rk-row') && !n.classList.contains('is-filtered')) left = true;
         }
         g.classList.toggle('is-filtered', !left);
       });
+      closeDetails();
       rkPage = 0;
       pageRanked();
     };
@@ -347,6 +354,7 @@
         td.addEventListener('click', function (e) {
           var b = e.target.closest('button[data-page]');
           if (!b || b.disabled) return;
+          closeDetails();
           rkPage = +b.getAttribute('data-page');
           pageRanked();
           document.querySelector('.rk').scrollIntoView({ block: 'start' });
@@ -379,6 +387,7 @@
       add('›', rkPage + 1, 'rk-page-step');
       rkPager.hidden = false;
       var last = rows[rows.length - 1];
+      if (last.nextElementSibling && last.nextElementSibling.classList.contains('rk-detail')) last = last.nextElementSibling;
       last.parentNode.insertBefore(rkPager, last.nextSibling);
     };
     try {

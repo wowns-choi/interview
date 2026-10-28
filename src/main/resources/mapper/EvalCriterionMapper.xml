@@ -3,16 +3,22 @@
 <mapper namespace="com.example.interview.mapper.EvalCriterionMapper">
 
     <select id="findByPositionId" resultType="com.example.interview.domain.EvalCriterion">
+        SELECT * FROM eval_criterion WHERE position_id = #{positionId} AND deleted_yn = 'N'
+        ORDER BY sort_order, id
+    </select>
+
+    <!-- 지운 표시한 기준까지: 검사 당시 목록이 없는 예전 지원자의 근거를 보일 때 -->
+    <select id="findAllByPositionId" resultType="com.example.interview.domain.EvalCriterion">
         SELECT * FROM eval_criterion WHERE position_id = #{positionId}
         ORDER BY sort_order, id
     </select>
 
     <select id="findById" resultType="com.example.interview.domain.EvalCriterion">
-        SELECT * FROM eval_criterion WHERE id = #{id}
+        SELECT * FROM eval_criterion WHERE id = #{id} AND deleted_yn = 'N'
     </select>
 
     <select id="maxSortOrder" resultType="int">
-        SELECT COALESCE(MAX(sort_order), 0) FROM eval_criterion WHERE position_id = #{positionId}
+        SELECT COALESCE(MAX(sort_order), 0) FROM eval_criterion WHERE position_id = #{positionId} AND deleted_yn = 'N'
     </select>
 
     <insert id="insert" useGeneratedKeys="true" keyProperty="id" keyColumn="id">
@@ -27,11 +33,11 @@
         WHERE id = #{id}
     </update>
 
-    <delete id="delete">
-        DELETE FROM eval_criterion WHERE id = #{id}
-    </delete>
+    <update id="delete">
+        UPDATE eval_criterion SET deleted_yn = 'Y' WHERE id = #{id}
+    </update>
 
-    <delete id="deleteByPositionId">
-        DELETE FROM eval_criterion WHERE position_id = #{positionId}
-    </delete>
+    <update id="deleteByPositionId">
+        UPDATE eval_criterion SET deleted_yn = 'Y' WHERE position_id = #{positionId}
+    </update>
 </mapper>

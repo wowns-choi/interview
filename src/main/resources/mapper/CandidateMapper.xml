@@ -35,6 +35,10 @@
         UPDATE candidate SET transcript = #{transcript}, record_json = #{recordJson} WHERE id = #{id}
     </update>
 
+    <update id="updateCriteria">
+        UPDATE candidate SET criteria_json = #{criteriaJson} WHERE id = #{id}
+    </update>
+
     <update id="updateReport">
         UPDATE candidate SET report_json = #{reportJson} WHERE id = #{id}
     </update>

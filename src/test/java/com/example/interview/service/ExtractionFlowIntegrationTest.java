@@ -83,6 +83,8 @@ public class ExtractionFlowIntegrationTest {
     @Autowired
     ReportService reportService;
     @Autowired
+    com.example.interview.mapper.CandidateMapper candidateMapper;
+    @Autowired
     ChatService chatService;
     @Autowired
     InterviewRecordService interviewRecordService;
@@ -240,12 +242,23 @@ public class ExtractionFlowIntegrationTest {
         verify(aiClient, org.mockito.Mockito.times(1)).call(eq(AiPurpose.ARRANGE), anyLong(), anyString(), anyString(), any(), any());
         assertThatThrownBy(() -> extractionService.mergeQuestions(id)).isInstanceOf(BusinessException.class);
 
-        // 평가항목 편집: 검사 뒤 추가한 항목은 "검사 전"
+        // 평가 기준을 고치거나 더하거나 지워도, 검사한 지원자는 검사한 그때 기준 그대로 보이고 순위도 그대로 (사용자 2026-10-28)
         assertThat(rankingService.rank(positionId)).extracting("rank", "state").containsExactly(org.assertj.core.groups.Tuple.tuple(1, "RANKED"));
+        List<String> before = reportService.report(id).getCriteria().stream().map(c -> c.getCriterion().getName()).toList();
         positionService.addCriterion(positionId, "Kotlin 경험", null);
-        assertThat(reportService.report(id).isHasUncheckedCriteria()).isTrue();
-        // 검사 뒤 평가항목이 바뀌면 순위에서 빠진다 (재검사 필요)
-        assertThat(rankingService.rank(positionId)).extracting("rank", "state").containsExactly(org.assertj.core.groups.Tuple.tuple(null, "STALE"));
+        positionService.deleteCriterion(positionId, positionService.criteria(positionId).get(0).getId());
+        assertThat(positionService.criteria(positionId)).extracting("name").contains("Kotlin 경험").doesNotContain(before.get(0));
+        ResultReport kept = reportService.report(id);
+        assertThat(kept.isHasUncheckedCriteria()).isFalse();
+        assertThat(kept.getCriteria()).extracting(c -> c.getCriterion().getName()).containsExactlyElementsOf(before);
+        assertThat(kept.getCriteria().get(0).getEvidences()).isNotEmpty();
+        // 검사 당시 목록이 없는 예전 지원자는 근거가 있는 기준이 곧 검사한 기준이다 (지운 것은 남고 더한 것은 안 보인다)
+        candidateMapper.updateCriteria(id, null);
+        assertThat(reportService.report(id).getCriteria()).extracting(c -> c.getCriterion().getName())
+                .containsExactlyElementsOf(before);
+        candidateMapper.updateCriteria(id, ReportService.criteriaJson(kept.getCriteria().stream().map(c -> c.getCriterion()).toList()));
+        assertThat(rankingService.changedCandidates(positionId)).as("검사 뒤 기준이 바뀌면 다시 검사 대상").containsExactly(id);
+        assertThat(rankingService.rank(positionId)).extracting("rank", "state").containsExactly(org.assertj.core.groups.Tuple.tuple(1, "RANKED"));
 
         // 면접 기록: 날짜나 합격을 고르면 면접 본 것으로 저장하고, 지원자 비교에서도 보인다
         candidateService.updateInterview(id, false, java.time.LocalDateTime.of(2026, 10, 22, 14, 30), "PASS");
@@ -262,7 +275,7 @@ public class ExtractionFlowIntegrationTest {
         // 이력서 삭제: 포지션은 남는다
         extractionService.deleteCandidate(id);
         assertThatThrownBy(() -> candidateService.get(id)).isInstanceOf(NotFoundException.class);
-        assertThat(positionService.criteria(positionId)).hasSize(4);
+        assertThat(positionService.criteria(positionId)).hasSize(3);
     }
 
     @Test
@@ -557,21 +570,29 @@ public class ExtractionFlowIntegrationTest {
     }
 
     @Test
-    void editingTheMaskedTextAfterACheckRechecksAndDropsTheSheet() {
+    void editingTheMaskedTextAfterACheckRechecksAndKeepsTheSheet() {
         stubAi(aiClient, templateMapper, sectionMapper);
         when(pdfTextExtractor.extract(any())).thenReturn(RESUME);
         Long id = extractionService.uploadResume(startPosition(positionService, "백엔드 개발자"), List.of(pdf()));
         extractionService.checkFit(id, null);
         extractionService.extractQuestions(id, QuestionType.SELECTABLE);
         extractionService.mergeQuestions(id);
-        assertThat(reportService.report(id).getSections()).isNotEmpty();
+        List<QuestionView> before = reportService.report(id).getSections().stream().flatMap(s -> s.getQuestions().stream()).toList();
+        assertThat(before).isNotEmpty();
+        Long answered = before.get(0).getQuestion().getId();
+        extractionService.saveAnswer(id, answered, "직접 적은 답변");
 
         String edited = candidateService.get(id).getMaskedText().replace("Redis", "[개인정보]");
         extractionService.checkFit(id, edited);
 
         ResultReport r = reportService.report(id);
         assertThat(r.isFitChecked()).isTrue();
-        assertThat(r.getSections()).as("본문이 바뀌면 질문지는 다시 만든다").isEmpty();
+        // 다시 검사해도 질문지와 답변은 남고, 예전 근거와의 연결만 끊긴다 (사용자 2026-10-28)
+        List<QuestionView> after = r.getSections().stream().flatMap(s -> s.getQuestions().stream()).toList();
+        assertThat(after).extracting(v -> v.getQuestion().getId()).containsExactlyElementsOf(before.stream().map(v -> v.getQuestion().getId()).toList());
+        assertThat(after.get(0).getQuestion().getAnswer()).isEqualTo("직접 적은 답변");
+        assertThat(after).allSatisfy(v -> assertThat(v.getQuestion().getEvidenceId()).isNull());
+        assertThat(r.getCandidate().getStatus()).isEqualTo(com.example.interview.domain.CandidateStatus.DONE);
         assertThat(r.getCandidate().getMaskedText()).contains("[개인정보] 캐시 도입");
     }
 

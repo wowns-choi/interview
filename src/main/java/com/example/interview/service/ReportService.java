@@ -5,6 +5,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
 import java.util.stream.Collectors;
 
 import org.springframework.stereotype.Service;
@@ -55,8 +56,8 @@ public class ReportService {
     public ResultReport report(Long candidateId) {
         Candidate candidate = candidateService.get(candidateId);
         Position position = positionService.get(candidate.getPositionId());
-        List<EvalCriterion> criteria = positionService.criteria(position.getId());
         List<Evidence> evidences = evidenceMapper.findByCandidateId(candidateId);
+        List<EvalCriterion> criteria = checkedCriteria(candidate, positionService.allCriteria(position.getId()), evidences);
         // 못 찾은 인용은 지금 규칙으로 다시 대조하고 ("…"로 줄인 인용은 2026-10-26부터 통과),
         // 그래도 없으면 가장 비슷한 원문을 저장하기 전에 검사한 근거는 여기서 찾아 보여 준다 (저장은 하지 않는다)
         evidences.stream().filter(e -> !"Y".equals(e.getVerifiedYn()) && e.getQuote() != null)
@@ -87,6 +88,44 @@ public class ReportService {
                 extractedByType(questions, criterionNames),
                 evidenceById,
                 usage(candidateId, position.getId()));
+    }
+
+    /**
+     * 이 지원자를 검사한 때의 평가 기준 (사용자 2026-10-28: 검사한 그때 그대로 보인다).
+     * 그 뒤에 고치거나 지운 기준도 당시 이름으로 남는다.
+     * 목록을 저장하기 전에 검사한 지원자는 근거가 있는 기준이 곧 검사한 기준이다 (검사는 기준마다 근거 없음까지 남긴다).
+     * 그 뒤에 더한 기준은 넣지 않아 「재검사 필요」로 빠지지 않는다. 아직 검사 전이면 지금 기준.
+     *
+     * @param all 지운 표시한 것까지 포지션의 모든 기준 (PositionService.allCriteria)
+     */
+    public static List<EvalCriterion> checkedCriteria(Candidate candidate, List<EvalCriterion> all, List<Evidence> evidences) {
+        String json = candidate.getCriteriaJson();
+        if (json != null && !json.isBlank()) {
+            try {
+                return JSON.readValue(json, new TypeReference<List<EvalCriterion>>() { });
+            } catch (JacksonException e) {
+                // 아래처럼 고른다
+            }
+        }
+        if (evidences.isEmpty()) {
+            return all.stream().filter(c -> !"Y".equals(c.getDeletedYn())).toList();
+        }
+        Set<Long> withEvidence = evidences.stream().map(Evidence::getCriterionId).collect(Collectors.toSet());
+        return all.stream().filter(c -> withEvidence.contains(c.getId())).toList();
+    }
+
+    /** 검사한 때의 기준이 지금 기준과 다른지 (더하거나 지웠거나 이름·설명을 고침. 순서만 바뀐 것은 같다) */
+    public static boolean criteriaChanged(List<EvalCriterion> checked, List<EvalCriterion> current) {
+        return !criteriaKeys(checked).equals(criteriaKeys(current));
+    }
+
+    private static Set<String> criteriaKeys(List<EvalCriterion> criteria) {
+        return criteria.stream().map(c -> c.getId() + "\n" + c.getName() + "\n" + Objects.toString(c.getDescription(), ""))
+                .collect(Collectors.toSet());
+    }
+
+    public static String criteriaJson(List<EvalCriterion> criteria) {
+        return JSON.writeValueAsString(criteria);
     }
 
     /** 평가항목 순서대로, 각 항목의 근거를 직접 → 간접 → 없음 순으로 */

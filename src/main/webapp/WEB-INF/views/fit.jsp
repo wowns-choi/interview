@@ -108,8 +108,7 @@
   </c:if>
   <div class="cand-actions">
   <c:if test="${not empty r.candidate.maskedText and not reviewing}">
-  <form method="post" action="<c:url value='/results/${r.candidate.id}/check'/>" data-busy="포지션 적합도를 검사하는 중"
-        <c:if test="${not empty r.sections}">data-confirm="다시 검사하면 지금 질문지가 지워집니다. 계속할까요?"</c:if>>
+  <form method="post" action="<c:url value='/results/${r.candidate.id}/check'/>" data-busy="포지션 적합도를 검사하는 중">
     <button type="submit" class="btn btn-sm ${r.fitChecked ? 'btn-ghost' : 'btn-primary'}">${r.fitChecked ? '다시 검사' : '검사'}</button>
   </form>
   </c:if>
@@ -194,7 +193,8 @@
         <c:set var="pf" value="${r.profile}"/>
         <c:set var="cev" value="${r.careerEval}"/>
         <c:set var="fit" value="${r.fit}"/>
-        <c:if test="${r.fitChecked and ((not empty pf and pf.filled) or not empty position.requiredExperience)}">
+        <%-- 검사 중이면 예전 개인정보·평가 기준 충족 여부는 감춘다 (사용자 2026-10-28) --%>
+        <c:if test="${r.fitChecked and st != 'ANALYZING' and ((not empty pf and pf.filled) or not empty position.requiredExperience)}">
         <section class="stage" id="sec-profile">
           <header class="stage-head"><h2>개인정보</h2></header>
           <div class="profile${justChecked ? ' is-stamping' : ''}">
@@ -355,7 +355,7 @@
         </section>
         </c:if>
 
-        <c:if test="${r.fitChecked}">
+        <c:if test="${r.fitChecked and st != 'ANALYZING'}">
         <section class="stage" id="sec-evidence">
           <header class="stage-head"><h2>평가 기준 충족 여부</h2>
             <c:set var="score" value="${r.score}"/>
@@ -541,6 +541,8 @@
 </section>
 </c:if>
 <c:if test="${staged}">
+<%-- 면접 질문지 밑에서 바로 면접 후로 (사용자 2026-10-28) --%>
+<div class="stage-next"><button type="button" class="btn btn-primary stage-go" data-go-stage="after">면접 후<svg class="i"><use href="#i-arrow-right"/></svg></button></div>
 </div>
 
 <%-- 면접 후: 합격·불합격 도장과 녹음본으로 만든 면접 기록 (사용자 2026-10-28) --%>

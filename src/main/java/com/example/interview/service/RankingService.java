@@ -9,7 +9,9 @@ import org.springframework.stereotype.Service;
 import com.example.interview.ai.dto.CareerEvalResult;
 import com.example.interview.domain.Candidate;
 import com.example.interview.domain.CandidateProfile;
+import com.example.interview.domain.CandidateStatus;
 import com.example.interview.domain.EvalCriterion;
+import com.example.interview.domain.Evidence;
 import com.example.interview.domain.Position;
 import com.example.interview.mapper.CandidateMapper;
 import com.example.interview.mapper.EvidenceMapper;
@@ -24,7 +26,7 @@ import lombok.RequiredArgsConstructor;
 /**
  * 포지션 하나의 지원자를 점수 순으로 줄 세운다.
  * 포지션에서 켜 둔 경우 경력·학력 미충족 지원자는 순위 없이 "제외됨"으로 뺀다.
- * 동점이면 직접 근거가 많은 쪽, 그다음 포지션 관련 경력이 긴 쪽이 앞선다.
+ * 점수는 지원자마다 검사한 때의 기준으로 매긴 100점 만점이다 (사용자 2026-10-28). 동점이면 직접 근거가 많은 쪽, 그다음 포지션 관련 경력이 긴 쪽이 앞선다.
  * 검사 뒤에 평가항목이 바뀐 지원자(재검사 필요)와 검사 전 지원자는 순위 없이 뒤에 둔다.
  */
 @Service
@@ -32,7 +34,7 @@ import lombok.RequiredArgsConstructor;
 public class RankingService {
 
     private static final Comparator<RankingRow> BY_SCORE = Comparator
-            .comparingDouble((RankingRow r) -> r.getScore().getTotal()).reversed()
+            .comparingDouble((RankingRow r) -> r.getScore().getRatio()).reversed()
             .thenComparing(Comparator.comparingLong((RankingRow r) -> r.getScore().getDirectCount()).reversed())
             .thenComparing(Comparator.comparing(RankingRow::getRelevantMonths,
                     Comparator.nullsLast(Comparator.<Integer>reverseOrder())))
@@ -45,20 +47,24 @@ public class RankingService {
 
     public List<RankingRow> rank(Long positionId) {
         Position position = positionService.get(positionId);
-        List<EvalCriterion> criteria = positionService.criteria(positionId);
+        List<EvalCriterion> criteria = positionService.allCriteria(positionId);
         List<RankingRow> ranked = new ArrayList<>();
         List<RankingRow> excluded = new ArrayList<>();
         List<RankingRow> stale = new ArrayList<>();
         List<RankingRow> unchecked = new ArrayList<>();
         for (ExtractionSummary s : candidateMapper.findByPositionId(positionId)) {
             Candidate c = candidateService.get(s.getCandidateId());
-            List<CriterionEvidenceView> views = ReportService.evidenceByCriterion(criteria,
-                    evidenceMapper.findByCandidateId(c.getId()));
+            List<Evidence> evidences = evidenceMapper.findByCandidateId(c.getId());
+            List<CriterionEvidenceView> views = ReportService.evidenceByCriterion(
+                    ReportService.checkedCriteria(c, criteria, evidences), evidences);
             FitScore score = null;
             Integer relevant = null;
             CareerEvalResult eval = CareerEvalService.parse(c.getCareerEvalJson());
             CareerEvalResult.Certificates certs = eval == null ? null : eval.getCertificates();
-            if (views.stream().anyMatch(CriterionEvidenceView::isChecked)) {
+            // 다시 검사 중(대기·검사 중)이면 예전 점수로 줄 세우지 않고 「검사 전」에 둔다 (사용자 2026-10-28)
+            boolean busy = s.getStatus() == CandidateStatus.QUEUED || s.getStatus() == CandidateStatus.MASKING
+                    || s.getStatus() == CandidateStatus.ANALYZING;
+            if (!busy && views.stream().anyMatch(CriterionEvidenceView::isChecked)) {
                 CandidateProfile profile = ReportService.parseProfile(c.getProfileJson());
                 CareerGauge gauge = CareerGauge.of(profile, position.getRequiredExperience(), eval);
                 score = FitScore.of(position, eval, gauge, views);
@@ -102,5 +108,26 @@ public class RankingService {
             return "경력·학력 미충족";
         }
         return career ? "경력 미충족" : education ? "학력 미충족" : null;
+    }
+
+    /** 검사한 때의 평가 기준이 지금과 다른 지원자 (검사 중인 지원자는 뺀다). 「n명 다시 검사」 버튼용 (사용자 2026-10-28) */
+    public List<Long> changedCandidates(Long positionId) {
+        List<EvalCriterion> all = positionService.allCriteria(positionId);
+        List<EvalCriterion> current = all.stream().filter(c -> !"Y".equals(c.getDeletedYn())).toList();
+        List<Long> ids = new ArrayList<>();
+        for (ExtractionSummary s : candidateMapper.findByPositionId(positionId)) {
+            // 다시 검사가 실패했어도(서버 재시작 등) 예전 근거가 남아 있으면 대상이다. 검사 중이거나 가리기 전은 뺀다
+            if (s.getStatus() != CandidateStatus.ANALYZED && s.getStatus() != CandidateStatus.DONE
+                    && s.getStatus() != CandidateStatus.FAILED) {
+                continue;
+            }
+            Candidate c = candidateService.get(s.getCandidateId());
+            List<Evidence> evidences = evidenceMapper.findByCandidateId(c.getId());
+            if (!evidences.isEmpty()
+                    && ReportService.criteriaChanged(ReportService.checkedCriteria(c, all, evidences), current)) {
+                ids.add(c.getId());
+            }
+        }
+        return ids;
     }
 }

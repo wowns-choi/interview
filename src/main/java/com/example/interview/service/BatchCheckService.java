@@ -39,6 +39,7 @@ public class BatchCheckService {
     private final ResumeAnonymizer resumeAnonymizer;
     private final CandidateMapper candidateMapper;
     private final PrivacyModeService privacyMode;
+    private final RankingService rankingService;
     private final ExecutorService worker = Executors.newSingleThreadExecutor(r -> {
         Thread t = new Thread(r, "batch-check");
         t.setDaemon(true);
@@ -47,7 +48,8 @@ public class BatchCheckService {
 
     public BatchCheckService(ExtractionService extractionService, CandidateService candidateService,
             PositionService positionService, ResumeAnonymizer resumeAnonymizer, CandidateMapper candidateMapper,
-            PrivacyModeService privacyMode) {
+            PrivacyModeService privacyMode, RankingService rankingService) {
+        this.rankingService = rankingService;
         this.extractionService = extractionService;
         this.candidateService = candidateService;
         this.positionService = positionService;
@@ -115,6 +117,35 @@ public class BatchCheckService {
         Long positionId = c.getPositionId();
         boolean strict = privacyMode.isStrict();
         worker.submit(() -> process(positionId, candidateId, text, strict));
+    }
+
+    /**
+     * 검사한 때의 평가 기준이 지금과 다른 지원자를 지금 기준으로 차례로 다시 검사한다 (사용자 2026-10-28).
+     * 가린 이력서는 그대로 쓰고, 질문지와 답변은 남는다.
+     *
+     * @return 다시 검사에 넣은 인원
+     */
+    public int recheckChanged(Long positionId) {
+        if (positionService.criteria(positionId).isEmpty()) {
+            throw new BusinessException("평가 기준이 없습니다.");
+        }
+        List<Long> ids = rankingService.changedCandidates(positionId);
+        for (Long id : ids) {
+            candidateMapper.updateStatus(id, CandidateStatus.QUEUED, null);
+            worker.submit(() -> recheck(id));
+        }
+        return ids.size();
+    }
+
+    private void recheck(Long candidateId) {
+        if (candidateMapper.findById(candidateId) == null) {
+            return; // 기다리는 동안 삭제됨
+        }
+        try {
+            extractionService.checkFit(candidateId);
+        } catch (RuntimeException e) {
+            log.warn("다시 검사 실패 candidateId={}: {}", candidateId, e.getMessage());
+        }
     }
 
     /** @param strict 개인정보 엄격 보호 모드: 가린 뒤 UPLOADED로 멈추고 검사하지 않는다 */

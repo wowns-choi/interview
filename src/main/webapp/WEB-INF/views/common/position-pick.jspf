@@ -27,12 +27,6 @@
   <a class="pick-new${empty r ? ' is-active' : ''}" href="${newHref}"><svg class="i"><use href="#i-plus"/></svg>${empty candidates ? '지원자 추가' : '추가'}</a>
   </div>
   </c:if>
-  <%-- 지원자 비교: 평가 기준 번호표. 표의 번호에 마우스를 올리면 여기 그 줄도 강조된다 (사용자 2026-10-27) --%>
-  <c:if test="${pickBase == '/ranking' and not empty criteria}">
-  <ol class="pick-crits" id="rk-key">
-    <c:forEach var="c" items="${criteria}" varStatus="cs"><li><b>${cs.count}</b><span><c:out value="${c.name}"/></span></li></c:forEach>
-  </ol>
-  </c:if>
   <%-- 지원자 올리는 화면: 보고서 자리에 개인정보 엄격 보호 모드 스위치 (사용자 2026-10-28) --%>
   <c:if test="${onFit and empty r and not empty position}">
   <form class="pick-strict" method="post" action="<c:url value='/settings/privacy'/>">

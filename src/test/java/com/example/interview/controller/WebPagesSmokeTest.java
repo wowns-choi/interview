@@ -201,13 +201,13 @@ class WebPagesSmokeTest {
         // 점수: 근거 직접 1·없음 0·없음 0 (경력·학력은 점수에 넣지 않는다)
         assertThat(checked).contains("class=\"score-pill\"", "1<small> / 3점</small>").doesNotContain(" · 1 / 3</option>");
         String ranking = get("/ranking?position=" + positionId).body();
-        assertThat(ranking).contains("data-rk-filter=\"engineer\"", "data-rk-filter=\"sqld\"", "data-rk-filter=\"interviewed\"", "data-rk-filter=\"passed\"", "class=\"rk-no\">1<", "href=\"/results/" + id + "\"", "rk-score\">1<small> / 3</small>", "rk-sq ev-NONE\"", "rk-sq ev-DIRECT\"",
+        assertThat(ranking).contains("data-rk-filter=\"engineer\"", "data-rk-filter=\"sqld\"", "data-rk-filter=\"interviewed\"", "data-rk-filter=\"passed\"", "class=\"rk-no\">1등<", ">정보처리기사</th>", ">합격 여부</th>", "href=\"/results/" + id + "\"", "rk-score\">33<small>점</small>", "rk-detail-total\">1<small> / 3</small>", "rk-sq ev-NONE\"", "rk-sq ev-DIRECT\"",
                         "rk-cond is-unmet\">미충족<", "rk-cond is-met\">충족<")
                 .doesNotContain("검사 전", ">연봉</th>", "제외됨");
         // 경력 미충족 제외를 켜면 순위 없이 제외됨으로
         assertThat(json("PATCH", "/positions/" + positionId + "/exclusions", "{\"career\":true,\"education\":false}").statusCode()).isEqualTo(204);
         assertThat(get("/ranking?position=" + positionId).body()).contains("제외됨 1명", "rk-why\">경력 미충족<", "data-rk-exclude=\"career\" checked><span>경력 미충족 제외</span>")
-                .doesNotContain("class=\"rk-no\">1<");
+                .doesNotContain("class=\"rk-no\">1등<");
         assertThat(json("PATCH", "/positions/" + positionId + "/exclusions", "{\"career\":false,\"education\":false}").statusCode()).isEqualTo(204);
         extractionService.extractQuestions(id, com.example.interview.domain.QuestionType.SELECTABLE);
         assertThat(get("/results/" + id).body()).contains("추출한 질문 <b>1</b>", "질문지에 넣기", "거짓말 판독기", "id=\"iq-board\"", "class=\"qx-empty\"");

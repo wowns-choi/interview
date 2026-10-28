@@ -8,7 +8,7 @@
 
     <select id="findRecent" resultType="com.example.interview.web.dto.PositionSummary">
         SELECT p.id, p.title, p.status, p.created_at,
-               (SELECT COUNT(*) FROM eval_criterion c WHERE c.position_id = p.id) AS criteria_count,
+               (SELECT COUNT(*) FROM eval_criterion c WHERE c.position_id = p.id AND c.deleted_yn = 'N') AS criteria_count,
                (SELECT COUNT(*) FROM candidate d WHERE d.position_id = p.id) AS candidate_count
         FROM position p
         ORDER BY p.created_at DESC, p.id DESC

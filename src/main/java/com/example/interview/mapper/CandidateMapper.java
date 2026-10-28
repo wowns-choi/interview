@@ -29,6 +29,8 @@ public interface CandidateMapper {
 
     void updateOpinion(@Param("id") Long id, @Param("opinionJson") String opinionJson);
 
+    void updateCriteria(@Param("id") Long id, @Param("criteriaJson") String criteriaJson);
+
     void updateRecord(@Param("id") Long id, @Param("transcript") String transcript, @Param("recordJson") String recordJson);
 
     void updateReport(@Param("id") Long id, @Param("reportJson") String reportJson);

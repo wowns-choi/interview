@@ -56,6 +56,11 @@
         DELETE FROM interview_question WHERE id = #{id} AND candidate_id = #{candidateId}
     </delete>
 
+    <!-- 다시 검사: 질문·답변은 남기고 예전 근거와의 연결만 끊는다 (사용자 2026-10-28) -->
+    <update id="clearEvidence">
+        UPDATE interview_question SET evidence_id = NULL WHERE candidate_id = #{candidateId}
+    </update>
+
     <delete id="deleteByCandidateId">
         DELETE FROM interview_question WHERE candidate_id = #{candidateId}
     </delete>

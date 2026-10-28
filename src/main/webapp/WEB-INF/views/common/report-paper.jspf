@@ -67,7 +67,6 @@
               <span class="rp-handle" title="끌어서 옮기기"><svg class="i"><use href="#i-grip"/></svg></span>
               <div class="rp-q"><span class="rp-qno"></span><textarea data-k="question" rows="1" placeholder="질문"><c:out value="${it.question}"/></textarea></div>
               <div class="rp-a"><span class="rp-ano">A</span><textarea data-k="answer" rows="1" placeholder="답변"><c:out value="${it.answer}"/></textarea></div>
-              <c:if test="${not empty it.excerpt}"><p class="rp-excerpt"><span>녹취</span><c:out value="${it.excerpt}"/></p></c:if>
               <button type="button" class="rp-del" title="삭제"><svg class="i"><use href="#i-trash"/></svg></button>
             </li>
           </c:forEach>
