@@ -9,7 +9,7 @@
 ## education_meets
 - <education_requirement>와 <major_requirement>를 모두 채우면 "MET", 하나라도 못 채우면 "NOT_MET", 조건이 없거나 판단할 수 없으면 "UNKNOWN". "학력무관"은 "MET".
 - 재학·졸업 예정은 그 과정을 마친 것으로 보지 않고, 중퇴·수료는 그 아래 과정까지만 채운 것으로 봅니다.
-- <major_requirement>가 있으면 학교마다 적힌 전공(학교명 다음 칸)이 그 학과이거나 가까운 관련 학과인지 봅니다. 그 전공으로 마친 과정이 학력 조건도 채워야 합니다. 전공이 비어 있으면 "UNKNOWN"입니다.
+- <major_requirement>가 있으면 학교마다 적힌 전공(학교명 다음 칸)이 그 학과이거나 가까운 관련 학과인지 봅니다. 그 전공으로 마친 과정이 학력 조건도 채워야 합니다. 전공이 빈 줄은 다른 줄과 같은 학력을 요약한 것일 수 있으니, 전공이 적힌 줄로 판단합니다. 모든 줄의 전공이 비어 있을 때만 "UNKNOWN"입니다.
 
 출력 (JSON만):
 {"final_education": "", "education_reason": "", "education_meets": "UNKNOWN"}

@@ -7,6 +7,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>AI와 대화 - <c:out value="${r.candidate.displayName}"/></title>
+  <link rel="icon" type="image/svg+xml" href="<c:url value='/logo.svg'/>?v=${applicationScope.assetVersion}">
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.min.css">
   <link rel="stylesheet" href="<c:url value='/css/app.css'/>?v=${applicationScope.assetVersion}">
 </head>
@@ -26,7 +27,7 @@
   <div class="chat-log" id="chat-log"></div>
   <div class="chat-examples" id="chat-examples"
        data-before="제공된 정보들을 토대로 채용해야 할 이유와 채용하지 말아야 할 이유를 각각 정리해 주세요.|이력서에서 서로 맞지 않거나 과장된 것으로 보이는 내용이 있다면 짚어 주세요.|이 포지션 기준으로 지원자의 핵심 강점과 우려되는 점을 하나씩 알려 주세요."
-       data-after="제공된 정보들을 토대로 채용해야 할 이유와 채용하지 말아야 할 이유를 각각 정리해 주세요.|이력서 내용과 면접에서의 답변이 일치하지 않는 부분이 있다면 짚어 주세요.|면접 답변 중 구체적이고 설득력 있었던 부분과 부족했던 부분을 정리해 주세요."></div>
+       data-after="제공된 정보들을 토대로 채용해야 할 이유와 채용하지 말아야 할 이유를 각각 정리해 주세요.|면접에서 이력서와 다르게 말한 부분이 있다면, 이력서 원문과 면접 발언을 나란히 보여 주세요.|면접 답변 중 구체적이고 설득력 있었던 부분과 부족했던 부분을 정리해 주세요."></div>
   <form class="chat-form" id="chat-form">
     <textarea id="chat-input" rows="2" maxlength="4000" placeholder="이 지원자에 대해 물어보세요"></textarea>
     <button type="submit" class="btn btn-primary" id="chat-send">보내기</button>

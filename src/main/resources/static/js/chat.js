@@ -129,6 +129,13 @@
         em.textContent = s.empty ? '없음' : s.detail;
         li.appendChild(em);
       }
+      // 무엇을 보내고 무엇을 안 보내는지 (사용자 2026-10-28)
+      (s.note || []).forEach(function (t) {
+        var p = document.createElement('span');
+        p.className = 'chat-src-note' + (t.indexOf('안 보냄') === 0 ? ' is-hidden' : '');
+        p.textContent = t;
+        li.appendChild(p);
+      });
       src.appendChild(li);
     });
   }

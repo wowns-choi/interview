@@ -145,6 +145,10 @@ public class ExtractionService {
                         career.getRelevantReason());
             } finally {
                 careerEvalService.save(candidate, education.join(), timeline.join(), career, careerMeets);
+                // 근거를 저장했으면 경력·학력·자격증까지 저장한 지금 끝낸다 (화면은 이 상태 변화를 보고 다시 불러온다)
+                if (career != null) {
+                    analysisService.finishCheck(candidateId);
+                }
             }
         });
     }

@@ -1770,3 +1770,41 @@ button.file-chip { font-family: inherit; cursor: pointer; }
 .stage-nav .toc { gap: 8px; max-height: 0; margin: -34px 0 0 27px; overflow: hidden; opacity: 0; border-left: 1px solid var(--border); }
 .stage-nav .toc.is-open { max-height: 260px; margin: -20px 0 14px 27px; opacity: 1; }
 .stage-nav.is-ready .toc { transition: max-height .32s ease, margin .32s ease, opacity .25s ease; }
+/* 지원자 화면 단계(면접 전·후·보고서)를 바꿀 때 새 단계가 스르륵 떠오른다 (사용자 2026-10-28) */
+.stage-pane.is-entering { animation: stage-in .32s ease both; }
+@keyframes stage-in { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: none; } }
+@media (prefers-reduced-motion: reduce) { .stage-pane.is-entering { animation: none; } }
+/* AI가 보는 자료: 항목 아래 보내는 것·안 보내는 것 */
+.chat-src .chat-src-item:has(.chat-src-note) { flex-wrap: wrap; row-gap: 2px; }
+.chat-src-note { flex-basis: 100%; padding-left: 12px; color: var(--muted); font-size: 12.5px; font-weight: 500; line-height: 1.5; }
+.chat-src-note.is-hidden { color: var(--accent); }
+/* 설정 탭은 글씨 대신 톱니 아이콘 (사용자 2026-10-28) */
+.tab-icon { display: inline-flex; align-items: center; }
+.tab-icon svg { display: block; }
+/* 로고: 탭 앞 (사용자 2026-10-28) */
+.brand { display: inline-flex; align-items: center; margin-right: 8px; color: var(--accent); font-family: 'Dancing Script', cursive; font-size: 34px; font-weight: 700; line-height: 1; text-decoration: none; white-space: nowrap; }
+.brand:hover { text-decoration: none; }
+@media print { .brand { display: none; } }
+
+/* ── 소개 화면 (/about, 사용자 2026-10-28): 면접 흐름에서 AI가 맡는 네 단계만 ── */
+.ab { display: grid; gap: 72px; padding: 80px 0 40px; }
+.ab-hero { display: grid; gap: 18px; }
+.ab-brand { color: var(--accent); font-family: 'Dancing Script', cursive; font-size: 140px; font-weight: 700; line-height: .9; }
+.ab-lead { margin: 0; font-size: 46px; font-weight: 800; letter-spacing: -0.03em; }
+.ab-flow { display: grid; grid-template-columns: repeat(8, minmax(0, 1fr)); gap: 10px; margin: 0; padding: 0; list-style: none; counter-reset: flow; }
+.ab-flow li { position: relative; display: flex; flex-direction: column; justify-content: flex-end; gap: 8px; min-height: 190px; padding: 18px 16px; border-radius: 14px; background: var(--chip); color: var(--muted); counter-increment: flow; }
+.ab-flow li::before { content: counter(flow, decimal-leading-zero); position: absolute; top: 16px; left: 16px; font-size: 13px; font-weight: 800; opacity: .7; }
+.ab-flow li:not(:last-child)::after { content: ""; position: absolute; top: 50%; right: -9px; z-index: 1; width: 8px; height: 8px; border-top: 2px solid var(--border-2); border-right: 2px solid var(--border-2); transform: translateY(-50%) rotate(45deg); }
+.ab-flow b { font-size: 19px; font-weight: 800; line-height: 1.3; }
+.ab-flow span { font-size: 14px; line-height: 1.45; }
+.ab-flow li.is-ai { background: var(--accent); color: #fff; }
+.ab-flow li.is-ai::before { content: "AI"; opacity: .85; }
+.ab-flow li.is-ai span { opacity: .8; }
+.ab-flow li.is-human { background: var(--surface); color: var(--text); box-shadow: inset 0 0 0 1.5px var(--text); }
+.ab-go { height: 52px; padding: 0 26px; font-size: 17px; gap: 10px; }
+@media screen and (max-width: 1100px) {
+  .ab-brand { font-size: 88px; }
+  .ab-lead { font-size: 32px; }
+  .ab-flow { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .ab-flow li::after { display: none; }
+}

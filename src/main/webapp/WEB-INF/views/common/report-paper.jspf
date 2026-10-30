@@ -50,10 +50,13 @@
     <div class="rp-h">
       <h2><span class="rp-h-no">3</span>질문과 답변</h2>
       <div class="rp-tools">
-        <form class="rp-seg" method="post" data-partial="#rp" action="<c:url value='/results/${candidate.id}/report/source'/>"
-              data-confirm="질문과 답변을 다시 가져옵니다. 보고서에서 고친 질문과 답변은 사라집니다.">
-          <button type="${report.qaSource == 'SHEET' ? 'button' : 'submit'}" name="source" value="SHEET" aria-pressed="${report.qaSource == 'SHEET'}">면접전(타이핑)</button>
-          <button type="${report.qaSource == 'RECORD' ? 'button' : 'submit'}" name="source" value="RECORD" aria-pressed="${report.qaSource == 'RECORD'}" ${hasRecord ? '' : 'disabled title="면접 기록이 없습니다"'}>면접후(녹음본)</button>
+        <form class="rp-seg" method="post" data-partial="#rp" action="<c:url value='/results/${candidate.id}/report/source'/>">
+          <%-- 보고서에 저장해 둔 사본끼리 바꾼다. 다른 쪽 사본이 비었으면 못 누른다 (사본 없는 예전 보고서는 지금 기록으로 판단) --%>
+          <c:set var="otherEmpty" value="${report.qaOther != null and empty report.qaOther}"/>
+          <c:set var="recOff" value="${report.qaSource != 'RECORD' and (otherEmpty or (report.qaOther == null and not hasRecord))}"/>
+          <c:set var="sheetOff" value="${report.qaSource != 'SHEET' and otherEmpty}"/>
+          <button type="${report.qaSource == 'SHEET' ? 'button' : 'submit'}" name="source" value="SHEET" aria-pressed="${report.qaSource == 'SHEET'}" ${sheetOff ? 'disabled title="이 보고서에는 질문지 답변이 없습니다"' : ''}>면접전(타이핑)</button>
+          <button type="${report.qaSource == 'RECORD' ? 'button' : 'submit'}" name="source" value="RECORD" aria-pressed="${report.qaSource == 'RECORD'}" ${recOff ? 'disabled title="이 보고서에는 면접 기록이 없습니다"' : ''}>면접후(녹음본)</button>
         </form>
       </div>
     </div>

@@ -70,7 +70,7 @@
               <th class="rk-cnd">SQLD</th>
               <th class="rk-ivc">면접</th>
               <th class="rk-decc">합격 여부</th>
-              <th class="rk-total">평가 기준 충족</th>
+              <th class="rk-total">평가 기준 충족 점수</th>
               <th class="rk-morec"></th>
             </tr>
           </thead>

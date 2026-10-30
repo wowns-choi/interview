@@ -506,6 +506,16 @@ public class ExtractionFlowIntegrationTest {
         // 질문지로 바꾸면 면접관이 적은 답변만 가져온다
         interviewReportService.useSource(id, InterviewReport.SHEET);
         assertThat(interviewReportService.get(id).getQa()).extracting(QaItem::getAnswer).containsExactly("희망연봉은 5,800만원이라고 함");
+        // 전환은 보고서에 저장해 둔 사본끼리: 그 뒤 질문지가 바뀌어도, 고친 것을 두고 오가도 그대로 (사용자 2026-10-28)
+        extractionService.saveAnswer(id, sheet.get(0).getId(), "보고서 뒤에 적은 답");
+        InterviewReport typed = interviewReportService.get(id);
+        typed.getQa().get(0).setAnswer("타이핑 쪽에서 고친 답");
+        interviewReportService.saveEdited(id, typed);
+        interviewReportService.useSource(id, InterviewReport.RECORD);
+        assertThat(interviewReportService.get(id).getQa()).hasSize(2)
+                .extracting(QaItem::getAnswer).contains("보고서에서 고친 답");
+        interviewReportService.useSource(id, InterviewReport.SHEET);
+        assertThat(interviewReportService.get(id).getQa()).extracting(QaItem::getAnswer).containsExactly("타이핑 쪽에서 고친 답");
         // 고른 출처는 다시 맞춰도 그대로
         assertThat(interviewReportService.create(id).getQaSource()).isEqualTo(InterviewReport.SHEET);
     }

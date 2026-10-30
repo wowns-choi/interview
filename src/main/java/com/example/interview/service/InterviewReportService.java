@@ -56,7 +56,8 @@ public class InterviewReportService {
     /**
      * 만들거나 지금 기록에 다시 맞춘다 (보고서 버튼을 누를 때마다, 사용자 2026-10-27).
      * 날짜·지원자 정보·질문과 답변은 새로 채우고, 보고서에만 있는 면접관 의견과 지원 포지션은 남긴다.
-     * 질문과 답변은 고른 출처(녹음본·질문지)를 따르고, 그 출처가 비었거나 처음이면 녹음본이 있으면 녹음본, 없으면 질문지.
+     * 질문과 답변은 두 출처(녹음본·질문지)를 모두 새로 복사해 두고(전환은 사본끼리), 고른 출처를 보인다.
+     * 그 출처가 비었거나 처음이면 녹음본이 있으면 녹음본, 없으면 질문지.
      * 파견 가능 여부·입사 가능 시기·희망연봉은 면접 내용이 바뀌었을 때만 GPT에 다시 묻는다.
      */
     public InterviewReport create(Long candidateId) {
@@ -75,6 +76,7 @@ public class InterviewReportService {
         }
         report.setQaSource(source);
         report.setQa(qa(source, record, sheet));
+        report.setQaOther(qa(InterviewReport.SHEET.equals(source) ? InterviewReport.RECORD : InterviewReport.SHEET, record, sheet));
 
         String input = infoInput(c, record, sheet);
         // 앞의 "v2": 찾는 항목이 바뀌면(직전연봉 추가, 2026-10-28) 예전 답을 쓰지 않고 한 번 다시 묻는다
@@ -119,21 +121,36 @@ public class InterviewReportService {
         InterviewReport old = require(candidateId);
         report.setInfoKey(old.getInfoKey());
         report.setFound(old.getFound());
+        report.setQaOther(old.getQaOther());
+        report.setQaSource(old.getQaSource());
         save(candidateId, report);
     }
 
-    /** 질문과 답변을 다른 곳(면접 기록·질문지)에서 다시 가져온다. 보고서에서 고친 질문과 답변은 사라진다 */
+    /**
+     * 질문과 답변을 보고서에 저장해 둔 다른 쪽 사본(타이핑·녹음본)으로 바꾼다. 기록을 다시 가져오지 않고,
+     * 지금 보이던 쪽은 고친 그대로 사본으로 남는다 (사용자 2026-10-28: 최신 기록 반영은 동기화로만).
+     * 사본이 없는 예전 보고서만 처음 한 번 지금 기록으로 채운다.
+     */
     public void useSource(Long candidateId, String source) {
         InterviewReport report = require(candidateId);
-        Candidate c = candidateService.get(candidateId);
         String s = InterviewReport.SHEET.equals(source) ? InterviewReport.SHEET : InterviewReport.RECORD;
-        List<QaItem> qa = qa(s, InterviewRecordService.parse(c.getRecordJson()), answeredSheet(candidateId));
-        if (qa.isEmpty()) {
-            throw new BusinessException(InterviewReport.SHEET.equals(s) ? "면접 질문지에 적은 답변이 없습니다."
-                    : "면접 기록이 없습니다. 면접 질문지의 녹음본 탭에서 만드세요.");
+        if (s.equals(report.getQaSource())) {
+            return;
         }
+        List<QaItem> other = report.getQaOther();
+        boolean snapshot = other != null;
+        if (!snapshot) {
+            Candidate c = candidateService.get(candidateId);
+            other = qa(s, InterviewRecordService.parse(c.getRecordJson()), answeredSheet(candidateId));
+        }
+        if (other.isEmpty()) {
+            String what = InterviewReport.SHEET.equals(s) ? "면접 질문지에 적은 답변이" : "면접 기록이";
+            throw new BusinessException(snapshot ? "이 보고서에는 " + what + " 없습니다. 「최신 기록으로 동기화」로 가져오세요."
+                    : what + " 없습니다.");
+        }
+        report.setQaOther(report.getQa());
+        report.setQa(other);
         report.setQaSource(s);
-        report.setQa(qa);
         save(candidateId, report);
     }
 

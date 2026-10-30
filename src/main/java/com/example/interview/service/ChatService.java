@@ -60,28 +60,35 @@ public class ChatService {
         return chatMapper.find(candidateId);
     }
 
-    /** 대화 창 위 「AI가 보고 있는 자료」 칩: key, label, detail, empty */
+    /** 대화 창 위 「AI가 보고 있는 자료」 칩: key, label, detail, empty, note (보내는 것·안 보내는 것, 사용자 2026-10-28) */
     public List<Map<String, Object>> sources(Long candidateId, String stage) {
         ResultReport r = reportService.report(candidateId);
         List<Map<String, Object>> out = new ArrayList<>();
-        out.add(source("posting", "채용 공고", "", false));
-        out.add(source("profile", "개인정보", "가린 이력서 · 경력·학력 조건", r.getCandidate().getMaskedText() == null));
-        out.add(source("evidence", "평가 기준 충족 여부", "기준 " + r.getCriteria().size() + "개", r.getCriteria().isEmpty()));
-        out.add(source("sheet", "면접 질문지", "답변 " + r.getAnsweredCount() + " / 질문 " + r.getQuestionCount(), r.getSections().isEmpty()));
+        out.add(source("posting", "채용 공고", "", false, List.of()));
+        out.add(source("profile", "개인정보", "가린 이력서 · 경력·학력 조건", r.getCandidate().getMaskedText() == null, List.of(
+                "보냄: 경력·학력 조건과 충족 여부, 총 경력·포지션 관련 경력 기간, 정보처리기사·SQLD 유무",
+                "보냄: 개인정보를 [이름]·[A사]처럼 가린 이력서 (경력 기간·업무·기술·자격증은 그대로)",
+                "안 보냄: 이름, 연락처, 이메일, 주소, 성별, 생년월일, 학교·전공, 회사 이름, 연봉")));
+        out.add(source("evidence", "평가 기준 충족 여부", "기준 " + r.getCriteria().size() + "개", r.getCriteria().isEmpty(),
+                List.of()));
+        out.add(source("sheet", "면접 질문지", "답변 " + r.getAnsweredCount() + " / 질문 " + r.getQuestionCount(),
+                r.getSections().isEmpty(), List.of("면접관이 적은 답변은 가리지 않고 그대로")));
         // 면접 기록은 면접 후에는 늘, 면접 전에는 녹음본으로 만든 기록이 있을 때만 (사용자 2026-10-28)
         int n = recordSize(r);
         if (AFTER.equals(stage(stage)) || n > 0) {
-            out.add(source("record", "면접 기록", "질문 " + n + "개", n == 0));
+            out.add(source("record", "면접 기록", "질문 " + n + "개", n == 0,
+                    List.of("녹음본에서 나온 말은 가리지 않고 그대로")));
         }
         return out;
     }
 
-    private static Map<String, Object> source(String key, String label, String detail, boolean empty) {
+    private static Map<String, Object> source(String key, String label, String detail, boolean empty, List<String> note) {
         Map<String, Object> m = new LinkedHashMap<>();
         m.put("key", key);
         m.put("label", label);
         m.put("detail", detail);
         m.put("empty", empty);
+        m.put("note", note);
         return m;
     }
 

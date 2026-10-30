@@ -150,7 +150,8 @@ class WebPagesSmokeTest {
         Long id = extractionService.uploadResume(positionId, List.of(ExtractionFlowIntegrationTest.pdf()));
         String review = get("/results/" + id).body();
         // 가린 본문은 화면에 펼치지 않고 「가린 이력서」 창에만 둔다. 인적사항·경력·학력·타임라인은 적합도 검사 뒤에
-        assertThat(review).contains("class=\"att-count\">1<", "data-dialog=\"dlg-masked\"", "id=\"dlg-masked\"", "[A사] 백엔드팀").doesNotContain("010-1111-2222");
+        assertThat(review).doesNotContain("class=\"att-count\"");
+        assertThat(review).contains("data-dialog=\"dlg-masked\"", "id=\"dlg-masked\"", "[A사] 백엔드팀").doesNotContain("010-1111-2222");
         assertThat(candidateService.get(id).getMaskedText()).contains("[전화번호]", "[A사] 백엔드팀", "[교육]").doesNotContain("010-1111-2222");
         assertThat(review).contains(">검사</button>")
                 .doesNotContain("id=\"mask-view\"", "name=\"maskedText\"", "class=\"profile\"", "가나커머스", "가나정보교육원", "<h3>타임라인</h3>",
@@ -158,6 +159,8 @@ class WebPagesSmokeTest {
         // 개인정보 엄격 보호 모드: 한 명씩 올리고, 가린 이력서를 확인·수정한 뒤 검사
         assertThat(post("/settings/privacy", "strict=true", false).statusCode()).isEqualTo(302);
         assertThat(get("/settings").body()).doesNotContain("action=\"/settings/privacy\"");
+        // 소개 화면: 로고에서 온다
+        assertThat(get("/about").body()).contains("면접관을 위한 AI", "적합도 검사", "href=\"/templates\"");
         assertThat(get("/fit?position=" + positionId).body()).contains("개인정보 엄격 보호 모드", "name=\"strict\" value=\"true\" checked");
         assertThat(get("/fit?position=" + positionId).body()).contains("개인정보 가리기</span>").doesNotContain("id=\"bz-add\"");
         assertThat(get("/results/" + id).body()).contains("id=\"mask-view\"", "name=\"maskedText\"", "id=\"mask-edit\"", "data-mark=\"확인 대기\"")

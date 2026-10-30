@@ -186,7 +186,21 @@
         b.classList.toggle('is-on', on);
         b.setAttribute('aria-current', on ? 'step' : 'false');
       });
-      document.querySelectorAll('.stage-pane').forEach(function (p) { p.hidden = p.getAttribute('data-pane') !== name; });
+      document.querySelectorAll('.stage-pane').forEach(function (p) {
+        var show = p.getAttribute('data-pane') === name;
+        // 단계 버튼으로 바꿀 때만 새 단계가 스르륵 떠오른다 (사용자 2026-10-28). 처음 열 때는 바로
+        if (show && p.hidden && scroll) {
+          p.classList.remove('is-entering');
+          void p.offsetWidth;
+          p.classList.add('is-entering');
+          p.addEventListener('animationend', function end(e) {
+            if (e.target !== p) return; // 안쪽 요소의 애니메이션 끝은 넘긴다
+            p.classList.remove('is-entering');
+            p.removeEventListener('animationend', end);
+          });
+        }
+        p.hidden = !show;
+      });
       document.querySelectorAll('[data-only]').forEach(function (el) {
         el.hidden = el.getAttribute('data-only').split(' ').indexOf(name) < 0;
       });

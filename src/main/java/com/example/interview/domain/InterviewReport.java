@@ -29,6 +29,12 @@ public class InterviewReport {
     /** 자격증 (지원자 정보와 따로, 사용자 2026-10-28) */
     private List<InfoRow> certs = new ArrayList<>();
     private List<QaItem> qa = new ArrayList<>();
+    /**
+     * 보이지 않는 쪽(qaSource가 아닌 출처)의 질문과 답변 사본. 보고서를 만들거나 동기화할 때 두 출처를 모두 복사해 두고,
+     * 타이핑·녹음본 전환은 이 사본과 qa를 맞바꾸기만 한다 (고친 것도 그대로, 사용자 2026-10-28).
+     * null이면 이 칸이 생기기 전에 만든 보고서라, 처음 바꿀 때 그때의 기록으로 채운다.
+     */
+    private List<QaItem> qaOther;
     private List<Opinion> opinions = new ArrayList<>();
     /** 파견 가능 여부·입사 가능 시기·희망연봉을 찾을 때 보낸 내용의 해시. 같으면 다시 묻지 않고 found를 쓴다 */
     private String infoKey;
@@ -88,6 +94,7 @@ public class InterviewReport {
             r.setValue(r.getValue() == null ? "" : r.getValue().strip());
         });
         qa = qa == null ? new ArrayList<>() : new ArrayList<>(qa.stream().filter(q -> q != null).toList());
+        qaOther = qaOther == null ? null : new ArrayList<>(qaOther.stream().filter(q -> q != null).toList());
         opinions = opinions == null ? new ArrayList<>() : new ArrayList<>(opinions.stream().filter(o -> o != null).toList());
         opinions.forEach(o -> {
             o.setTeam(o.getTeam() == null ? "" : o.getTeam().strip());

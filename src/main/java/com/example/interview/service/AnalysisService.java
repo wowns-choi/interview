@@ -61,7 +61,8 @@ public class AnalysisService {
 
     /**
      * 근거를 새로 찾는다. 질문지·추출한 질문과 답변은 남기고 예전 근거와의 연결만 끊는다
-     * (사용자 2026-10-28: 사람이 적은 답변은 다시 만들 수 없다). 질문지가 있으면 DONE, 없으면 ANALYZED.
+     * (사용자 2026-10-28: 사람이 적은 답변은 다시 만들 수 없다). 상태는 ANALYZING으로 둔다: 경력·학력·자격증까지 저장한 뒤
+     * {@link #finishCheck}가 바꾼다 (먼저 바꾸면 화면이 다시 불러와 반쯤 저장된 결과를 보였다, 사용자 2026-10-28).
      *
      * @return 같은 호출에서 계산한 총 경력·관련 경력 (저장은 CareerEvalService가 한다)
      */
@@ -80,8 +81,6 @@ public class AnalysisService {
                 candidateMapper.updateOpinion(candidateId, null);
                 candidateMapper.updateCriteria(candidateId, ReportService.criteriaJson(criteria));
                 evidences.forEach(evidenceMapper::insert);
-                boolean sheet = questionMapper.findByCandidateId(candidateId).stream().anyMatch(InterviewQuestion::isMerged);
-                candidateMapper.updateStatus(candidateId, sheet ? CandidateStatus.DONE : CandidateStatus.ANALYZED, null);
             });
             return analysis.career();
         } catch (RuntimeException e) {
@@ -89,6 +88,12 @@ public class AnalysisService {
             candidateMapper.updateStatus(candidateId, CandidateStatus.FAILED, e.getMessage());
             throw e;
         }
+    }
+
+    /** 적합도 검사를 마친다: 질문지가 있으면 DONE, 없으면 ANALYZED */
+    public void finishCheck(Long candidateId) {
+        boolean sheet = questionMapper.findByCandidateId(candidateId).stream().anyMatch(InterviewQuestion::isMerged);
+        candidateMapper.updateStatus(candidateId, sheet ? CandidateStatus.DONE : CandidateStatus.ANALYZED, null);
     }
 
     /**

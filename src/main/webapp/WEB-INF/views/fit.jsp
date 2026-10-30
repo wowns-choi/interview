@@ -127,7 +127,7 @@
 <c:if test="${not empty candFiles or showMasked}">
 <div class="cand-files">
 <details class="att">
-  <summary class="file-chip att-btn"><svg class="i"><use href="#i-clip"/></svg><span>첨부 파일</span><span class="att-count">${fn:length(candFiles) + (showMasked ? 1 : 0)}</span></summary>
+  <summary class="file-chip att-btn"><svg class="i"><use href="#i-clip"/></svg><span>첨부 파일</span><c:if test="${not empty candFiles}"><span class="att-count">${fn:length(candFiles)}</span></c:if></summary>
   <ul class="att-menu">
     <c:if test="${showMasked}">
       <li><button type="button" class="att-item is-masked" data-dialog="dlg-masked"><svg class="i"><use href="#i-eye"/></svg><span>가린 이력서</span><em>보기</em></button></li>
@@ -601,7 +601,7 @@
 <div class="stage-pane" data-pane="report" hidden>
   <div class="rp-bar">
     <span class="save-state" id="rp-state" aria-live="polite"></span>
-    <form method="post" action="<c:url value='/results/${r.candidate.id}/report'/>" data-busy="${empty report ? '보고서를 만드는 중' : '보고서를 동기화하는 중'}"<c:if test="${not empty report}"> data-confirm="최신 기록으로 다시 채웁니다.&#10;지원자 정보·자격증·질의응답을 직접 고친 내용은 사라집니다. (면접관 의견은 그대로)&#10;&#10;계속할까요?"</c:if>>
+    <form method="post" action="<c:url value='/results/${r.candidate.id}/report'/>" data-busy="${empty report ? '보고서를 만드는 중' : '보고서를 동기화하는 중'}"<c:if test="${not empty report}"> data-confirm="최신 기록으로 다시 채웁니다.&#10;지원자 정보·자격증과 타이핑·녹음본 질문과 답변을 직접 고친 내용은 사라집니다. (면접관 의견은 그대로)&#10;&#10;계속할까요?"</c:if>>
       <button type="submit" class="btn ${empty report ? 'btn-primary' : 'btn-ghost'} btn-sm"><svg class="i"><use href="#i-file"/></svg>${empty report ? '보고서 만들기' : '최신 기록으로 동기화'}</button>
     </form>
     <c:if test="${not empty report}">
@@ -635,7 +635,7 @@
   <div class="chat-log" id="chat-log"></div>
   <div class="chat-examples" id="chat-examples"
        data-before="제공된 정보들을 토대로 채용해야 할 이유와 채용하지 말아야 할 이유를 각각 정리해 주세요.|이력서에서 서로 맞지 않거나 과장된 것으로 보이는 내용이 있다면 짚어 주세요.|이 포지션 기준으로 지원자의 핵심 강점과 우려되는 점을 하나씩 알려 주세요."
-       data-after="제공된 정보들을 토대로 채용해야 할 이유와 채용하지 말아야 할 이유를 각각 정리해 주세요.|이력서 내용과 면접에서의 답변이 일치하지 않는 부분이 있다면 짚어 주세요.|면접 답변 중 구체적이고 설득력 있었던 부분과 부족했던 부분을 정리해 주세요."></div>
+       data-after="제공된 정보들을 토대로 채용해야 할 이유와 채용하지 말아야 할 이유를 각각 정리해 주세요.|면접에서 이력서와 다르게 말한 부분이 있다면, 이력서 원문과 면접 발언을 나란히 보여 주세요.|면접 답변 중 구체적이고 설득력 있었던 부분과 부족했던 부분을 정리해 주세요."></div>
   <form class="chat-form" id="chat-form">
     <textarea id="chat-input" rows="2" maxlength="4000" placeholder="이 지원자에 대해 물어보세요"></textarea>
     <button type="submit" class="btn btn-primary" id="chat-send">보내기</button>
