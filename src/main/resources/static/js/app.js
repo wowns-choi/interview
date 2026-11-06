@@ -14,6 +14,12 @@
       e.preventDefault();
       return;
     }
+    // 면접 내용 정리: 받는 대로 항목을 보여 준다 (extract.js의 streamRecord)
+    if (form.hasAttribute('data-stream') && window.streamRecord) {
+      e.preventDefault();
+      window.streamRecord(form);
+      return;
+    }
     var busy = form.getAttribute('data-busy');
     if (busy) {
       var overlay = document.getElementById('busy-overlay');

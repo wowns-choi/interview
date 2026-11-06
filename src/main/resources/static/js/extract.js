@@ -1098,6 +1098,108 @@
   initRecord();
   document.addEventListener('partial', initRecord);
 
+  // ── 면접 내용 정리를 스트림으로 (사용자 2026-11-06): 항목을 받는 대로 면접관 질문·지원자 질문 목록에 하나씩 붙인다.
+  //    다 끝나면 저장된 결과로 다시 그린다. 실패하면 원래 화면으로 되돌린다 ──
+  window.streamRecord = function (form) {
+    var box = document.getElementById('record');
+    if (!box || box.dataset.streaming) return;
+    var before = Array.prototype.slice.call(box.childNodes);
+    var body = new FormData(form);
+    box.dataset.streaming = '1';
+
+    var el = function (tag, cls, text) {
+      var n = document.createElement(tag);
+      if (cls) n.className = cls;
+      if (text != null) n.textContent = text;
+      return n;
+    };
+    var head = el('div', 'rec-head');
+    var live = el('span', 'rec-live', '녹음본을 읽는 중');
+    head.appendChild(live);
+    var groups = {};
+    var view = document.createDocumentFragment();
+    view.appendChild(head);
+    [['INTERVIEWER', '면접관 질문'], ['CANDIDATE', '지원자 질문']].forEach(function (g) {
+      var sec = el('section', 'rec-group');
+      var h = el('h3', 'iq-sec-name', g[1] + ' ');
+      var count = el('span', 'rec-count', '0');
+      h.appendChild(count);
+      var list = el('ol', 'rec-list');
+      sec.appendChild(h);
+      sec.appendChild(list);
+      view.appendChild(sec);
+      groups[g[0]] = { list: list, count: count, n: 0 };
+    });
+    box.replaceChildren(view);
+
+    var total = 0;
+    var add = function (it) {
+      var g = groups[it.kind === 'CANDIDATE' ? 'CANDIDATE' : 'INTERVIEWER'];
+      g.n++;
+      total++;
+      g.count.textContent = g.n;
+      live.textContent = '정리하는 중 · ' + total + '개';
+      var li = el('li', 'rec-item is-new');
+      var q = el('p', 'rec-q');
+      q.appendChild(el('span', 'rec-no', 'Q' + g.n));
+      q.appendChild(document.createTextNode(it.question));
+      li.appendChild(q);
+      li.appendChild(el('p', 'rec-a', it.answer));
+      if (it.excerpt) {
+        var ex = el('p', 'q-excerpt');
+        ex.appendChild(el('span', null, '녹취'));
+        ex.appendChild(document.createTextNode(it.excerpt));
+        li.appendChild(ex);
+      }
+      g.list.appendChild(li);
+    };
+    var fail = function (msg) {
+      delete box.dataset.streaming;
+      box.replaceChildren.apply(box, before);
+      window.showToast(msg || '면접 내용을 정리하지 못했습니다.', true);
+    };
+
+    fetch(form.getAttribute('data-stream'), { method: 'POST', body: body, headers: { 'X-Requested-With': 'fetch' } })
+      .then(function (res) {
+        if (!res.ok || !res.body) {
+          return res.text().then(function (t) { fail(t); });
+        }
+        var reader = res.body.getReader();
+        var decoder = new TextDecoder();
+        var buf = '';
+        var finished = false;
+        var handle = function (line) {
+          if (!line.trim()) return;
+          var m = JSON.parse(line);
+          if (m.item) add(m.item);
+          else if (m.error) { finished = true; fail(m.error); }
+          else if (m.done) {
+            finished = true;
+            delete box.dataset.streaming;
+            window.refreshPartial('#record-stage').then(function () {
+              window.showToast('질문-답변 ' + m.count + '개를 정리했습니다.', false);
+            });
+          }
+        };
+        var pump = function () {
+          return reader.read().then(function (r) {
+            if (r.done) {
+              if (buf) handle(buf);
+              if (!finished) fail('연결이 끊겼습니다. 다시 정리해 주세요.');
+              return;
+            }
+            buf += decoder.decode(r.value, { stream: true });
+            var lines = buf.split('\n');
+            buf = lines.pop();
+            lines.forEach(handle);
+            return pump();
+          });
+        };
+        return pump();
+      })
+      .catch(function () { fail(); });
+  };
+
   function initRecord() {
   var form = document.getElementById('rec-form');
   // 다른 영역만 새로 그려졌으면 폼은 그대로라 다시 묶지 않는다

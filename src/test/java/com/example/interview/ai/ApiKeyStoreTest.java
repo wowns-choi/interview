@@ -20,7 +20,7 @@ class ApiKeyStoreTest {
     Path dir;
 
     private ApiKeyStore store(String key, Path file) {
-        AiProperties props = new AiProperties(key, "https://example.invalid/v1", "m", null, null, null, null, null, null, null, null, null);
+        AiProperties props = new AiProperties(key, "https://example.invalid/v1", "m", null, null, null, null, null, null, null, null, null, null);
         return new ApiKeyStore(props, file) {
             @Override
             void check(String k) {

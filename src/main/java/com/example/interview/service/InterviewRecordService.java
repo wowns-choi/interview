@@ -5,11 +5,13 @@ import java.nio.charset.StandardCharsets;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.Locale;
+import java.util.function.Consumer;
 
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
 
 import com.example.interview.ai.AiClient;
+import com.example.interview.ai.JsonObjectStream;
 import com.example.interview.ai.PromptLoader;
 import com.example.interview.ai.dto.InterviewRecordResult;
 import com.example.interview.domain.AiPurpose;
@@ -22,6 +24,7 @@ import com.example.interview.resume.QuoteVerifier;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import tools.jackson.databind.DeserializationFeature;
 import tools.jackson.databind.ObjectMapper;
 import tools.jackson.databind.json.JsonMapper;
 
@@ -37,6 +40,8 @@ public class InterviewRecordService {
 
     static final int MAX_CHARS = 200_000;
     private static final ObjectMapper JSON = JsonMapper.builder().build();
+    private static final ObjectMapper LENIENT = JsonMapper.builder()
+            .disable(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES).build();
     private static final DateTimeFormatter CREATED_AT = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm");
 
     private final CandidateService candidateService;
@@ -57,13 +62,55 @@ public class InterviewRecordService {
             log.error("면접 기록 만들기 실패 candidateId={}", candidateId, e);
             throw new BusinessException("녹음본으로 면접 내용을 정리하지 못했습니다. " + e.getMessage());
         }
+        return save(candidateId, transcript, result);
+    }
+
+    /** 스트림으로 정리하기 전에 녹음본을 읽어 둔다 (올린 파일은 요청이 끝나면 못 읽는다). 오류는 스트림을 열기 전에 알린다 */
+    public record Prepared(Long candidateId, String transcript) {
+    }
+
+    public Prepared prepare(Long candidateId, String pasted, MultipartFile file) {
+        candidateService.get(candidateId);
+        return new Prepared(candidateId, transcript(pasted, file));
+    }
+
+    /**
+     * 스트림으로 정리한다 (사용자 2026-11-06: 1분 넘게 기다리기만 했다). 항목 하나를 다 받을 때마다 onItem으로 넘기고,
+     * 다 받으면 create와 같이 검증·저장한다.
+     */
+    public InterviewRecord createStreaming(Prepared p, Consumer<QaItem> onItem) {
+        JsonObjectStream items = new JsonObjectStream(2, json -> {
+            try {
+                InterviewRecordResult.Item i = LENIENT.readValue(json, InterviewRecordResult.Item.class);
+                if (i.getQuestion() != null && !i.getQuestion().isBlank()) {
+                    onItem.accept(toQa(i, p.transcript()));
+                }
+            } catch (RuntimeException e) {
+                // 화면에 미리 보이는 것만 빠진다. 저장은 다 받은 뒤 전체로 한다
+            }
+        });
+        InterviewRecordResult result;
+        try {
+            result = aiClient.streamJson(AiPurpose.INTERVIEW_RECORD, p.candidateId(), promptLoader.load("interview_record"),
+                    "<transcript>\n" + p.transcript() + "\n</transcript>", InterviewRecordResult.class,
+                    InterviewRecordResult::validate, items);
+        } catch (RuntimeException e) {
+            log.error("면접 기록 만들기 실패 candidateId={}", p.candidateId(), e);
+            throw new BusinessException("녹음본으로 면접 내용을 정리하지 못했습니다. " + e.getMessage());
+        }
+        return save(p.candidateId(), p.transcript(), result);
+    }
+
+    private InterviewRecord save(Long candidateId, String transcript, InterviewRecordResult result) {
         InterviewRecord record = new InterviewRecord();
         record.setCreatedAt(LocalDateTime.now().format(CREATED_AT));
-        record.setItems(result.getItems().stream()
-                .map(i -> QaItem.of(i.getKind(), i.getQuestion(), i.getAnswer(), verifiedExcerpt(i.getExcerpt(), transcript)))
-                .toList());
+        record.setItems(result.getItems().stream().map(i -> toQa(i, transcript)).toList());
         candidateMapper.updateRecord(candidateId, transcript, JSON.writeValueAsString(record));
         return record;
+    }
+
+    private QaItem toQa(InterviewRecordResult.Item i, String transcript) {
+        return QaItem.of(i.getKind(), i.getQuestion(), i.getAnswer(), verifiedExcerpt(i.getExcerpt(), transcript));
     }
 
     public static InterviewRecord parse(String json) {

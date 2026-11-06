@@ -111,22 +111,53 @@ public class AiClient {
             onDelta.accept(d);
         };
         try {
-            return sendStream(purpose, refId, messages, sink).strip();
+            return sendStream(purpose, refId, messages, sink, false).strip();
         } catch (AiCallException first) {
             if (started[0]) {
                 throw first;
             }
             log.warn("AI 대화 실패, 한 번 더 보낸다 (refId={}): {}", refId, first.getMessage());
-            return sendStream(purpose, refId, messages, sink).strip();
+            return sendStream(purpose, refId, messages, sink, false).strip();
+        }
+    }
+
+    /**
+     * JSON 응답을 스트림으로 받는다 (면접 내용 정리, 사용자 2026-11-06). 받는 대로 onDelta에 조각을 넘기고, 다 받으면
+     * call과 같이 파싱·검증한다. 조각을 이미 화면에 보였으므로 형식이 틀려도 다시 보내지 않고 실패로 끝낸다.
+     */
+    public <T> T streamJson(AiPurpose purpose, Long refId, String systemPrompt, String userContent,
+            Class<T> type, Consumer<T> validator, Consumer<String> onDelta) {
+        if (!apiKeys.isSet()) {
+            throw new AiCallException("AI API 키가 설정되지 않았습니다. 설정 탭에서 GPT API 키를 넣으세요.");
+        }
+        List<Map<String, Object>> messages = new ArrayList<>();
+        messages.add(Map.of("role", "system", "content", systemPrompt));
+        messages.add(Map.of("role", "user", "content", userContent));
+        String text = sendStream(purpose, refId, messages, onDelta, true);
+        try {
+            T result = parse(text, type);
+            validator.accept(result);
+            return result;
+        } catch (AiResponseInvalidException e) {
+            log.warn("AI 응답 검증 실패 (purpose={}, refId={}, 스트림): {}", purpose, refId, e.getMessage());
+            throw new AiCallException("AI 응답 형식 오류: " + e.getMessage(), e);
         }
     }
 
     /** stream: true. 응답은 "data: {...}" 줄들이고 "data: [DONE]"으로 끝난다. 마지막 조각에 usage가 온다 */
-    private String sendStream(AiPurpose purpose, Long refId, List<Map<String, Object>> messages, Consumer<String> onDelta) {
+    private String sendStream(AiPurpose purpose, Long refId, List<Map<String, Object>> messages, Consumer<String> onDelta,
+            boolean json) {
         Map<String, Object> body = new LinkedHashMap<>();
         body.put("model", props.modelFor(purpose));
         body.put("messages", messages);
         body.put(props.maxTokensParam(), props.maxTokensFor(purpose));
+        if (json && props.jsonMode()) {
+            body.put("response_format", Map.of("type", "json_object"));
+        }
+        String effort = props.reasoningEffortFor(purpose);
+        if (effort != null) {
+            body.put("reasoning_effort", effort);
+        }
         body.put("stream", true);
         body.put("stream_options", Map.of("include_usage", true));
 
@@ -138,6 +169,8 @@ public class AiClient {
         long start = System.currentTimeMillis();
         StringBuilder text = new StringBuilder();
         String[] finishReason = { "" };
+        int[] reasoningTokens = { 0 };
+        long[] firstDelta = { 0 };
         try {
             restClient.post()
                     .uri("/chat/completions")
@@ -166,10 +199,14 @@ public class AiClient {
                                 if (usage.isObject()) {
                                     callLog.setInputTokens(usage.path("prompt_tokens").asInt());
                                     callLog.setOutputTokens(usage.path("completion_tokens").asInt());
+                                    reasoningTokens[0] = usage.path("completion_tokens_details").path("reasoning_tokens").asInt();
                                 }
                                 JsonNode choice = chunk.path("choices").path(0);
                                 String delta = choice.path("delta").path("content").asString(null);
                                 if (delta != null && !delta.isEmpty()) {
+                                    if (firstDelta[0] == 0) {
+                                        firstDelta[0] = System.currentTimeMillis();
+                                    }
                                     text.append(delta);
                                     onDelta.accept(delta);
                                 }
@@ -182,9 +219,10 @@ public class AiClient {
                         return null;
                     });
             callLog.setLatencyMs(elapsed(start));
-            log.info("[시간] GPT {} refId={} model={} {}ms 토큰 입력={} 출력={} finish={}",
-                    purpose, refId, callLog.getModel(), callLog.getLatencyMs(), callLog.getInputTokens(),
-                    callLog.getOutputTokens(), finishReason[0]);
+            log.info("[시간] GPT {} refId={} model={}{} 스트림 {}ms (첫 글자 {}ms) 토큰 입력={} 출력={} (추론 {}) finish={}",
+                    purpose, refId, callLog.getModel(), effort == null ? "" : " effort=" + effort, callLog.getLatencyMs(),
+                    firstDelta[0] == 0 ? -1 : firstDelta[0] - start, callLog.getInputTokens(), callLog.getOutputTokens(),
+                    reasoningTokens[0], finishReason[0]);
             if (text.isEmpty()) {
                 throw new AiCallException("AI 응답에 텍스트가 없습니다. (finish_reason=" + finishReason[0] + ")");
             }

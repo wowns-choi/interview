@@ -19,6 +19,8 @@ import com.example.interview.domain.AiPurpose;
  * @param outputPricePer1m   출력 100만 토큰당 USD (선택, 비용 표시용)
  * @param evidenceReasoningEffort 근거 분석(EVIDENCE)에 보내는 reasoning_effort (minimal, low, medium, high). 비우면 보내지 않는다
  *                           (모델 기본값 medium). 근거 분석이 검사 시간의 3분의 2라 낮춰 본다 (사용자 2026-11-06)
+ * @param recordReasoningEffort 면접 내용 정리(INTERVIEW_RECORD)에 보내는 reasoning_effort. 녹음본을 다듬어 옮기는 일이라
+ *                           깊은 추론이 필요 없다 (사용자 2026-11-06)
  */
 @ConfigurationProperties("ai")
 public record AiProperties(
@@ -33,7 +35,8 @@ public record AiProperties(
         Integer timeoutSeconds,
         Double inputPricePer1m,
         Double outputPricePer1m,
-        String evidenceReasoningEffort) {
+        String evidenceReasoningEffort,
+        String recordReasoningEffort) {
 
     private static final Set<AiPurpose> REASONING = Set.of(AiPurpose.EVIDENCE, AiPurpose.EDUCATION_EVAL, AiPurpose.CAREER_MEETS, AiPurpose.OPINION,
             AiPurpose.INTERVIEW_RECORD);
@@ -72,13 +75,17 @@ public record AiProperties(
         return reasoning(purpose) ? reasoningMaxTokens : maxTokens;
     }
 
-    /** 추론 모델로 가는 근거 분석에만 붙인다. 추론 모델이 아니면 reasoning_effort를 받지 않으므로 보내지 않는다 */
+    /** 추론 모델로 가는 근거 분석·면접 내용 정리에만 붙인다. 추론 모델이 아니면 reasoning_effort를 받지 않으므로 보내지 않는다 */
     public String reasoningEffortFor(AiPurpose purpose) {
-        if (purpose != AiPurpose.EVIDENCE || !reasoning(purpose)
-                || evidenceReasoningEffort == null || evidenceReasoningEffort.isBlank()) {
+        String effort = switch (purpose) {
+            case EVIDENCE -> evidenceReasoningEffort;
+            case INTERVIEW_RECORD -> recordReasoningEffort;
+            default -> null;
+        };
+        if (!reasoning(purpose) || effort == null || effort.isBlank()) {
             return null;
         }
-        return evidenceReasoningEffort.strip();
+        return effort.strip();
     }
 
     public boolean hasPricing() {

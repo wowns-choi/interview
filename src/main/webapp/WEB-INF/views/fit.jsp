@@ -556,8 +556,8 @@
 <section class="stage" id="record-stage">
   <header class="stage-head"><h2>면접 내용 정리</h2><c:if test="${not empty record}"><span class="count">${fn:length(record.items)}</span></c:if></header>
   <div id="record">
-    <form class="aa rec-form" id="rec-form" method="post" data-partial="#record" enctype="multipart/form-data" action="<c:url value='/results/${r.candidate.id}/record'/>"
-          data-busy="녹음본으로 면접 내용을 정리하는 중" data-busy-sub="녹음본이 길면 몇 분 걸립니다"
+    <form class="aa rec-form" id="rec-form" method="post" enctype="multipart/form-data" action="<c:url value='/results/${r.candidate.id}/record'/>"
+          data-stream="<c:url value='/results/${r.candidate.id}/record/stream'/>"
           <c:if test="${not empty record}">data-confirm="면접 내용을 새로 정리합니다. 지금 정리한 내용은 바뀝니다." hidden</c:if>>
       <textarea name="transcript" class="aa-text" rows="8" placeholder="녹음본 글을 붙여넣거나 파일을 끌어다 놓으세요"><c:out value="${r.candidate.transcript}"/></textarea>
       <div class="aa-dropped" hidden><svg class="i"><use href="#i-file"/></svg><span class="aa-name"></span><button type="button" class="icon-btn js-aa-clear" title="빼기"><svg class="i"><use href="#i-x"/></svg></button></div>

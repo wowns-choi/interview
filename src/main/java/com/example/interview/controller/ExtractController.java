@@ -372,31 +372,18 @@ public class ExtractController {
      * 빈 질문 같은 검사 오류는 스트림을 열기 전에 일반 오류로 돌려준다.
      */
     @PostMapping("/results/{id}/chat")
-    public ResponseEntity<StreamingResponseBody> sendChat(@PathVariable Long id, @RequestBody Map<String, String> body) {
+    public ResponseEntity<StreamingResponseBody> sendChat(@PathVariable Long id, @RequestBody Map<String, String> body,
+            jakarta.servlet.http.HttpServletResponse response) {
         ChatService.Prepared prepared = chatService.prepare(id, body.get("stage"), body.get("message"));
-        StreamingResponseBody stream = out -> {
-            java.util.function.Consumer<Map<String, Object>> write = m -> {
-                try {
-                    out.write((CHAT_JSON.writeValueAsString(m) + "\n").getBytes(java.nio.charset.StandardCharsets.UTF_8));
-                    out.flush();
-                } catch (java.io.IOException e) {
-                    throw new java.io.UncheckedIOException(e);
-                }
-            };
+        return NdjsonStream.of(response, write -> {
             try {
                 ChatMessage reply = chatService.answer(prepared, d -> write.accept(Map.of("d", d)));
                 write.accept(Map.of("done", true, "content", reply.getContent()));
             } catch (BusinessException e) {
                 write.accept(Map.of("error", e.getMessage()));
             }
-        };
-        return ResponseEntity.ok()
-                .contentType(MediaType.parseMediaType("application/x-ndjson;charset=UTF-8"))
-                .header("X-Accel-Buffering", "no")
-                .body(stream);
+        });
     }
-
-    private static final tools.jackson.databind.json.JsonMapper CHAT_JSON = tools.jackson.databind.json.JsonMapper.builder().build();
 
     @DeleteMapping("/results/{id}/chat")
     public ResponseEntity<Void> resetChat(@PathVariable Long id) {

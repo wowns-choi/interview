@@ -48,7 +48,7 @@ class AiClientTest {
         server = MockRestServiceServer.bindTo(builder).build();
         callLogger = mock(AiCallLogger.class);
         AiProperties props = new AiProperties("test-key", "http://ai.test/v1", "test-model", "test-reasoning-model", 1000, 2000,
-                "max_completion_tokens", true, 5, null, null, "low");
+                "max_completion_tokens", true, 5, null, null, "low", "low");
         RestClient.Builder localBuilder = RestClient.builder().baseUrl("http://local.test");
         localServer = MockRestServiceServer.bindTo(localBuilder).build();
         client = new AiClient(builder.build(), props, localBuilder.build(),
@@ -96,6 +96,33 @@ class AiClientTest {
 
         client.call(AiPurpose.EVIDENCE, 1L, "시스템", "본문", CriteriaResult.class, r -> { });
         client.call(AiPurpose.EDUCATION_EVAL, 1L, "시스템", "본문", CriteriaResult.class, r -> { });
+        server.verify();
+    }
+
+    @Test
+    void streamJsonPassesDeltasThenParses() {
+        String sse = """
+                data: {"choices":[{"delta":{"content":"{\\"required_experience\\":\\"\\",\\"required_education\\":\\"\\","}}]}
+
+                data: {"choices":[{"delta":{"content":"\\"criteria\\":[]}"},"finish_reason":"stop"}]}
+
+                data: {"choices":[],"usage":{"prompt_tokens":30,"completion_tokens":12,"completion_tokens_details":{"reasoning_tokens":4}}}
+
+                data: [DONE]
+
+                """;
+        server.expect(requestTo("http://ai.test/v1/chat/completions"))
+                .andExpect(jsonPath("$.stream").value(true))
+                .andExpect(jsonPath("$.response_format.type").value("json_object"))
+                .andExpect(jsonPath("$.reasoning_effort").value("low"))
+                .andRespond(withSuccess(sse, MediaType.TEXT_EVENT_STREAM));
+
+        List<String> deltas = new java.util.ArrayList<>();
+        CriteriaResult r = client.streamJson(AiPurpose.INTERVIEW_RECORD, 3L, "시스템", "녹음본", CriteriaResult.class, x -> { },
+                deltas::add);
+
+        assertThat(deltas).hasSize(2);
+        assertThat(r.getCriteria()).isEmpty();
         server.verify();
     }
 
@@ -214,7 +241,7 @@ class AiClientTest {
 
     @Test
     void missingApiKeyFailsWithoutCalling() {
-        AiProperties noKey = new AiProperties("", "http://ai.test/v1", "m", null, 10, null, null, null, null, null, null, null);
+        AiProperties noKey = new AiProperties("", "http://ai.test/v1", "m", null, 10, null, null, null, null, null, null, null, null);
         AiClient c = new AiClient(RestClient.create(), noKey, RestClient.create(), new LocalAiProperties(null, null, null, null, null, null),
                 callLogger);
         assertThatThrownBy(() -> c.call(AiPurpose.EVIDENCE, 1L, "s", "u", CriteriaResult.class, r -> {
