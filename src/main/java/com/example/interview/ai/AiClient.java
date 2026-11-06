@@ -9,8 +9,6 @@ import java.util.function.Supplier;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.http.MediaType;
@@ -43,8 +41,6 @@ import tools.jackson.databind.json.JsonMapper;
 @Component
 public class AiClient {
 
-    /** AI에 보낸 메시지와 받은 응답 전문. logging.level.ai.trace로 켜고 끈다 */
-    private static final Logger TRACE = LoggerFactory.getLogger("ai.trace");
     private static final Pattern CODE_FENCE = Pattern.compile("^```(?:json)?\\s*(.*?)\\s*```$", Pattern.DOTALL);
 
     private final RestClient restClient;
@@ -139,7 +135,6 @@ public class AiClient {
         callLog.setRefId(refId);
         callLog.setModel(props.modelFor(purpose));
         callLog.setSuccessYn("N");
-        traceRequest("GPT 요청", purpose, refId, props.modelFor(purpose), messages);
         long start = System.currentTimeMillis();
         StringBuilder text = new StringBuilder();
         String[] finishReason = { "" };
@@ -187,9 +182,9 @@ public class AiClient {
                         return null;
                     });
             callLog.setLatencyMs(elapsed(start));
-            TRACE.info("[GPT 응답] purpose={} refId={} model={} {}ms 토큰 입력={} 출력={} finish_reason={}\n{}",
+            log.info("[시간] GPT {} refId={} model={} {}ms 토큰 입력={} 출력={} finish={}",
                     purpose, refId, callLog.getModel(), callLog.getLatencyMs(), callLog.getInputTokens(),
-                    callLog.getOutputTokens(), finishReason[0], text);
+                    callLog.getOutputTokens(), finishReason[0]);
             if (text.isEmpty()) {
                 throw new AiCallException("AI 응답에 텍스트가 없습니다. (finish_reason=" + finishReason[0] + ")");
             }
@@ -269,13 +264,16 @@ public class AiClient {
         if (json && props.jsonMode()) {
             body.put("response_format", Map.of("type", "json_object"));
         }
+        String effort = props.reasoningEffortFor(purpose);
+        if (effort != null) {
+            body.put("reasoning_effort", effort);
+        }
 
         AiCallLog callLog = new AiCallLog();
         callLog.setPurpose(purpose);
         callLog.setRefId(refId);
         callLog.setModel(props.modelFor(purpose));
         callLog.setSuccessYn("N");
-        traceRequest("GPT 요청", purpose, refId, props.modelFor(purpose), messages);
         long start = System.currentTimeMillis();
         try {
             JsonNode response = restClient.post()
@@ -297,9 +295,10 @@ public class AiClient {
             JsonNode choice = response.path("choices").path(0);
             String text = choice.path("message").path("content").asString(null);
             String finishReason = choice.path("finish_reason").asString("");
-            TRACE.info("[GPT 응답] purpose={} refId={} model={} {}ms 토큰 입력={} 출력={} finish_reason={}\n{}",
-                    purpose, refId, callLog.getModel(), callLog.getLatencyMs(), callLog.getInputTokens(),
-                    callLog.getOutputTokens(), finishReason, pretty(text));
+            log.info("[시간] GPT {} refId={} model={}{} {}ms 토큰 입력={} 출력={} (추론 {}) finish={}",
+                    purpose, refId, callLog.getModel(), effort == null ? "" : " effort=" + effort, callLog.getLatencyMs(),
+                    callLog.getInputTokens(), callLog.getOutputTokens(),
+                    usage.path("completion_tokens_details").path("reasoning_tokens").asInt(), finishReason);
             if (text == null || text.isBlank()) {
                 throw new AiCallException("AI 응답에 텍스트가 없습니다. (finish_reason=" + finishReason + ")");
             }
@@ -338,6 +337,7 @@ public class AiClient {
         body.put("stream", false);
         body.put("format", schema);
         body.put("options", Map.of("temperature", 0, "num_ctx", localProps.numCtx()));
+        body.put("keep_alive", localProps.keepAlive());
         if (localProps.think() != null) {
             body.put("think", localProps.think());
         }
@@ -347,8 +347,6 @@ public class AiClient {
         callLog.setRefId(refId);
         callLog.setModel(localProps.model());
         callLog.setSuccessYn("N");
-        // 이력서 원문이 그대로 들어 있다. 응답 로그와 같이 이 컴퓨터 콘솔에만 남는다
-        traceRequest("로컬 AI 요청", purpose, refId, localProps.model(), messages);
         long start = System.currentTimeMillis();
         try {
             JsonNode response = localRestClient.post()
@@ -366,13 +364,13 @@ public class AiClient {
             callLog.setInputTokens(inputTokens);
             callLog.setOutputTokens(outputTokens);
             String text = response.path("message").path("content").asString(null);
-            // 이력서 원문의 개인정보가 그대로 들어 있다. 로그는 이 컴퓨터 콘솔에만 남는다
-            String thinking = response.path("message").path("thinking").asString(null);
-            if (thinking != null && !thinking.isBlank()) {
-                TRACE.info("[로컬 AI 생각] purpose={} refId={}\n{}", purpose, refId, thinking.strip());
-            }
-            TRACE.info("[로컬 AI 응답] purpose={} refId={} model={} {}ms 토큰 입력={} 출력={}\n{}",
-                    purpose, refId, localProps.model(), callLog.getLatencyMs(), inputTokens, outputTokens, pretty(text));
+            // 어디에 시간이 드는지: 모델 올리기(load) · 입력 읽기(prompt) · 출력 쓰기(eval, 생각 포함). Ollama는 ns로 준다
+            String thinking = response.path("message").path("thinking").asString("");
+            log.info("[시간] 로컬 {} refId={} model={} {}ms (모델 올리기 {}ms, 입력 읽기 {}ms, 출력 {}ms) 토큰 입력={} 출력={} 생각 {}자 답 {}자",
+                    purpose, refId, localProps.model(), callLog.getLatencyMs(),
+                    response.path("load_duration").asLong() / 1_000_000, response.path("prompt_eval_duration").asLong() / 1_000_000,
+                    response.path("eval_duration").asLong() / 1_000_000, inputTokens, outputTokens,
+                    thinking.length(), text == null ? 0 : text.length());
             if (inputTokens + outputTokens >= localProps.numCtx()) {
                 throw new AiInputTooLongException("로컬 AI 입력 한도(num_ctx=" + localProps.numCtx() + ")를 넘어 입력이 잘렸습니다.");
             }
@@ -402,6 +400,26 @@ public class AiClient {
         }
     }
 
+    /**
+     * 로컬 모델을 미리 메모리에 올린다 (프롬프트 없는 /api/generate). 첫 이력서에서 모델 올리는 시간을 빼려고 앱이 켜질 때 부른다.
+     * Ollama가 꺼져 있어도 조용히 넘어간다.
+     */
+    public void warmUpLocal() {
+        long start = System.currentTimeMillis();
+        try {
+            localRestClient.post()
+                    .uri("/api/generate")
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .body(Map.of("model", localProps.model(), "keep_alive", localProps.keepAlive()))
+                    .retrieve()
+                    .toBodilessEntity();
+            log.info("[시간] 로컬 모델 미리 올림 model={} keep_alive={} {}ms", localProps.model(), localProps.keepAlive(),
+                    elapsed(start));
+        } catch (RuntimeException e) {
+            log.info("로컬 모델을 미리 올리지 못함 (Ollama가 꺼져 있으면 첫 호출 때 올린다): {}", e.getMessage());
+        }
+    }
+
     <T> T parse(String text, Class<T> type) {
         String json = stripCodeFence(text);
         try {
@@ -419,35 +437,6 @@ public class AiClient {
         String trimmed = text == null ? "" : text.trim();
         Matcher m = CODE_FENCE.matcher(trimmed);
         return m.matches() ? m.group(1) : trimmed;
-    }
-
-    /** 보내는 메시지 전체. 이미지는 개수만 적는다 */
-    private void traceRequest(String label, AiPurpose purpose, Long refId, String model, List<Map<String, Object>> messages) {
-        if (!TRACE.isInfoEnabled()) {
-            return;
-        }
-        StringBuilder sb = new StringBuilder();
-        for (Map<String, Object> m : messages) {
-            sb.append("\n----- ").append(m.get("role")).append(" -----\n");
-            if (m.get("content") instanceof List<?> parts) {
-                long images = parts.stream().filter(p -> p instanceof Map<?, ?> part && "image_url".equals(part.get("type"))).count();
-                parts.stream().filter(p -> p instanceof Map<?, ?> part && "text".equals(part.get("type")))
-                        .forEach(p -> sb.append(((Map<?, ?>) p).get("text")));
-                sb.append("\n(이미지 ").append(images).append("개)");
-            } else {
-                sb.append(m.get("content"));
-            }
-        }
-        TRACE.info("[{}] purpose={} refId={} model={}{}", label, purpose, refId, model, sb);
-    }
-
-    /** JSON이면 들여쓰기해서 읽기 쉽게, 아니면 그대로 */
-    private String pretty(String text) {
-        try {
-            return objectMapper.writerWithDefaultPrettyPrinter().writeValueAsString(objectMapper.readTree(stripCodeFence(text)));
-        } catch (RuntimeException e) {
-            return text;
-        }
     }
 
     private static int elapsed(long start) {

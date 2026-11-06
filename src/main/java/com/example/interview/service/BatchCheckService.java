@@ -78,17 +78,21 @@ public class BatchCheckService {
         if (strict && chosen.size() > 1) {
             throw new BusinessException("개인정보 엄격 보호 모드에서는 지원자를 한 명씩 올립니다.");
         }
+        long readStart = System.currentTimeMillis();
         List<String> texts = new ArrayList<>();
         for (List<MultipartFile> files : chosen) {
             texts.add(extractionService.combine(files));
         }
+        log.info("[시간] 파일 읽기 positionId={} 지원자 {}명 {}ms 글자 {}", positionId, chosen.size(),
+                System.currentTimeMillis() - readStart, texts.stream().mapToInt(String::length).sum());
         List<Long> ids = new ArrayList<>();
         for (int i = 0; i < chosen.size(); i++) {
             Long id = candidateService.createQueued(positionId, ExtractionService.baseName(chosen.get(i).get(0)));
             candidateService.saveFiles(id, chosen.get(i));
             String text = texts.get(i);
             ids.add(id);
-            worker.submit(() -> process(positionId, id, text, strict));
+            long queued = System.currentTimeMillis();
+            worker.submit(() -> process(positionId, id, text, strict, queued));
         }
         return ids;
     }
@@ -116,7 +120,8 @@ public class BatchCheckService {
         candidateMapper.updateStatus(candidateId, CandidateStatus.QUEUED, null);
         Long positionId = c.getPositionId();
         boolean strict = privacyMode.isStrict();
-        worker.submit(() -> process(positionId, candidateId, text, strict));
+        long queued = System.currentTimeMillis();
+        worker.submit(() -> process(positionId, candidateId, text, strict, queued));
     }
 
     /**
@@ -149,16 +154,19 @@ public class BatchCheckService {
     }
 
     /** @param strict 개인정보 엄격 보호 모드: 가린 뒤 UPLOADED로 멈추고 검사하지 않는다 */
-    private void process(Long positionId, Long candidateId, String text, boolean strict) {
+    private void process(Long positionId, Long candidateId, String text, boolean strict, long queued) {
         if (candidateMapper.findById(candidateId) == null) {
             return; // 기다리는 동안 삭제됨
         }
+        long start = System.currentTimeMillis();
+        log.info("[시간] 검사 시작 candidateId={} 대기 {}ms 글자 {}", candidateId, start - queued, text.length());
         try {
             candidateMapper.updateStatus(candidateId, CandidateStatus.MASKING, null);
             ResumeAnonymizer.Result masked = resumeAnonymizer.anonymize(positionId, text);
             String name = masked.applicantName().orElse(candidateService.get(candidateId).getDisplayName());
             candidateMapper.updateMasked(candidateId, name.length() > 50 ? name.substring(0, 50) : name, masked.text(),
                     ExtractionService.profileJson(masked));
+            log.info("[시간] 개인정보 가리기 끝 candidateId={} {}ms", candidateId, System.currentTimeMillis() - start);
         } catch (RuntimeException e) {
             log.warn("다수 검사: 개인정보 가리기 실패 candidateId={}: {}", candidateId, e.getMessage());
             candidateMapper.updateStatus(candidateId, CandidateStatus.FAILED,
@@ -168,11 +176,15 @@ public class BatchCheckService {
         if (strict) {
             return; // 사람이 가린 이력서를 확인하고 검사를 누를 때까지 기다린다
         }
+        long fitStart = System.currentTimeMillis();
         try {
             extractionService.checkFit(candidateId);
         } catch (RuntimeException e) {
             log.warn("다수 검사: 적합도 검사 실패 candidateId={}: {}", candidateId, e.getMessage());
         }
+        long end = System.currentTimeMillis();
+        log.info("[시간] 검사 끝 candidateId={} 전체 {}ms = 가리기 {}ms + 적합도 검사 {}ms", candidateId,
+                end - start, fitStart - start, end - fitStart);
     }
 
     @EventListener(ApplicationReadyEvent.class)

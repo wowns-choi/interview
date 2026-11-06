@@ -615,7 +615,7 @@
         var avatar = document.querySelector('.pf-avatar');
         if (avatar) avatar.textContent = name.charAt(0);
         var pdf = document.getElementById('pdf-btn');
-        if (pdf) pdf.setAttribute('data-filename', '면접질문지_' + name);
+        if (pdf) pdf.setAttribute('data-filename', '면접질문준비_' + name);
         document.title = name;
       }
     }

@@ -144,7 +144,7 @@ public class InterviewReportService {
             other = qa(s, InterviewRecordService.parse(c.getRecordJson()), answeredSheet(candidateId));
         }
         if (other.isEmpty()) {
-            String what = InterviewReport.SHEET.equals(s) ? "면접 질문지에 적은 답변이" : "면접 기록이";
+            String what = InterviewReport.SHEET.equals(s) ? "면접 질문 준비에 적은 답변이" : "면접 내용 정리가";
             throw new BusinessException(snapshot ? "이 보고서에는 " + what + " 없습니다. 「최신 기록으로 동기화」로 가져오세요."
                     : what + " 없습니다.");
         }

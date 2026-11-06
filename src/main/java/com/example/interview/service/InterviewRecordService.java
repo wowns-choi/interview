@@ -55,7 +55,7 @@ public class InterviewRecordService {
                     "<transcript>\n" + transcript + "\n</transcript>", InterviewRecordResult.class, InterviewRecordResult::validate);
         } catch (RuntimeException e) {
             log.error("면접 기록 만들기 실패 candidateId={}", candidateId, e);
-            throw new BusinessException("면접 기록을 만들지 못했습니다. " + e.getMessage());
+            throw new BusinessException("녹음본으로 면접 내용을 정리하지 못했습니다. " + e.getMessage());
         }
         InterviewRecord record = new InterviewRecord();
         record.setCreatedAt(LocalDateTime.now().format(CREATED_AT));

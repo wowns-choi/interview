@@ -55,8 +55,8 @@
           <c:set var="otherEmpty" value="${report.qaOther != null and empty report.qaOther}"/>
           <c:set var="recOff" value="${report.qaSource != 'RECORD' and (otherEmpty or (report.qaOther == null and not hasRecord))}"/>
           <c:set var="sheetOff" value="${report.qaSource != 'SHEET' and otherEmpty}"/>
-          <button type="${report.qaSource == 'SHEET' ? 'button' : 'submit'}" name="source" value="SHEET" aria-pressed="${report.qaSource == 'SHEET'}" ${sheetOff ? 'disabled title="이 보고서에는 질문지 답변이 없습니다"' : ''}>면접전(타이핑)</button>
-          <button type="${report.qaSource == 'RECORD' ? 'button' : 'submit'}" name="source" value="RECORD" aria-pressed="${report.qaSource == 'RECORD'}" ${recOff ? 'disabled title="이 보고서에는 면접 기록이 없습니다"' : ''}>면접후(녹음본)</button>
+          <button type="${report.qaSource == 'SHEET' ? 'button' : 'submit'}" name="source" value="SHEET" aria-pressed="${report.qaSource == 'SHEET'}" ${sheetOff ? 'disabled title="이 보고서에는 면접 질문 준비 답변이 없습니다"' : ''}>면접 질문 준비</button>
+          <button type="${report.qaSource == 'RECORD' ? 'button' : 'submit'}" name="source" value="RECORD" aria-pressed="${report.qaSource == 'RECORD'}" ${recOff ? 'disabled title="이 보고서에는 면접 내용 정리가 없습니다"' : ''}>면접 내용 정리</button>
         </form>
       </div>
     </div>

@@ -132,25 +132,43 @@ public class ExtractionService {
     public void checkFit(Long candidateId) {
         runAi(candidateId, () -> {
             Candidate candidate = candidateService.get(candidateId);
+            long start = System.currentTimeMillis();
             CompletableFuture<CareerEvalResult> education =
-                    async(() -> careerEvalService.education(candidate));
+                    async(() -> timed("학력 판단", candidateId, () -> careerEvalService.education(candidate)));
             CompletableFuture<List<CareerEvalResult.Period>> timeline =
-                    async(() -> careerEvalService.timeline(candidate));
+                    async(() -> timed("타임라인", candidateId, () -> careerEvalService.timeline(candidate)));
             EvidenceResult.Career career = null;
             CareerEvalResult careerMeets = null;
             try {
-                career = analysisService.analyzeEvidence(candidateId);
+                career = timed("근거 분석(저장 포함)", candidateId, () -> analysisService.analyzeEvidence(candidateId));
                 // 경력 조건 판단은 근거 분석이 센 관련 경력이 있어야 해서 그 뒤에 묻는다
-                careerMeets = careerEvalService.careerMeets(candidate, career.getRelevantMonths(), career.getTotalMonths(),
-                        career.getRelevantReason());
+                EvidenceResult.Career c = career;
+                careerMeets = timed("경력 조건 판단", candidateId, () -> careerEvalService.careerMeets(candidate,
+                        c.getRelevantMonths(), c.getTotalMonths(), c.getRelevantReason()));
             } finally {
-                careerEvalService.save(candidate, education.join(), timeline.join(), career, careerMeets);
+                long waitStart = System.currentTimeMillis();
+                CareerEvalResult edu = education.join();
+                List<CareerEvalResult.Period> periods = timeline.join();
+                long saveStart = System.currentTimeMillis();
+                careerEvalService.save(candidate, edu, periods, career, careerMeets);
                 // 근거를 저장했으면 경력·학력·자격증까지 저장한 지금 끝낸다 (화면은 이 상태 변화를 보고 다시 불러온다)
                 if (career != null) {
                     analysisService.finishCheck(candidateId);
                 }
+                long end = System.currentTimeMillis();
+                log.info("[시간] 적합도 검사 candidateId={} 전체 {}ms (학력·타임라인 더 기다림 {}ms, 저장 {}ms)", candidateId,
+                        end - start, saveStart - waitStart, end - saveStart);
             }
         });
+    }
+
+    private static <T> T timed(String step, Long candidateId, Supplier<T> task) {
+        long t = System.currentTimeMillis();
+        try {
+            return task.get();
+        } finally {
+            log.info("[시간] {} candidateId={} {}ms", step, candidateId, System.currentTimeMillis() - t);
+        }
     }
 
     /** 공용 스레드 풀에서 돌리되, 실행 war에서도 앱 클래스·리소스가 보이도록 앱 클래스로더를 건다 */

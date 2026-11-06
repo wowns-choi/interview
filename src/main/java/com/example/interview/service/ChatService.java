@@ -71,12 +71,12 @@ public class ChatService {
                 "안 보냄: 이름, 연락처, 이메일, 주소, 성별, 생년월일, 학교·전공, 회사 이름, 연봉")));
         out.add(source("evidence", "평가 기준 충족 여부", "기준 " + r.getCriteria().size() + "개", r.getCriteria().isEmpty(),
                 List.of()));
-        out.add(source("sheet", "면접 질문지", "답변 " + r.getAnsweredCount() + " / 질문 " + r.getQuestionCount(),
+        out.add(source("sheet", "면접 질문 준비", "답변 " + r.getAnsweredCount() + " / 질문 " + r.getQuestionCount(),
                 r.getSections().isEmpty(), List.of("면접관이 적은 답변은 가리지 않고 그대로")));
         // 면접 기록은 면접 후에는 늘, 면접 전에는 녹음본으로 만든 기록이 있을 때만 (사용자 2026-10-28)
         int n = recordSize(r);
         if (AFTER.equals(stage(stage)) || n > 0) {
-            out.add(source("record", "면접 기록", "질문 " + n + "개", n == 0,
+            out.add(source("record", "면접 내용 정리", "질문 " + n + "개", n == 0,
                     List.of("녹음본에서 나온 말은 가리지 않고 그대로")));
         }
         return out;

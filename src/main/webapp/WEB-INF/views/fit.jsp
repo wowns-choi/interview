@@ -39,7 +39,7 @@
       <div class="toc" id="toc">
         <a href="#sec-profile">개인정보</a>
         <a href="#sec-evidence">평가 기준 충족 여부</a>
-        <a href="#questions">면접 질문</a>
+        <a href="#questions">면접 질문 준비</a>
       </div>
       <button type="button" data-stage="after"><span class="stage-no">2</span>면접 후</button>
       <button type="button" data-stage="report"><span class="stage-no">3</span>보고서</button>
@@ -407,14 +407,14 @@
 <c:if test="${qOpen}">
 <section class="stage" id="questions">
   <header class="stage-head">
-    <h2>면접 질문지</h2>
+    <h2>면접 질문 준비</h2>
     <label class="iv-date">면접 본 날짜<input type="datetime-local" id="iv-date" value="${r.candidate.interviewDate}"><span class="save-state" id="iv-date-state" aria-live="polite"></span></label>
   </header>
   <div class="qpane">
   <%-- 질문 추출: 버튼 → 창에서 유형 이름을 적고(기본 네 유형, 직접 적은 유형) 추출. 여러 번 추출해 쌓고, 질문지에 넣는다 --%>
   <dialog class="pf-dialog qx-dialog" id="dlg-extract">
-    <header><h3>면접 질문 추출</h3><button type="button" class="icon-btn" data-close title="닫기"><svg class="i"><use href="#i-x"/></svg></button></header>
-    <form method="post" data-partial="#questions" action="<c:url value='/results/${r.candidate.id}/questions/generate'/>" data-busy="면접 질문을 추출하는 중" id="qx-form">
+    <header><h3>질문 추출</h3><button type="button" class="icon-btn" data-close title="닫기"><svg class="i"><use href="#i-x"/></svg></button></header>
+    <form method="post" data-partial="#questions" action="<c:url value='/results/${r.candidate.id}/questions/generate'/>" data-busy="질문을 추출하는 중" id="qx-form">
       <%-- 기본 네 유형은 켜고 끄기만. 직접 만든 유형은 「+ 유형 추가」로 바로 저장되고, ×로 바로 지운다 --%>
       <div class="qx-chips" id="qx-chips" data-url="<c:url value='/question-types'/>">
         <c:forEach var="t" items="${['거짓말 판독기', '어디까지 알고 한 거야?', '그 기술 왜 선택했어?', '해본 적 있어?']}">
@@ -433,7 +433,7 @@
     </form>
   </dialog>
   <div id="extract">
-    <button type="button" class="qx-empty" data-dialog="dlg-extract"><svg class="ico"><use href="#i-plus"/></svg>면접 질문 추출</button>
+    <button type="button" class="qx-empty" data-dialog="dlg-extract"><svg class="ico"><use href="#i-plus"/></svg>질문 추출</button>
     <c:if test="${not empty r.extracted}">
       <div class="qx-pool" id="qx-pool">
         <div class="qx-pool-head">
@@ -554,17 +554,17 @@
 </div>
 <%-- 녹음본만 보고 만든 질문-답변 (녹음본 순서). 질문지 답변과 섞지 않는다 --%>
 <section class="stage" id="record-stage">
-  <header class="stage-head"><h2>면접 기록</h2><c:if test="${not empty record}"><span class="count">${fn:length(record.items)}</span></c:if></header>
+  <header class="stage-head"><h2>면접 내용 정리</h2><c:if test="${not empty record}"><span class="count">${fn:length(record.items)}</span></c:if></header>
   <div id="record">
     <form class="aa rec-form" id="rec-form" method="post" data-partial="#record" enctype="multipart/form-data" action="<c:url value='/results/${r.candidate.id}/record'/>"
-          data-busy="녹음본으로 면접 기록을 만드는 중" data-busy-sub="녹음본이 길면 몇 분 걸립니다"
-          <c:if test="${not empty record}">data-confirm="면접 기록을 새로 만듭니다. 지금 기록은 바뀝니다." hidden</c:if>>
+          data-busy="녹음본으로 면접 내용을 정리하는 중" data-busy-sub="녹음본이 길면 몇 분 걸립니다"
+          <c:if test="${not empty record}">data-confirm="면접 내용을 새로 정리합니다. 지금 정리한 내용은 바뀝니다." hidden</c:if>>
       <textarea name="transcript" class="aa-text" rows="8" placeholder="녹음본 글을 붙여넣거나 파일을 끌어다 놓으세요"><c:out value="${r.candidate.transcript}"/></textarea>
       <div class="aa-dropped" hidden><svg class="i"><use href="#i-file"/></svg><span class="aa-name"></span><button type="button" class="icon-btn js-aa-clear" title="빼기"><svg class="i"><use href="#i-x"/></svg></button></div>
       <div class="aa-foot">
         <label class="aa-file"><input type="file" name="file" accept=".txt,.md,.doc,.docx,.pdf,.hwp,.hwpx"><svg class="i"><use href="#i-file"/></svg><span>파일 올리기</span></label>
         <c:if test="${not empty record}"><button type="button" class="btn btn-ghost btn-sm" data-open="rec-form">취소</button></c:if>
-        <button type="submit" class="btn btn-primary btn-sm">${empty record ? '면접 기록 만들기' : '다시 만들기'}</button>
+        <button type="submit" class="btn btn-primary btn-sm">${empty record ? '면접 내용 정리하기' : '다시 정리하기'}</button>
       </div>
     </form>
     <c:if test="${not empty record}">
@@ -601,7 +601,7 @@
 <div class="stage-pane" data-pane="report" hidden>
   <div class="rp-bar">
     <span class="save-state" id="rp-state" aria-live="polite"></span>
-    <form method="post" action="<c:url value='/results/${r.candidate.id}/report'/>" data-busy="${empty report ? '보고서를 만드는 중' : '보고서를 동기화하는 중'}"<c:if test="${not empty report}"> data-confirm="최신 기록으로 다시 채웁니다.&#10;지원자 정보·자격증과 타이핑·녹음본 질문과 답변을 직접 고친 내용은 사라집니다. (면접관 의견은 그대로)&#10;&#10;계속할까요?"</c:if>>
+    <form method="post" action="<c:url value='/results/${r.candidate.id}/report'/>" data-busy="${empty report ? '보고서를 만드는 중' : '보고서를 동기화하는 중'}"<c:if test="${not empty report}"> data-confirm="최신 기록으로 다시 채웁니다.&#10;지원자 정보·자격증과 면접 질문 준비·면접 내용 정리의 질문과 답변을 직접 고친 내용은 사라집니다. (면접관 의견은 그대로)&#10;&#10;계속할까요?"</c:if>>
       <button type="submit" class="btn ${empty report ? 'btn-primary' : 'btn-ghost'} btn-sm"><svg class="i"><use href="#i-file"/></svg>${empty report ? '보고서 만들기' : '최신 기록으로 동기화'}</button>
     </form>
     <c:if test="${not empty report}">

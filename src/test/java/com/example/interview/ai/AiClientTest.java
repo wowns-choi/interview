@@ -48,11 +48,11 @@ class AiClientTest {
         server = MockRestServiceServer.bindTo(builder).build();
         callLogger = mock(AiCallLogger.class);
         AiProperties props = new AiProperties("test-key", "http://ai.test/v1", "test-model", "test-reasoning-model", 1000, 2000,
-                "max_completion_tokens", true, 5, null, null);
+                "max_completion_tokens", true, 5, null, null, "low");
         RestClient.Builder localBuilder = RestClient.builder().baseUrl("http://local.test");
         localServer = MockRestServiceServer.bindTo(localBuilder).build();
         client = new AiClient(builder.build(), props, localBuilder.build(),
-                new LocalAiProperties("http://local.test", "local-model", 100, 5, true), callLogger);
+                new LocalAiProperties("http://local.test", "local-model", 100, 5, true, null), callLogger);
     }
 
     @Test
@@ -63,6 +63,7 @@ class AiClientTest {
                 .andExpect(jsonPath("$.model").value("test-model"))
                 .andExpect(jsonPath("$.max_completion_tokens").value(1000))
                 .andExpect(jsonPath("$.response_format.type").value("json_object"))
+                .andExpect(jsonPath("$.reasoning_effort").doesNotExist())
                 .andExpect(jsonPath("$.messages[0].role").value("system"))
                 .andExpect(jsonPath("$.messages[1].content").value("<job_posting>공고</job_posting>"))
                 .andRespond(withSuccess(completion(VALID, 120, 45), MediaType.APPLICATION_JSON));
@@ -80,6 +81,33 @@ class AiClientTest {
         assertThat(log.getSuccessYn()).isEqualTo("Y");
         assertThat(log.getLatencyMs()).isNotNull();
         server.verify();
+    }
+
+    @Test
+    void sendsReasoningEffortOnlyForEvidence() {
+        server.expect(requestTo("http://ai.test/v1/chat/completions"))
+                .andExpect(jsonPath("$.model").value("test-reasoning-model"))
+                .andExpect(jsonPath("$.reasoning_effort").value("low"))
+                .andRespond(withSuccess(completion(VALID, 10, 5), MediaType.APPLICATION_JSON));
+        server.expect(requestTo("http://ai.test/v1/chat/completions"))
+                .andExpect(jsonPath("$.model").value("test-reasoning-model"))
+                .andExpect(jsonPath("$.reasoning_effort").doesNotExist())
+                .andRespond(withSuccess(completion(VALID, 10, 5), MediaType.APPLICATION_JSON));
+
+        client.call(AiPurpose.EVIDENCE, 1L, "시스템", "본문", CriteriaResult.class, r -> { });
+        client.call(AiPurpose.EDUCATION_EVAL, 1L, "시스템", "본문", CriteriaResult.class, r -> { });
+        server.verify();
+    }
+
+    @Test
+    void sendsKeepAliveToLocalModel() {
+        localServer.expect(requestTo("http://local.test/api/chat"))
+                .andExpect(jsonPath("$.keep_alive").value("1h"))
+                .andRespond(withSuccess("""
+                        {"message":{"content":"{}"},"prompt_eval_count":10,"eval_count":5}""", MediaType.APPLICATION_JSON));
+
+        client.callLocal(AiPurpose.PII_DETECT, 7L, "시스템", "본문", java.util.Map.of(), PiiExtract.class, r -> { });
+        localServer.verify();
     }
 
     @Test
@@ -186,8 +214,8 @@ class AiClientTest {
 
     @Test
     void missingApiKeyFailsWithoutCalling() {
-        AiProperties noKey = new AiProperties("", "http://ai.test/v1", "m", null, 10, null, null, null, null, null, null);
-        AiClient c = new AiClient(RestClient.create(), noKey, RestClient.create(), new LocalAiProperties(null, null, null, null, null),
+        AiProperties noKey = new AiProperties("", "http://ai.test/v1", "m", null, 10, null, null, null, null, null, null, null);
+        AiClient c = new AiClient(RestClient.create(), noKey, RestClient.create(), new LocalAiProperties(null, null, null, null, null, null),
                 callLogger);
         assertThatThrownBy(() -> c.call(AiPurpose.EVIDENCE, 1L, "s", "u", CriteriaResult.class, r -> {
         })).isInstanceOf(AiCallException.class).hasMessageContaining("API 키");

@@ -219,7 +219,7 @@ class WebPagesSmokeTest {
         HttpResponse<String> result = get("/results/" + id);
         assertThat(result.statusCode()).isEqualTo(200);
         String body = result.body();
-        assertThat(body).contains("100만 건 배치 처리 시간을 어떻게 측정하셨나요?", "답변 기록", "id=\"stage-nav\"", "data-pane=\"after\"", "data-pane=\"report\"", "면접 기록 만들기",
+        assertThat(body).contains("100만 건 배치 처리 시간을 어떻게 측정하셨나요?", "답변 기록", "id=\"stage-nav\"", "data-pane=\"after\"", "data-pane=\"report\"", "면접 내용 정리하기",
                 "질문 추가", "kind kind-verify\">거짓말 판독기<", "id=\"chat-btn\"", "/chat/window", "id=\"to-bottom\"", "보고서 만들기", "js-q-must", "id=\"iv-bar\"", "면접 본 날짜", "data-decision=\"PASS\"").doesNotContain("추출한 질문 <b>", "병목은 어디였나요?");
 
         assertThat(get("/results/" + id + "/chat?stage=BEFORE").body()).startsWith("{\"messages\":[],\"sources\":[{\"key\":\"posting\"");

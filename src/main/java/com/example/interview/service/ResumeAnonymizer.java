@@ -103,6 +103,7 @@ public class ResumeAnonymizer {
 
         // 1. 로컬 AI 응답을 받아 합친다. 화면용 프로필에는 원문에 있는 값만 남긴다
         List<PiiExtract> found = detectAll(positionId, text);
+        long afterDetect = System.currentTimeMillis();
         CandidateProfile profile = verify(merge(found.stream().map(PiiExtract::toProfile).toList()), text);
 
         // 2. 같은 회사는 한 줄로 합치고 별칭을 붙인다 (A사, B사 / 학교1 / 교육1 / 활동1)
@@ -124,6 +125,7 @@ public class ResumeAnonymizer {
                     + ")가 남아 있어 이력서를 저장하지 않았습니다.");
         }
 
+        log.info("[시간] 가리기(찾은 뒤 바꾸기·남은 것 검사) {}ms", System.currentTimeMillis() - afterDetect);
         // 5. 저장은 호출한 쪽이 한다 (가린 글, 별칭이 붙은 프로필, 지원자 이름)
         return new Result(maskedText, masked.applicantName(), profile);
     }
@@ -132,9 +134,15 @@ public class ResumeAnonymizer {
         String prompt = promptLoader.load("pii_detect");
         List<PiiExtract> found = new ArrayList<>();
         try {
-            for (String chunk : split(text, CHUNK_CHARS)) {
-                detect(positionId, prompt, chunk, found);
+            List<String> chunks = split(text, CHUNK_CHARS);
+            long start = System.currentTimeMillis();
+            for (int i = 0; i < chunks.size(); i++) {
+                long t = System.currentTimeMillis();
+                detect(positionId, prompt, chunks.get(i), found);
+                log.info("[시간] 개인정보 찾기 조각 {}/{} ({}자) {}ms", i + 1, chunks.size(), chunks.get(i).length(),
+                        System.currentTimeMillis() - t);
             }
+            log.info("[시간] 개인정보 찾기 전체 {}자 {}조각 {}ms", text.length(), chunks.size(), System.currentTimeMillis() - start);
         } catch (AiCallException e) {
             log.warn("개인정보 탐지 실패 positionId={}: {}", positionId, e.getMessage());
             throw new ResumeProcessingException("개인정보를 가리지 못해 이력서를 저장하지 않았습니다. 로컬 AI(Ollama)가 실행 중인지 확인하세요.", e);
