@@ -50,6 +50,8 @@ class WebPagesSmokeTest {
     @Autowired
     PositionService positionService;
     @Autowired
+    com.example.interview.ai.LocalAiSwitch localAiSwitch;
+    @Autowired
     QuestionTemplateMapper templateMapper;
     @Autowired
     QuestionSectionMapper sectionMapper;
@@ -69,7 +71,14 @@ class WebPagesSmokeTest {
                 .doesNotContain("jsessionid", "type=\"file\" id=\"resume\"");
         HttpResponse<String> settings = get("/settings");
         assertThat(settings.statusCode()).isEqualTo(200);
-        assertThat(settings.body()).contains("GPT API 키", "로컬 AI (Ollama)", "https://ollama.com/download", "ollama pull ");
+        assertThat(settings.body()).contains("GPT API 키", "로컬 AI (Ollama)", "https://ollama.com/download", "ollama pull ",
+                "action=\"/settings/local-ai\"", "로컬 AI로 처리");
+        // 로컬 AI로 처리 스위치: 켜고 끄기
+        assertThat(post("/settings/local-ai", "on=true", false).statusCode()).isEqualTo(302);
+        assertThat(localAiSwitch.isOn()).isTrue();
+        assertThat(get("/settings").body()).contains("checked onchange=\"this.form.requestSubmit()\"><span class=\"switch-track\"></span>켜짐");
+        assertThat(post("/settings/local-ai", "", false).statusCode()).isEqualTo(302);
+        assertThat(localAiSwitch.isOn()).isFalse();
         // 포지션이 없으면 적합도 검사·비교는 빈 화면
         assertThat(get("/fit").body()).contains("평가 기준을 추출한 포지션이 없습니다");
         assertThat(get("/ranking").body()).contains("평가 기준을 추출한 포지션이 없습니다");
@@ -138,6 +147,16 @@ class WebPagesSmokeTest {
         // 경력·학력 조건 칸 (값을 바꾸면 뒤의 점수 확인이 달라지므로 화면과 없는 포지션만 본다)
         assertThat(get("/positions/" + positionId).body()).contains("id=\"conds\"", "data-key=\"requiredEducation\"", "data-edit=\"requiredMajor\"", "data-exp-kind=");
         assertThat(json("PATCH", "/positions/" + (positionId + 999) + "/conditions", "{\"requiredExperience\":\"x\"}").statusCode()).isEqualTo(404);
+        // 경력 칸을 고르면 개월(하한·상한)도 저장하고, 학력만 고치면 개월은 그대로 둔다 (다른 포지션에서)
+        Long condId = ExtractionFlowIntegrationTest.startPosition(positionService, "조건 포지션");
+        assertThat(positionService.get(condId)).extracting("careerMinMonths", "careerMaxMonths").containsExactly(36, null);
+        assertThat(json("PATCH", "/positions/" + condId + "/conditions",
+                "{\"requiredExperience\":\"경력 2년 이하\",\"expKind\":\"MAX\",\"expYears\":\"2\"}").statusCode()).isEqualTo(204);
+        assertThat(positionService.get(condId)).extracting("careerMinMonths", "careerMaxMonths").containsExactly(null, 24);
+        assertThat(json("PATCH", "/positions/" + condId + "/conditions",
+                "{\"requiredExperience\":\"경력 2년 이하\",\"requiredEducation\":\"대졸(4년제) 이상\"}").statusCode()).isEqualTo(204);
+        assertThat(positionService.get(condId)).extracting("careerMinMonths", "careerMaxMonths", "requiredEducation")
+                .containsExactly(null, 24, "대졸(4년제) 이상");
         // 포지션 이름 바꾸기
         HttpResponse<String> renamed = json("PATCH", "/positions/" + positionId, "{\"title\":\"<b>10월 공채</b>\"}");
         assertThat(renamed.statusCode()).isEqualTo(200);
@@ -187,7 +206,7 @@ class WebPagesSmokeTest {
         assertThat(checked).contains("가나커머스", "class=\"cmp-sign\"", "공고", "id=\"dlg-career\"", "data-dialog=\"dlg-career\"",
                 "<h3>타임라인</h3>", "class=\"is-career\"", "2021.03 ~ 2024.02", "이력서상 기록 없음 <small>8개월</small>", "2020.07 ~ 2021.02")
                 .doesNotContain("class=\"gauge\"", "공고까지", "없는항목", "<h3>연봉", "5,000만원", "<h3>교육</h3>");
-        assertThat(checked).contains("홍길동", "부분 충족", "<strong>2년 6개월</strong> 포지션 관련", "title=\"3년 이상 조건에 관련 경력 30개월로 6개월 모자람\"",
+        assertThat(checked).contains("홍길동", "부분 충족", "<strong>2년 6개월</strong> 포지션 관련", "title=\"포지션 관련 경력 30개월, 공고 36개월 이상\"",
                 "<h3 class=\"vmark is-unmet\">", "<span class=\"sr-only\">미충족</span>","일 100만 건 주문 데이터 배치 처리 개선", "원문에서 찾지 못한",
                 "id=\"dlg-extract\"", "class=\"qx-empty\"", "name=\"type\" value=\"해본 적 있어?\"", "class=\"print-head\"",
                 // 추출 전에도 공통 질문은 질문지로 보인다

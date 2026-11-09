@@ -88,7 +88,7 @@
 <%-- 개인정보 엄격 보호 모드: 가린 뒤 멈춘 지원자는 가린 이력서를 확인·수정하고 검사한다 --%>
 <c:set var="reviewing" value="${strictPrivacy and st == 'UPLOADED' and not empty r.candidate.maskedText and not r.fitChecked}"/>
 <c:set var="pf" value="${r.profile}"/>
-<c:set var="showProfile" value="${r.fitChecked and ((not empty pf and pf.filled) or not empty position.requiredExperience)}"/>
+<c:set var="showProfile" value="${r.fitChecked and ((not empty pf and pf.filled) or not empty r.careerRequirement)}"/>
 <c:set var="renameBtn"><c:if test="${not busy}"><button type="button" class="icon-btn" id="cand-rename" title="이름 바꾸기"><svg class="i"><use href="#i-pencil"/></svg></button></c:if></c:set>
 <%-- 단계 화면은 적합도 검사가 끝나야 생긴다. 그 전에는 지금처럼 한 화면 --%>
 <c:set var="staged" value="${r.fitChecked}"/>
@@ -191,7 +191,7 @@
         <c:set var="cev" value="${r.careerEval}"/>
         <c:set var="fit" value="${r.fit}"/>
         <%-- 검사 중이면 예전 개인정보·평가 기준 충족 여부는 감춘다 (사용자 2026-10-28) --%>
-        <c:if test="${r.fitChecked and st != 'ANALYZING' and ((not empty pf and pf.filled) or not empty position.requiredExperience)}">
+        <c:if test="${r.fitChecked and st != 'ANALYZING' and ((not empty pf and pf.filled) or not empty r.careerRequirement)}">
         <section class="stage" id="sec-profile">
           <header class="stage-head"><h2>개인정보</h2></header>
           <div class="profile${justChecked ? ' is-stamping' : ''}">
@@ -227,7 +227,7 @@
                     <c:when test="${not empty fit.career}"><c:set var="markLabel" value="경력"/><c:set var="markKind" value="${fit.career ? 'met' : 'unmet'}"/><c:set var="markText" value="${fit.career ? '충족' : '미충족'}"/>
 <%@ include file="common/verdict-mark.jspf" %>
                     </c:when>
-                    <c:otherwise><h3>경력</h3><span class="verdict-none">${empty position.requiredExperience ? '조건 없음' : '판단 못 함'}</span></c:otherwise>
+                    <c:otherwise><h3>경력</h3><span class="verdict-none">${empty r.careerRequirement ? '조건 없음' : '판단 못 함'}</span></c:otherwise>
                   </c:choose>
                 </div>
                 <c:set var="ln" value="${r.careerLine}"/><c:set var="lnTitle" value="${not empty cev.careerReason ? cev.careerReason : cev.relevantReason}"/>
@@ -242,7 +242,7 @@
                     <c:when test="${not empty fit.education}"><c:set var="markLabel" value="학력"/><c:set var="markKind" value="${fit.education ? 'met' : 'unmet'}"/><c:set var="markText" value="${fit.education ? '충족' : '미충족'}"/>
 <%@ include file="common/verdict-mark.jspf" %>
                     </c:when>
-                    <c:otherwise><h3>학력</h3><span class="verdict-none">${empty position.requiredEducation and empty position.requiredMajor ? '조건 없음' : '판단 못 함'}</span></c:otherwise>
+                    <c:otherwise><h3>학력</h3><span class="verdict-none">${r.educationConditionEmpty ? '조건 없음' : '판단 못 함'}</span></c:otherwise>
                   </c:choose>
                 </div>
                 <c:set var="lnTitle" value="${cev.educationReason}"/>

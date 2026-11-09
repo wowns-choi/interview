@@ -18,6 +18,7 @@ import com.example.interview.ai.AiImage;
 import com.example.interview.ai.PromptLoader;
 import com.example.interview.ai.dto.CriteriaResult;
 import com.example.interview.domain.AiPurpose;
+import com.example.interview.domain.CareerRange;
 import com.example.interview.domain.CriterionCategory;
 import com.example.interview.domain.CriterionSource;
 import com.example.interview.domain.EvalCriterion;
@@ -192,8 +193,11 @@ public class PositionService {
                 positionMapper.updateImageText(positionId,
                         imageText == null || imageText.isBlank() ? null : imageText.strip());
             }
+            boolean hasExperience = blankToNull(result.getRequiredExperience()) != null;
             positionMapper.updateHiring(positionId,
                     truncate(blankToNull(result.getRequiredExperience()), 300),
+                    hasExperience ? result.getExperienceMinMonths() : null,
+                    hasExperience ? result.getExperienceMaxMonths() : null,
                     truncate(blankToNull(result.getRequiredEducation()), 300),
                     truncate(blankToNull(result.getRequiredMajor()), 300));
             positionMapper.updateStatus(positionId, PositionStatus.CONFIRMED);
@@ -207,6 +211,13 @@ public class PositionService {
         get(positionId);
         positionMapper.updateConditions(positionId, truncate(blankToNull(requiredExperience), 300),
                 truncate(blankToNull(requiredEducation), 300), truncate(blankToNull(requiredMajor), 300));
+    }
+
+    /** 경력 칸을 고르면 개월도 바꾼다 (ANY 경력무관, MIN N년 이상, MAX N년 이하, 그 밖은 조건 없음) */
+    public void updateCareerRange(Long positionId, String kind, String years) {
+        get(positionId);
+        Integer[] range = CareerRange.fromChoice(kind, years);
+        positionMapper.updateCareerRange(positionId, range[0], range[1]);
     }
 
     public EvalCriterion addCriterion(Long positionId, String name, String description) {

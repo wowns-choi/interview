@@ -126,8 +126,8 @@ public class ExtractionService {
 
     /**
      * 외부 AI를 세 번 동시에 부른다: 가린 글로 근거와 총 경력·관련 경력(EVIDENCE),
-     * 학교 목록으로 학력(EDUCATION_EVAL), 이름표·기간 목록으로 타임라인(TIMELINE). 근거 분석이 끝나면 그 경력 개월로
-     * 경력 조건 충족(CAREER_MEETS)을 묻는다. 한쪽이 실패해도 나머지는 저장한다.
+     * 학교 목록으로 학력(EDUCATION_EVAL), 이름표·기간 목록으로 타임라인(TIMELINE). 근거 분석이 끝나면 그 경력 개월과
+     * 포지션의 요구 경력 개월로 경력 조건 충족을 코드가 정한다. 한쪽이 실패해도 나머지는 저장한다.
      */
     public void checkFit(Long candidateId) {
         runAi(candidateId, () -> {
@@ -141,10 +141,8 @@ public class ExtractionService {
             CareerEvalResult careerMeets = null;
             try {
                 career = timed("근거 분석(저장 포함)", candidateId, () -> analysisService.analyzeEvidence(candidateId));
-                // 경력 조건 판단은 근거 분석이 센 관련 경력이 있어야 해서 그 뒤에 묻는다
-                EvidenceResult.Career c = career;
-                careerMeets = timed("경력 조건 판단", candidateId, () -> careerEvalService.careerMeets(candidate,
-                        c.getRelevantMonths(), c.getTotalMonths(), c.getRelevantReason()));
+                // 경력 조건 충족은 근거 분석이 센 관련 경력 개월과 요구 경력 개월을 코드로 비교한다 (GPT 호출 없음)
+                careerMeets = careerEvalService.judgeCareer(candidate, career.getRelevantMonths(), career.getTotalMonths());
             } finally {
                 long waitStart = System.currentTimeMillis();
                 CareerEvalResult edu = education.join();
@@ -160,6 +158,30 @@ public class ExtractionService {
                         end - start, saveStart - waitStart, end - saveStart);
             }
         });
+    }
+
+    /**
+     * 조건만 바뀐 지원자: 바뀐 쪽 판단만 지금 조건으로 다시 정한다 (사용자 2026-11-09). 이력서는 보내지 않는다.
+     * 경력은 저장된 경력 개월과 지금 요구 경력 개월을 코드로 비교, 학력은 학교 목록으로 EDUCATION_EVAL. 실패하면 이전 판단을 그대로 둔다.
+     * 지원자 상태는 바꾸지 않는다 (부르는 쪽이 대기 표시와 복원을 맡는다).
+     */
+    public void rejudgeConditions(Long candidateId, boolean career, boolean education) {
+        Candidate candidate = candidateService.get(candidateId);
+        try {
+            CompletableFuture<CareerEvalResult> edu = education
+                    ? async(() -> timed("학력 판단", candidateId, () -> careerEvalService.education(candidate)))
+                    : CompletableFuture.completedFuture(null);
+            CareerEvalResult meets = null;
+            if (career) {
+                CareerEvalResult saved = CareerEvalService.parse(candidate.getCareerEvalJson());
+                if (saved != null) {
+                    meets = careerEvalService.judgeCareer(candidate, saved.getRelevantMonths(), saved.getTotalMonths());
+                }
+            }
+            careerEvalService.save(candidate, edu.join(), null, null, meets);
+        } catch (RuntimeException e) {
+            log.warn("조건 다시 판단 실패 candidateId={}: {}", candidateId, e.getMessage());
+        }
     }
 
     private static <T> T timed(String step, Long candidateId, Supplier<T> task) {

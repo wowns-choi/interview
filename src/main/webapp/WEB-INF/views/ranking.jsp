@@ -24,12 +24,12 @@
 </div>
 </c:if>
 
-<%-- 평가 기준이 바뀐 지원자를 한 번에 다시 검사 (사용자 2026-10-28): 표 위 띠, 누르면 무엇이 바뀌는지 알리는 창 --%>
+<%-- 평가 기준이나 경력·학력 조건이 바뀐 지원자를 한 번에 다시 검사 (사용자 2026-10-28, 조건 2026-11-09): 표 위 띠, 누르면 무엇이 바뀌는지 알리는 창 --%>
 <c:if test="${changedCount > 0}">
 <div class="rk-notice">
   <span class="rk-notice-ico"><svg class="i"><use href="#i-refresh"/></svg></span>
-  <span class="rk-notice-text">평가 기준이 바뀐 뒤 아직 다시 검사하지 않은 지원자 <b>${changedCount}명</b></span>
-  <button type="button" class="btn btn-primary btn-sm" data-dialog="dlg-recheck">지금 평가 기준으로 다시 검사</button>
+  <span class="rk-notice-text">평가 기준·조건이 바뀐 뒤 아직 다시 검사하지 않은 지원자 <b>${changedCount}명</b></span>
+  <button type="button" class="btn btn-primary btn-sm" data-dialog="dlg-recheck">지금 기준으로 다시 검사</button>
 </div>
 <dialog class="pf-dialog rk-dialog" id="dlg-recheck">
   <header><h3>${changedCount}명 다시 검사</h3><button type="button" class="icon-btn" data-close title="닫기"><svg class="i"><use href="#i-x"/></svg></button></header>
@@ -89,7 +89,7 @@
               <c:set var="s" value="${row.score}"/>
               <tr class="rk-row is-${row.state}"${row.state != 'RANKED' ? ' hidden' : ''} data-interviewed="${not empty row.interviewDate}" data-decision="${row.decision}" data-engineer="${row.infoEngineer}" data-sqld="${row.sqld}">
                 <td class="rk-no">${empty row.rank ? '' : row.rank.toString().concat('등')}</td>
-                <td class="rk-name"><span class="rk-who"><c:out value="${row.displayName}"/></span><c:if test="${changedIds.contains(row.candidateId) and not row.inProgress}"><small class="rk-why rk-old">이전 평가 기준</small></c:if><c:if test="${not empty row.exclusion}"><small class="rk-why">${row.exclusion}</small></c:if></td>
+                <td class="rk-name"><span class="rk-who"><c:out value="${row.displayName}"/></span><c:if test="${changedIds.contains(row.candidateId) and not row.inProgress}"><small class="rk-why rk-old">${criteriaChangedIds.contains(row.candidateId) ? '이전 평가 기준' : '이전 조건'}</small></c:if><c:if test="${not empty row.exclusion}"><small class="rk-why">${row.exclusion}</small></c:if></td>
                 <c:choose>
                   <c:when test="${empty s}">
                     <td class="rk-pending" colspan="2"><span class="muted">${row.statusLabel}</span></td>

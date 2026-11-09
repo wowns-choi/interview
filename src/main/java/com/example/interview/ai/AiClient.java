@@ -50,20 +50,28 @@ public class AiClient {
     private final AiCallLogger callLogger;
     /** 설정 탭에서 바꿀 수 있는 API 키 */
     private final ApiKeyStore apiKeys;
+    /** 설정 탭 「로컬 AI로 처리」. null이면 늘 GPT */
+    private final LocalAiSwitch localSwitch;
     private final ObjectMapper objectMapper = JsonMapper.builder()
             .disable(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES)
             .build();
 
     public AiClient(RestClient aiRestClient, AiProperties props, RestClient localAiRestClient,
             LocalAiProperties localProps, AiCallLogger callLogger) {
-        this(aiRestClient, props, localAiRestClient, localProps, callLogger, new ApiKeyStore(props));
+        this(aiRestClient, props, localAiRestClient, localProps, callLogger, new ApiKeyStore(props), null);
+    }
+
+    public AiClient(RestClient aiRestClient, AiProperties props, RestClient localAiRestClient,
+            LocalAiProperties localProps, AiCallLogger callLogger, ApiKeyStore apiKeys) {
+        this(aiRestClient, props, localAiRestClient, localProps, callLogger, apiKeys, null);
     }
 
     @Autowired
     public AiClient(@Qualifier("aiRestClient") RestClient aiRestClient, AiProperties props,
             @Qualifier("localAiRestClient") RestClient localAiRestClient, LocalAiProperties localProps,
-            AiCallLogger callLogger, ApiKeyStore apiKeys) {
+            AiCallLogger callLogger, ApiKeyStore apiKeys, LocalAiSwitch localSwitch) {
         this.apiKeys = apiKeys;
+        this.localSwitch = localSwitch;
         this.restClient = aiRestClient;
         this.props = props;
         this.localRestClient = localAiRestClient;
@@ -84,6 +92,14 @@ public class AiClient {
      */
     public <T> T call(AiPurpose purpose, Long refId, String systemPrompt, String userContent,
             List<AiImage> images, Class<T> type, Consumer<T> validator) {
+        if (routesLocal(purpose) && (images == null || images.isEmpty())) {
+            // 설정 탭 「로컬 AI로 처리」: 같은 프롬프트를 로컬로, JSON으로만 답하게 한다
+            List<Map<String, Object>> local = new ArrayList<>();
+            local.add(Map.of("role", "system", "content", systemPrompt));
+            local.add(Map.of("role", "user", "content", userContent));
+            return withRetry(purpose, refId, local,
+                    () -> sendLocal(purpose, refId, local, "json", localProps.taskNumCtx()), type, validator);
+        }
         if (!apiKeys.isSet()) {
             throw new AiCallException("AI API 키가 설정되지 않았습니다. 설정 탭에서 GPT API 키를 넣으세요.");
         }
@@ -99,12 +115,17 @@ public class AiClient {
      */
     public String chatStream(AiPurpose purpose, Long refId, String systemPrompt, List<Map<String, String>> turns,
             Consumer<String> onDelta) {
-        if (!apiKeys.isSet()) {
+        boolean local = routesLocal(purpose);
+        if (!local && !apiKeys.isSet()) {
             throw new AiCallException("AI API 키가 설정되지 않았습니다. 설정 탭에서 GPT API 키를 넣으세요.");
         }
         List<Map<String, Object>> messages = new ArrayList<>();
         messages.add(Map.of("role", "system", "content", systemPrompt));
         turns.forEach(t -> messages.add(Map.of("role", t.get("role"), "content", t.get("content"))));
+        if (local) {
+            // 설정 탭 「로컬 AI로 처리」: 글로 답하는 스트림 (JSON 형식 강제 없음)
+            return sendLocalStream(purpose, refId, messages, null, onDelta).strip();
+        }
         boolean[] started = { false };
         Consumer<String> sink = d -> {
             started[0] = true;
@@ -127,13 +148,15 @@ public class AiClient {
      */
     public <T> T streamJson(AiPurpose purpose, Long refId, String systemPrompt, String userContent,
             Class<T> type, Consumer<T> validator, Consumer<String> onDelta) {
-        if (!apiKeys.isSet()) {
+        boolean local = routesLocal(purpose);
+        if (!local && !apiKeys.isSet()) {
             throw new AiCallException("AI API 키가 설정되지 않았습니다. 설정 탭에서 GPT API 키를 넣으세요.");
         }
         List<Map<String, Object>> messages = new ArrayList<>();
         messages.add(Map.of("role", "system", "content", systemPrompt));
         messages.add(Map.of("role", "user", "content", userContent));
-        String text = sendStream(purpose, refId, messages, onDelta, true);
+        String text = local ? sendLocalStream(purpose, refId, messages, "json", onDelta)
+                : sendStream(purpose, refId, messages, onDelta, true);
         try {
             T result = parse(text, type);
             validator.accept(result);
@@ -249,6 +272,114 @@ public class AiClient {
     }
 
     /**
+     * Ollama 스트림(/api/chat, stream=true): 한 줄에 JSON 하나씩 온다. 생각(thinking) 조각은 넘기지 않고 답(content) 조각만 넘긴다.
+     *
+     * @param format "json"이면 JSON으로만 답하게 하고, null이면 글로 답한다
+     */
+    private String sendLocalStream(AiPurpose purpose, Long refId, List<Map<String, Object>> messages, Object format,
+            Consumer<String> onDelta) {
+        Map<String, Object> body = new LinkedHashMap<>();
+        body.put("model", localProps.model());
+        body.put("messages", messages);
+        body.put("stream", true);
+        if (format != null) {
+            body.put("format", format);
+        }
+        body.put("options", Map.of("temperature", 0, "num_ctx", localProps.taskNumCtx()));
+        body.put("keep_alive", localProps.keepAlive());
+        if (localProps.think() != null) {
+            body.put("think", localProps.think());
+        }
+
+        AiCallLog callLog = new AiCallLog();
+        callLog.setPurpose(purpose);
+        callLog.setRefId(refId);
+        callLog.setModel(localProps.model());
+        callLog.setSuccessYn("N");
+        long start = System.currentTimeMillis();
+        StringBuilder text = new StringBuilder();
+        long[] firstDelta = { 0 };
+        int[] thinkingChars = { 0 };
+        String[] doneReason = { "" };
+        try {
+            localRestClient.post()
+                    .uri("/api/chat")
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .body(body)
+                    .exchange((req, res) -> {
+                        if (res.getStatusCode().isError()) {
+                            String err = new String(res.getBody().readAllBytes(), java.nio.charset.StandardCharsets.UTF_8);
+                            throw new AiCallException("로컬 AI 오류 HTTP " + res.getStatusCode().value() + ": " + abbreviate(err));
+                        }
+                        try (java.io.BufferedReader reader = new java.io.BufferedReader(
+                                new java.io.InputStreamReader(res.getBody(), java.nio.charset.StandardCharsets.UTF_8))) {
+                            String line;
+                            while ((line = reader.readLine()) != null) {
+                                if (line.isBlank()) {
+                                    continue;
+                                }
+                                JsonNode chunk = objectMapper.readTree(line);
+                                if (chunk.hasNonNull("error")) {
+                                    throw new AiCallException("로컬 AI 오류: " + chunk.path("error").asString(""));
+                                }
+                                JsonNode message = chunk.path("message");
+                                thinkingChars[0] += message.path("thinking").asString("").length();
+                                String delta = message.path("content").asString("");
+                                if (!delta.isEmpty()) {
+                                    if (firstDelta[0] == 0) {
+                                        firstDelta[0] = System.currentTimeMillis();
+                                    }
+                                    text.append(delta);
+                                    onDelta.accept(delta);
+                                }
+                                if (chunk.path("done").asBoolean(false)) {
+                                    callLog.setInputTokens(chunk.path("prompt_eval_count").asInt());
+                                    callLog.setOutputTokens(chunk.path("eval_count").asInt());
+                                    doneReason[0] = chunk.path("done_reason").asString("");
+                                    break;
+                                }
+                            }
+                        }
+                        return null;
+                    });
+            callLog.setLatencyMs(elapsed(start));
+            log.info("[시간] 로컬 {} refId={} model={} 스트림 {}ms (첫 글자 {}ms) 토큰 입력={} 출력={} 생각 {}자 답 {}자 done={}",
+                    purpose, refId, localProps.model(), callLog.getLatencyMs(),
+                    firstDelta[0] == 0 ? -1 : firstDelta[0] - start, callLog.getInputTokens(), callLog.getOutputTokens(),
+                    thinkingChars[0], text.length(), doneReason[0]);
+            int in = callLog.getInputTokens() == null ? 0 : callLog.getInputTokens();
+            int out = callLog.getOutputTokens() == null ? 0 : callLog.getOutputTokens();
+            if (in + out >= localProps.taskNumCtx()) {
+                throw new AiInputTooLongException("로컬 AI 입력 한도(num_ctx=" + localProps.taskNumCtx() + ")를 넘어 입력이 잘렸습니다.");
+            }
+            if (text.isEmpty()) {
+                throw new AiCallException("로컬 AI 응답에 텍스트가 없습니다. (done_reason=" + doneReason[0] + ")");
+            }
+            callLog.setSuccessYn("Y");
+            return text.toString();
+        } catch (AiCallException e) {
+            callLog.setLatencyMs(elapsed(start));
+            callLog.setErrorMessage(e.getMessage());
+            throw e;
+        } catch (RuntimeException e) {
+            callLog.setLatencyMs(elapsed(start));
+            callLog.setErrorMessage(e.getClass().getSimpleName() + ": " + e.getMessage());
+            throw new AiCallException("로컬 AI 호출 실패: " + e.getMessage(), e);
+        } finally {
+            try {
+                callLogger.log(callLog);
+            } catch (RuntimeException logError) {
+                log.error("ai_call_log 저장 실패", logError);
+            }
+        }
+    }
+
+    /** 설정 탭 스위치가 켜져 있고 로컬로 보낼 수 있는 작업인지 */
+    private boolean routesLocal(AiPurpose purpose) {
+        return localSwitch != null && localSwitch.routesLocal(purpose);
+    }
+
+    /**
      * 로컬 AI(Ollama)를 호출한다. 출력은 schema(JSON Schema)로 강제한다.
      */
     public <T> T callLocal(AiPurpose purpose, Long refId, String systemPrompt, String userContent,
@@ -256,7 +387,8 @@ public class AiClient {
         List<Map<String, Object>> messages = new ArrayList<>();
         messages.add(Map.of("role", "system", "content", systemPrompt));
         messages.add(Map.of("role", "user", "content", userContent));
-        return withRetry(purpose, refId, messages, () -> sendLocal(purpose, refId, messages, schema), type, validator);
+        return withRetry(purpose, refId, messages, () -> sendLocal(purpose, refId, messages, schema, localProps.numCtx()),
+                type, validator);
     }
 
     private <T> T withRetry(AiPurpose purpose, Long refId, List<Map<String, Object>> messages,
@@ -367,14 +499,15 @@ public class AiClient {
     }
 
     /** Ollama 고유 API(/api/chat). OpenAI 호환 API로는 num_ctx를 정할 수 없어 긴 이력서가 잘린다. */
+    /** @param format JSON Schema, 또는 아무 JSON이면 "json" */
     private String sendLocal(AiPurpose purpose, Long refId, List<Map<String, Object>> messages,
-            Map<String, Object> schema) {
+            Object format, int numCtx) {
         Map<String, Object> body = new LinkedHashMap<>();
         body.put("model", localProps.model());
         body.put("messages", messages);
         body.put("stream", false);
-        body.put("format", schema);
-        body.put("options", Map.of("temperature", 0, "num_ctx", localProps.numCtx()));
+        body.put("format", format);
+        body.put("options", Map.of("temperature", 0, "num_ctx", numCtx));
         body.put("keep_alive", localProps.keepAlive());
         if (localProps.think() != null) {
             body.put("think", localProps.think());
@@ -409,8 +542,8 @@ public class AiClient {
                     response.path("load_duration").asLong() / 1_000_000, response.path("prompt_eval_duration").asLong() / 1_000_000,
                     response.path("eval_duration").asLong() / 1_000_000, inputTokens, outputTokens,
                     thinking.length(), text == null ? 0 : text.length());
-            if (inputTokens + outputTokens >= localProps.numCtx()) {
-                throw new AiInputTooLongException("로컬 AI 입력 한도(num_ctx=" + localProps.numCtx() + ")를 넘어 입력이 잘렸습니다.");
+            if (inputTokens + outputTokens >= numCtx) {
+                throw new AiInputTooLongException("로컬 AI 입력 한도(num_ctx=" + numCtx + ")를 넘어 입력이 잘렸습니다.");
             }
             if (text == null || text.isBlank()) {
                 throw new AiCallException("로컬 AI 응답에 텍스트가 없습니다. (done_reason="

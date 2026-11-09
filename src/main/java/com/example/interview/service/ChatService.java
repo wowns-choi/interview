@@ -160,7 +160,7 @@ public class ChatService {
         RequirementFit fit = r.getFit();
         CareerEvalResult eval = r.getCareerEval();
         sb.append("<profile>\n");
-        sb.append("경력 조건: ").append(orNone(position.getRequiredExperience()));
+        sb.append("경력 조건: ").append(orNone(r.getCareerRequirement()));
         if (eval != null && eval.getTotalMonths() != null) {
             sb.append(" / 지원자 총 경력 ").append(months(eval.getTotalMonths()));
             if (eval.getRelevantMonths() != null) {

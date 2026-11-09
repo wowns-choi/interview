@@ -24,7 +24,7 @@ class CareerGaugeTest {
 
     @Test
     void shortCareerFillsPartOfTheBar() {
-        CareerGauge g = CareerGauge.of(profile("총 2년 3개월"), "경력 5년 ↑", null);
+        CareerGauge g = CareerGauge.of(profile("총 2년 3개월"), 60, null);
 
         assertThat(g.isOver()).isFalse();
         assertThat(g.getTotalPercent()).isEqualTo(45);
@@ -34,7 +34,7 @@ class CareerGaugeTest {
 
     @Test
     void usesExternalAiNumbersAndComparesRelevantCareerWithPosting() {
-        CareerGauge g = CareerGauge.of(profile("총 1년"), "5년 이상", eval(96, 72));
+        CareerGauge g = CareerGauge.of(profile("총 1년"), 60, eval(96, 72));
 
         assertThat(g.getActualText()).isEqualTo("8년");
         assertThat(g.getTotalPercent()).isEqualTo(100);
@@ -46,12 +46,12 @@ class CareerGaugeTest {
 
     @Test
     void barWithoutMarkWhenPostingHasNoYears() {
-        CareerGauge g = CareerGauge.of(profile(""), "경력 무관", eval(27, 10));
+        CareerGauge g = CareerGauge.of(profile(""), null, eval(27, 10));
 
         assertThat(g.getMarkPercent()).isNull();
         assertThat(g.getTotalPercent()).isEqualTo(100);
         assertThat(g.isOver()).isFalse();
-        assertThat(CareerGauge.of(profile(""), "경력 무관", eval(0, 0))).isNull();
+        assertThat(CareerGauge.of(profile(""), null, eval(0, 0))).isNull();
     }
 
     @Test
@@ -59,16 +59,16 @@ class CareerGaugeTest {
         CandidateProfile p = profile("");
         p.setCareers(List.of(career("1년 11개월"), career("4개월")));
 
-        CareerGauge g = CareerGauge.of(p, "3년", null);
+        CareerGauge g = CareerGauge.of(p, 36, null);
 
         assertThat(g.getActualText()).isEqualTo("2년 3개월");
     }
 
     @Test
     void noBarWithoutNumbers() {
-        assertThat(CareerGauge.of(profile("총 2년"), "경력 무관", null)).isNull();
-        assertThat(CareerGauge.of(profile(""), "3년", null)).isNull();
-        assertThat(CareerGauge.of(null, "3년", null)).isNull();
+        assertThat(CareerGauge.of(profile("총 2년"), null, null)).isNull();
+        assertThat(CareerGauge.of(profile(""), 36, null)).isNull();
+        assertThat(CareerGauge.of(null, 36, null)).isNull();
     }
 
     private static CareerEvalResult eval(int total, int relevant) {
@@ -88,14 +88,5 @@ class CareerGaugeTest {
         CandidateProfile.Career c = new CandidateProfile.Career();
         c.setDuration(duration);
         return c;
-    }
-
-    @Test
-    void downArrowIsAnUpperBound() {
-        assertThat(CareerGauge.maxMonths("신입·경력 3년 ↓")).isEqualTo(36);
-        assertThat(CareerGauge.minMonths("신입·경력 3년 ↓")).isNull();
-        assertThat(CareerGauge.meets("신입·경력 3년 ↓", 27)).isTrue();
-        assertThat(CareerGauge.meets("신입·경력 3년 ↓", 40)).isFalse();
-        assertThat(CareerGauge.minMonths("경력 5년 ↑")).isEqualTo(60);
     }
 }

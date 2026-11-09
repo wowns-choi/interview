@@ -9,12 +9,13 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.servlet.mvc.support.RedirectAttributes;
 
 import com.example.interview.ai.ApiKeyStore;
+import com.example.interview.ai.LocalAiSwitch;
 import com.example.interview.service.OllamaStatusService;
 import com.example.interview.service.PrivacyModeService;
 
 import lombok.RequiredArgsConstructor;
 
-/** "설정" 탭: GPT API 키, 로컬 AI(Ollama) 상태, 개인정보 엄격 보호 모드 */
+/** "설정" 탭: GPT API 키, 로컬 AI(Ollama) 상태, 로컬 AI로 처리 스위치, 개인정보 엄격 보호 모드 */
 @Controller
 @RequestMapping("/settings")
 @RequiredArgsConstructor
@@ -23,11 +24,13 @@ public class SettingsController {
     private final ApiKeyStore apiKeys;
     private final OllamaStatusService ollama;
     private final PrivacyModeService privacyMode;
+    private final LocalAiSwitch localAi;
 
     @GetMapping
     public String page(Model model) {
         model.addAttribute("apiKey", apiKeys);
         model.addAttribute("ollama", ollama.status());
+        model.addAttribute("localAiOn", localAi.isOn());
         return "settings";
     }
 
@@ -39,6 +42,14 @@ public class SettingsController {
         // 적합도 검사 화면의 스위치는 그 화면으로 돌아간다. 이 앱 안의 경로만 받는다
         boolean local = back.startsWith("/") && !back.startsWith("//") && !back.contains("\\");
         return "redirect:" + (local ? back : "/settings");
+    }
+
+    /** GPT 대신 로컬 AI로 처리 (사용자 2026-11-09: 발표에서 같은 작업의 시간을 견주려고) */
+    @PostMapping("/local-ai")
+    public String saveLocalAi(@RequestParam(defaultValue = "false") boolean on, RedirectAttributes ra) {
+        localAi.set(on);
+        ra.addFlashAttribute("message", on ? "로컬 AI로 처리합니다." : "GPT로 처리합니다.");
+        return "redirect:/settings";
     }
 
     @PostMapping("/api-key")

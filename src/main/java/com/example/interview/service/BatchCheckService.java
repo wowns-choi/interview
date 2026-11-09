@@ -2,6 +2,8 @@ package com.example.interview.service;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -125,7 +127,8 @@ public class BatchCheckService {
     }
 
     /**
-     * 검사한 때의 평가 기준이 지금과 다른 지원자를 지금 기준으로 차례로 다시 검사한다 (사용자 2026-10-28).
+     * 검사한 때의 평가 기준이나 경력·학력 조건이 지금과 다른 지원자를 지금 기준으로 차례로 다시 검사한다 (사용자 2026-10-28, 조건 2026-11-09).
+     * 평가 기준이 바뀌었으면 전체 검사, 조건만 바뀌었으면 그 판단만 다시 묻는다.
      * 가린 이력서는 그대로 쓰고, 질문지와 답변은 남는다.
      *
      * @return 다시 검사에 넣은 인원
@@ -134,12 +137,32 @@ public class BatchCheckService {
         if (positionService.criteria(positionId).isEmpty()) {
             throw new BusinessException("평가 기준이 없습니다.");
         }
-        List<Long> ids = rankingService.changedCandidates(positionId);
-        for (Long id : ids) {
+        Map<Long, Set<RankingService.Change>> changes = rankingService.changes(positionId);
+        changes.forEach((id, change) -> {
+            if (change.contains(RankingService.Change.CRITERIA)) {
+                candidateMapper.updateStatus(id, CandidateStatus.QUEUED, null);
+                worker.submit(() -> recheck(id));
+                return;
+            }
+            // 조건만 바뀌었으면 그 판단만 다시 묻고 원래 상태로 돌려 둔다 (사용자 2026-11-09)
+            Candidate before = candidateService.get(id);
             candidateMapper.updateStatus(id, CandidateStatus.QUEUED, null);
-            worker.submit(() -> recheck(id));
+            worker.submit(() -> rejudge(id, change, before.getStatus(), before.getErrorMessage()));
+        });
+        return changes.size();
+    }
+
+    private void rejudge(Long candidateId, Set<RankingService.Change> change, CandidateStatus status, String error) {
+        if (candidateMapper.findById(candidateId) == null) {
+            return; // 기다리는 동안 삭제됨
         }
-        return ids.size();
+        try {
+            candidateMapper.updateStatus(candidateId, CandidateStatus.ANALYZING, null);
+            extractionService.rejudgeConditions(candidateId, change.contains(RankingService.Change.CAREER),
+                    change.contains(RankingService.Change.EDUCATION));
+        } finally {
+            candidateMapper.updateStatus(candidateId, status, error);
+        }
     }
 
     private void recheck(Long candidateId) {

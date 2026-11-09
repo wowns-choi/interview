@@ -46,7 +46,6 @@ import com.example.interview.resume.ResumeProcessingException;
 import com.example.interview.service.BatchCheckService;
 import com.example.interview.service.BusinessException;
 import com.example.interview.service.CandidateService;
-import com.example.interview.service.CareerEvalService;
 import com.example.interview.service.CustomQuestionTypeService;
 import com.example.interview.service.ExtractionService;
 import com.example.interview.service.InterviewRecordService;
@@ -85,7 +84,6 @@ public class ExtractController {
     private final BatchCheckService batchCheckService;
     private final CandidateService candidateService;
     private final CustomQuestionTypeService customQuestionTypeService;
-    private final CareerEvalService careerEvalService;
     private final PrivacyModeService privacyMode;
 
     /** 개인정보 엄격 보호 모드: 지원자 한 명씩, 가린 이력서를 확인한 뒤 검사 */
@@ -192,12 +190,12 @@ public class ExtractController {
     @PatchMapping("/positions/{id}/conditions")
     @ResponseBody
     public ResponseEntity<Void> updateConditions(@PathVariable Long id, @RequestBody Map<String, String> body) {
-        String before = positionService.get(id).getRequiredExperience();
+        // 검사를 마친 지원자의 경력·학력 판단은 검사 당시 조건 그대로 둔다. 다시 검사는 지원자 비교에서 (사용자 2026-11-09)
         positionService.updateConditions(id, body.get("requiredExperience"), body.get("requiredEducation"),
                 body.get("requiredMajor"));
-        // 경력 조건이 바뀌면 검사를 마친 지원자의 경력 판단을 뒤에서 다시 묻는다 (이력서는 보내지 않는다)
-        if (!java.util.Objects.equals(before, positionService.get(id).getRequiredExperience())) {
-            careerEvalService.rejudgeCareer(id);
+        // 경력 칸을 고쳤을 때만 개월을 바꾼다 (학력만 고치면 AI ①이 정한 범위를 그대로 둔다)
+        if (body.containsKey("expKind")) {
+            positionService.updateCareerRange(id, body.get("expKind"), body.get("expYears"));
         }
         return ResponseEntity.noContent().build();
     }
@@ -511,9 +509,13 @@ public class ExtractController {
             model.addAttribute("excludedCount", rows.stream().filter(r -> "EXCLUDED".equals(r.getState())).count());
             model.addAttribute("uncheckedCount", rows.stream().filter(r -> "UNCHECKED".equals(r.getState())).count());
             model.addAttribute("staleCount", rows.stream().filter(r -> "STALE".equals(r.getState())).count());
-            java.util.Set<Long> changed = new java.util.HashSet<>(rankingService.changedCandidates(id));
-            model.addAttribute("changedIds", changed);
-            model.addAttribute("changedCount", changed.size());
+            java.util.Map<Long, java.util.Set<RankingService.Change>> changes = rankingService.changes(id);
+            model.addAttribute("changedIds", changes.keySet());
+            // 평가 기준이 바뀐 지원자는 「이전 평가 기준」, 조건만 바뀐 지원자는 「이전 조건」
+            model.addAttribute("criteriaChangedIds", changes.entrySet().stream()
+                    .filter(e -> e.getValue().contains(RankingService.Change.CRITERIA)).map(java.util.Map.Entry::getKey)
+                    .collect(java.util.stream.Collectors.toSet()));
+            model.addAttribute("changedCount", changes.size());
             model.addAttribute("rankBusy", rows.stream().anyMatch(RankingRow::isInProgress));
         }
         return "ranking";

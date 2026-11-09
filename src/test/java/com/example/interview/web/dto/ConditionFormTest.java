@@ -4,22 +4,27 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import org.junit.jupiter.api.Test;
 
+import com.example.interview.domain.CareerRange;
 import com.example.interview.domain.Position;
 
 class ConditionFormTest {
 
     @Test
-    void readsPostingWordingIntoDropdownChoices() {
-        assertThat(form("경력 5년 ↑", "학력무관"))
+    void readsStoredMonthsIntoDropdownChoices() {
+        assertThat(form("경력 5년 ↑", 60, null, "학력무관"))
                 .extracting("expKind", "expYears", "eduLevel")
                 .containsExactly("MIN", 5, "ANY");
-        assertThat(form("경력 3년 이하", "대졸(4년제) 이상"))
+        assertThat(form("경력 3년 이하", null, 36, "대졸(4년제) 이상"))
                 .extracting("expKind", "expYears", "eduLevel")
                 .containsExactly("MAX", 3, "UNIV");
-        assertThat(form("신입·경력", "초대졸(2·3년제) 이상"))
+        assertThat(form("신입·경력 3년 ↓", 0, 36, null))
+                .extracting("expKind", "expYears").as("신입 가능하면 상한").containsExactly("MAX", 3);
+        assertThat(form("경력 2~5년", 24, 60, null))
+                .extracting("expKind", "expYears").as("범위는 하한").containsExactly("MIN", 2);
+        assertThat(form("신입·경력", null, null, "초대졸(2·3년제) 이상"))
                 .extracting("expKind", "expYears", "eduLevel")
                 .containsExactly("ANY", null, "COLLEGE");
-        assertThat(form(null, null))
+        assertThat(form(null, null, null, null))
                 .extracting("expKind", "eduLevel")
                 .containsExactly("", "");
         assertThat(ConditionForm.education("고졸 이상")).isEqualTo("HIGH");
@@ -28,23 +33,28 @@ class ConditionFormTest {
     }
 
     @Test
-    void careerAtMostIsMetOnlyWhenShorter() {
-        assertThat(CareerGauge.meets("경력 3년 이하", 24)).isTrue();
-        assertThat(CareerGauge.meets("경력 3년 이하", 48)).isFalse();
-        assertThat(CareerGauge.meets("경력 3년 이상", 48)).isTrue();
-        assertThat(CareerGauge.meets("경력 3년 이상", 24)).isFalse();
-        // 하한과 상한이 함께 있으면 그 사이 (2년 3개월은 "2년 이상 10년 이하" 충족)
-        assertThat(CareerGauge.meets("경력 2년 이상 10년 이하", 27)).isTrue();
-        assertThat(CareerGauge.meets("경력 2년 이상 10년 이하", 20)).isFalse();
-        assertThat(CareerGauge.meets("경력 2년 이상 10년 이하", 121)).isFalse();
-        assertThat(CareerGauge.meets("3~5년", 48)).isTrue();
-        assertThat(CareerGauge.meets("3~5년", 72)).isFalse();
-        assertThat(CareerGauge.meets("경력 1년 미만", 6)).isTrue();
+    void careerRangeComparesBothBounds() {
+        assertThat(CareerRange.meets(null, 36, 24)).isTrue();
+        assertThat(CareerRange.meets(null, 36, 48)).isFalse();
+        assertThat(CareerRange.meets(36, null, 48)).isTrue();
+        assertThat(CareerRange.meets(36, null, 24)).isFalse();
+        assertThat(CareerRange.meets(24, 120, 27)).isTrue();
+        assertThat(CareerRange.meets(24, 120, 20)).isFalse();
+        assertThat(CareerRange.meets(24, 120, 121)).isFalse();
+        assertThat(CareerRange.meets(0, 36, 0)).as("신입").isTrue();
+        assertThat(CareerRange.meets(null, null, null)).as("경력무관").isTrue();
+        assertThat(CareerRange.meets(36, null, null)).as("경력을 못 셈").isNull();
+        assertThat(CareerRange.fromChoice("MIN", "3")).containsExactly(36, null);
+        assertThat(CareerRange.fromChoice("MAX", "2")).containsExactly(null, 24);
+        assertThat(CareerRange.fromChoice("ANY", "")).containsExactly(null, null);
+        assertThat(CareerRange.describe(0, 36)).isEqualTo("0~36개월");
     }
 
-    private static ConditionForm form(String experience, String education) {
+    private static ConditionForm form(String experience, Integer min, Integer max, String education) {
         Position p = new Position();
         p.setRequiredExperience(experience);
+        p.setCareerMinMonths(min);
+        p.setCareerMaxMonths(max);
         p.setRequiredEducation(education);
         return ConditionForm.of(p);
     }

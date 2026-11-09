@@ -9,7 +9,7 @@ import com.example.interview.domain.AiPurpose;
 /**
  * AI 호출 설정. 키와 모델 이름은 코드에 두지 않고 설정·환경변수로만 받는다.
  *
- * @param reasoningModel     근거 분석·학력·경력 판단·AI 의견(EVIDENCE, EDUCATION_EVAL, CAREER_MEETS, OPINION)에 쓰는 추론 모델. 비우면 model을 쓴다
+ * @param reasoningModel     근거 분석·학력·AI 의견(EVIDENCE, EDUCATION_EVAL, OPINION)에 쓰는 추론 모델. 비우면 model을 쓴다
  *                           (겹치는 재직 기간 계산은 추론 모델만 정확해서 따로 둔다)
  * @param reasoningMaxTokens 추론 모델의 출력 토큰 한도. 추론에 쓰는 토큰도 여기에 포함된다
  * @param maxTokensParam     요청 본문에서 출력 토큰 한도를 담는 필드 이름
@@ -38,7 +38,7 @@ public record AiProperties(
         String evidenceReasoningEffort,
         String recordReasoningEffort) {
 
-    private static final Set<AiPurpose> REASONING = Set.of(AiPurpose.EVIDENCE, AiPurpose.EDUCATION_EVAL, AiPurpose.CAREER_MEETS, AiPurpose.OPINION,
+    private static final Set<AiPurpose> REASONING = Set.of(AiPurpose.EVIDENCE, AiPurpose.EDUCATION_EVAL, AiPurpose.OPINION,
             AiPurpose.INTERVIEW_RECORD);
 
     public AiProperties {

@@ -4,7 +4,6 @@ import java.util.List;
 
 import com.example.interview.ai.dto.CareerEvalResult;
 import com.example.interview.domain.EvidenceType;
-import com.example.interview.domain.Position;
 
 import lombok.Value;
 
@@ -32,33 +31,19 @@ public class FitScore {
         }
     }
 
-    public static FitScore of(Position position, CareerEvalResult eval, CareerGauge gauge,
-            List<CriterionEvidenceView> criteria) {
+    public static FitScore of(CareerEvalResult eval, List<CriterionEvidenceView> criteria) {
         List<Item> items = criteria.stream()
                 .map(c -> new Item(c.getCriterion().getName(), c.isChecked() ? c.getMatch() : null))
                 .toList();
-        return new FitScore(career(position.getRequiredExperience(), gauge, eval), education(eval), items);
+        return new FitScore(career(eval), education(eval), items);
     }
 
-    /** 외부 AI가 지금 공고 조건으로 판단했으면 그 값(판단 못 함은 0), 아니면 코드로 비교 */
-    static int career(String required, CareerGauge gauge, CareerEvalResult eval) {
-        String verdict = eval == null || required == null || required.isBlank() ? null : eval.careerVerdict(required);
-        if (verdict == null) {
-            return career(required, gauge);
-        }
-        return "MET".equals(verdict) ? 1 : 0;
-    }
-
-    static int career(String required, CareerGauge gauge) {
-        Integer months = CareerGauge.months(required);
-        if (months == null || months == 0) {
-            return 1;
-        }
-        if (gauge == null) {
+    /** 검사 때 정한 경력 판정: 충족·조건 없음(UNKNOWN) 1, 미충족이나 경력을 못 셈 0 */
+    static int career(CareerEvalResult eval) {
+        if (eval == null || eval.getCareerMeets() == null) {
             return 0;
         }
-        int candidate = gauge.getRelevantMonths() != null ? gauge.getRelevantMonths() : gauge.getActualMonths();
-        return CareerGauge.meets(required, candidate) ? 1 : 0;
+        return "NOT_MET".equals(eval.getCareerMeets()) ? 0 : 1;
     }
 
     static int education(CareerEvalResult eval) {

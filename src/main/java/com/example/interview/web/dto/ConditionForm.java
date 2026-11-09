@@ -1,19 +1,15 @@
 package com.example.interview.web.dto;
 
-import java.util.regex.Pattern;
-
 import com.example.interview.domain.Position;
 
 import lombok.Value;
 
 /**
- * 경력·학력 조건 고치기 드롭다운의 처음 선택값. 공고 표기(AI ①이 옮긴 글)를 읽어 고른다.
+ * 경력·학력 조건 고치기 드롭다운의 처음 선택값. 경력은 저장된 개월(하한·상한)로, 학력은 공고 표기를 읽어 고른다.
  * 저장할 때는 화면이 정해진 문장("경력 3년 이상", "대졸(4년제) 이상")으로 만들어 보낸다.
  */
 @Value
 public class ConditionForm {
-
-    private static final Pattern ANY = Pattern.compile("무관|신입");
 
     /** "", ANY(경력무관), MIN(N년 이상), MAX(N년 이하) */
     String expKind;
@@ -26,11 +22,16 @@ public class ConditionForm {
         String expKind = "";
         Integer years = null;
         if (exp != null && !exp.isBlank()) {
-            Integer months = CareerGauge.months(exp);
-            if (months != null && months > 0) {
-                years = Math.max(1, Math.round(months / 12f));
-                expKind = CareerGauge.atMost(exp) ? "MAX" : "MIN";
-            } else if (ANY.matcher(exp).find()) {
+            Integer min = p.getCareerMinMonths();
+            Integer max = p.getCareerMaxMonths();
+            // 드롭다운은 이상·이하 하나뿐이라 범위("2~5년")는 하한으로 보인다. 하한이 0이면(신입 가능) 상한으로
+            if (max != null && (min == null || min == 0)) {
+                expKind = "MAX";
+                years = Math.max(1, Math.round(max / 12f));
+            } else if (min != null && min > 0) {
+                expKind = "MIN";
+                years = Math.max(1, Math.round(min / 12f));
+            } else {
                 expKind = "ANY";
             }
         }

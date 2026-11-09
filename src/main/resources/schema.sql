@@ -41,6 +41,10 @@ ALTER TABLE position ADD COLUMN IF NOT EXISTS required_education VARCHAR(300);
 -- 요구 학과 (공고에 있으면 AI ①이 옮기고, 없어도 사용자가 적을 수 있다). 학력 판단 때 함께 본다
 ALTER TABLE position ADD COLUMN IF NOT EXISTS required_major VARCHAR(300);
 ALTER TABLE position ADD COLUMN IF NOT EXISTS conditions_edited BOOLEAN NOT NULL DEFAULT FALSE;
+-- 요구 경력을 개월로 (AI ①이 공고를 읽을 때 정하거나 사용자가 고른 값). 원문이 있는데 둘 다 NULL이면 경력무관.
+-- 경력 충족은 이 값과 근거 분석이 센 관련 경력 개월을 코드로 비교한다 (사용자 2026-11-09)
+ALTER TABLE position ADD COLUMN IF NOT EXISTS career_min_months INT;
+ALTER TABLE position ADD COLUMN IF NOT EXISTS career_max_months INT;
 -- 지원자 비교에서 경력·학력 미충족 지원자를 순위에서 뺄지 (포지션별)
 ALTER TABLE position ADD COLUMN IF NOT EXISTS exclude_career BOOLEAN NOT NULL DEFAULT FALSE;
 ALTER TABLE position ADD COLUMN IF NOT EXISTS exclude_education BOOLEAN NOT NULL DEFAULT FALSE;

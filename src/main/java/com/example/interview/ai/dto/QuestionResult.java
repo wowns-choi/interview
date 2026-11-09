@@ -38,9 +38,9 @@ public class QuestionResult {
     }
 
     /**
-     * 쓸 수 없는 질문은 버리고 남은 것만 쓴다. 하나도 남지 않을 때만 실패(재시도).
-     * 근거 질문은 보낸 직접·간접 근거를 가리켜야 하고 평가항목은 그 근거의 것으로 맞춘다.
-     * "해본 적 있어?"는 직접 근거가 없는 평가항목만 가리킨다.
+     * 내용이 없거나 고르지 않은 유형인 질문만 버린다. 하나도 남지 않을 때만 실패(재시도).
+     * 근거·평가항목 연결은 있으면 쓰고 없어도 질문은 남긴다 (사용자 2026-11-09: 로컬 AI가 근거 번호를 비워 질문 대부분이 버려졌다):
+     * 근거 번호가 보낸 직접·간접 근거를 가리키면 평가항목은 그 근거의 것, 아니면 AI가 적은 평가항목(이 포지션의 것일 때만), 둘 다 아니면 연결 없음.
      *
      * @param types              고른 유형 이름
      * @param claimRefs          근거 참조값(1부터) → 그 근거의 평가항목 id. 직접·간접 근거만
@@ -49,11 +49,13 @@ public class QuestionResult {
      */
     public void validate(Set<String> types, Map<Long, Long> claimRefs, Set<Long> experienceCriteria,
             Set<String> claimTypes) {
-        validate(types, claimRefs, experienceCriteria, claimTypes, Set.of(), Set.of());
+        Set<Long> criteriaIds = new java.util.HashSet<>(claimRefs.values());
+        criteriaIds.addAll(experienceCriteria);
+        validate(types, claimRefs, experienceCriteria, claimTypes, Set.of(), criteriaIds);
     }
 
     /**
-     * @param customTypes 면접관이 직접 적은 유형의 코드 (CUSTOM_1…). 근거·평가항목은 있으면 맞는 것만 남기고 없어도 된다
+     * @param customTypes 면접관이 직접 적은 유형의 코드 (CUSTOM_1…)
      * @param criteriaIds 이 포지션의 평가항목 id
      */
     public void validate(Set<String> types, Map<Long, Long> claimRefs, Set<Long> experienceCriteria,
@@ -69,7 +71,7 @@ public class QuestionResult {
                 errors.add("questions[" + i + "].content 누락");
             } else if (!types.contains(q.questionType)) {
                 errors.add("questions[" + i + "].question_type은 " + String.join(", ", types) + " 중 하나여야 함");
-            } else if (customTypes.contains(q.questionType)) {
+            } else {
                 if (q.evidenceId != null && claimRefs.containsKey(q.evidenceId)) {
                     q.criterionId = claimRefs.get(q.evidenceId);
                 } else {
@@ -78,18 +80,6 @@ public class QuestionResult {
                         q.criterionId = null;
                     }
                 }
-                kept.add(q);
-            } else if (claimTypes.contains(q.questionType)) {
-                if (q.evidenceId == null || !claimRefs.containsKey(q.evidenceId)) {
-                    errors.add("questions[" + i + "].evidence_id는 <evidence>의 DIRECT/INDIRECT 근거여야 함");
-                } else {
-                    q.criterionId = claimRefs.get(q.evidenceId);
-                    kept.add(q);
-                }
-            } else if (q.criterionId == null || !experienceCriteria.contains(q.criterionId)) {
-                errors.add("questions[" + i + "].criterion_id는 <experience_criteria>의 평가항목이어야 함");
-            } else {
-                q.evidenceId = null;
                 kept.add(q);
             }
         }

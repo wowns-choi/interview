@@ -18,6 +18,11 @@
 - name은 짧은 명사구로(예: "대용량 트래픽 처리 경험"), description은 "무엇을 보면 충족인지"를 한 문장으로 씁니다.
 - position_title에는 포지션을 나타내는 짧은 제목(30자 이내, 예: "백엔드 개발자 (Java/Spring)")을 씁니다.
 - required_experience에는 공고에 적힌 요구 경력을 표기 그대로 옮깁니다 (예: "경력 3년 이상", "신입·경력", "경력 무관"). 공고 어디에도 없으면 빈 문자열("")입니다.
+- experience_min_months, experience_max_months에는 required_experience를 개월로 옮깁니다. 프로그램이 이 값과 지원자의 관련 경력 개월을 비교합니다.
+  - "3년 이상" → min 36, max null. "3년 미만" → min null, max 35. "3년 이하"·"3년 ↓"·"3년까지" → min null, max 36. "2~5년" → min 24, max 60.
+  - "신입"이 함께 있으면 min은 0입니다. "신입·경력 3년 ↓" → min 0, max 36. "신입"이나 "경력무관"만 있으면 둘 다 null입니다.
+  - "3년 내외"처럼 애매하면 채용 공고에서 흔히 쓰는 뜻으로 정합니다 (예: min 24, max 48).
+  - required_experience가 빈 문자열이면 둘 다 null입니다.
 - required_education에는 공고에 적힌 학력 조건을 표기 그대로 옮깁니다 (예: "학력무관", "대졸(4년) 이상", "초대졸 이상"). 공고 어디에도 없으면 빈 문자열("")입니다.
 - required_major에는 공고에 적힌 요구 학과·전공을 표기 그대로 옮깁니다 (예: "컴퓨터공학 등 관련 학과"). 공고 어디에도 없으면 빈 문자열("")입니다.
 - 연봉, 요구 경력, 학력 조건, 요구 학과는 평가항목(criteria)에 넣지 않습니다. 연차("5년 이상")와 학력은 항목의 name·description에도 쓰지 않습니다 (예: "Java/Spring 5년 이상 개발 경력" → "Java/Spring 기반 개발 경험"). 연차와 학력은 프로그램이 따로 비교합니다.
@@ -31,6 +36,8 @@
   "position_title": "백엔드 개발자 (Java/Spring)",
   "image_text": "",
   "required_experience": "경력 3년 이상",
+  "experience_min_months": 36,
+  "experience_max_months": null,
   "required_education": "대졸(4년) 이상",
   "required_major": "",
   "criteria": [

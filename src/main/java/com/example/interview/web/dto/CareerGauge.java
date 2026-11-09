@@ -19,8 +19,6 @@ public class CareerGauge {
 
     private static final Pattern YEARS = Pattern.compile("(\\d+(?:\\.\\d+)?)\\s*(?:[~～-]\\s*\\d+(?:\\.\\d+)?\\s*)?년");
     private static final Pattern MONTHS = Pattern.compile("(\\d+)\\s*개월");
-    private static final Pattern AT_MOST = Pattern.compile("이하|미만|까지|↓|⬇");
-    private static final Pattern RANGE = Pattern.compile("(\\d+(?:\\.\\d+)?)\\s*[~～-]\\s*(\\d+(?:\\.\\d+)?)\\s*년");
 
     int actualMonths;
     /** 공고 경력. 공고에 숫자가 없으면(신입, 경력 무관) null */
@@ -28,8 +26,9 @@ public class CareerGauge {
     /** 포지션 관련 경력. 적합도 검사 전이면 null */
     Integer relevantMonths;
 
-    public static CareerGauge of(CandidateProfile profile, String requiredExperience, CareerEvalResult eval) {
-        Integer required = months(requiredExperience);
+    /** @param requiredMonths 공고 경력 눈금 개월 (하한, 하한이 없으면 상한). 조건이 없으면 null */
+    public static CareerGauge of(CandidateProfile profile, Integer requiredMonths, CareerEvalResult eval) {
+        Integer required = requiredMonths;
         if (required != null && required == 0) {
             required = null;
         }
@@ -50,58 +49,6 @@ public class CareerGauge {
             actual = durations.stream().mapToInt(Integer::intValue).sum();
         }
         return new CareerGauge(actual, required, null);
-    }
-
-    /** "경력 3년 이하"처럼 공고 경력이 상한인지 */
-    public static boolean atMost(String text) {
-        return text != null && AT_MOST.matcher(text).find();
-    }
-
-    /**
-     * 공고 경력 조건을 채우는지. 하한과 상한을 모두 본다: "3년 이상" → 3년 이상, "3년 이하" → 3년 이하,
-     * "2년 이상 10년 이하"·"3~5년" → 그 사이.
-     */
-    static boolean meets(String required, int candidateMonths) {
-        Integer min = minMonths(required);
-        Integer max = maxMonths(required);
-        return (min == null || candidateMonths >= min) && (max == null || candidateMonths <= max);
-    }
-
-    /** 공고 경력 하한. "3년 이하"처럼 상한만 있으면 null */
-    static Integer minMonths(String text) {
-        if (atMost(text) && !RANGE.matcher(text).find() && yearCount(text) < 2) {
-            return null;
-        }
-        return months(text);
-    }
-
-    /** 공고 경력 상한. "3~5년" → 5년, "2년 이상 10년 이하" → 10년, "3년 이하" → 3년. 상한이 없으면 null */
-    static Integer maxMonths(String text) {
-        if (text == null) {
-            return null;
-        }
-        Matcher r = RANGE.matcher(text);
-        if (r.find()) {
-            return (int) Math.round(Double.parseDouble(r.group(2)) * 12);
-        }
-        if (!atMost(text)) {
-            return null;
-        }
-        Integer last = null;
-        Matcher y = YEARS.matcher(text);
-        while (y.find()) {
-            last = (int) Math.round(Double.parseDouble(y.group(1)) * 12);
-        }
-        return last != null ? last : months(text);
-    }
-
-    private static int yearCount(String text) {
-        int n = 0;
-        Matcher y = YEARS.matcher(text);
-        while (y.find()) {
-            n++;
-        }
-        return n;
     }
 
     /** "총 2년 3개월", "5년 ↑", "3~5년"·"2년 이상 10년 이하"(앞 숫자), "1.5년", "18개월" → 개월 수. 숫자가 없으면 null */

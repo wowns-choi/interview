@@ -51,7 +51,8 @@ public class ResultReport {
 
     /** 경력 막대. 공고 경력이나 지원자 경력을 숫자로 읽을 수 없으면 null */
     public CareerGauge getCareerGauge() {
-        return CareerGauge.of(profile, position.getRequiredExperience(), careerEval);
+        Integer min = getCareerMinMonths();
+        return CareerGauge.of(profile, min != null && min > 0 ? min : getCareerMaxMonths(), careerEval);
     }
 
     /** 이력 타임라인. 기간을 읽기 전이면 null */
@@ -61,26 +62,64 @@ public class ResultReport {
 
     /** 지원자 비교 점수. 적합도 검사 전이면 null */
     public FitScore getScore() {
-        return isFitChecked() ? FitScore.of(position, careerEval, getCareerGauge(), criteria) : null;
+        return isFitChecked() ? FitScore.of(careerEval, criteria) : null;
     }
 
     /** 경력·학력 충족 도장 */
     public RequirementFit getFit() {
-        return RequirementFit.of(position, careerEval, getCareerGauge());
+        return RequirementFit.of(careerEval);
     }
 
     /** 경력 카드: 포지션 관련 경력 vs 공고 경력 */
     public CompareLine getCareerLine() {
         return CompareLine.career(getCareerGauge(), profile == null ? null : profile.getTotalCareer(),
-                position.getRequiredExperience(), getFit().getCareer());
+                getCareerRequirement(), getCareerMinMonths(), getCareerMaxMonths(), getFit().getCareer());
+    }
+
+    private boolean careerSaved() {
+        return careerEval != null && careerEval.getCareerRequirement() != null;
+    }
+
+    /** 검사할 때의 요구 경력 하한 개월 */
+    public Integer getCareerMinMonths() {
+        return careerSaved() ? careerEval.getCareerMinMonths() : position.getCareerMinMonths();
+    }
+
+    /** 검사할 때의 요구 경력 상한 개월 */
+    public Integer getCareerMaxMonths() {
+        return careerSaved() ? careerEval.getCareerMaxMonths() : position.getCareerMaxMonths();
+    }
+
+    /** 검사할 때의 공고 경력 조건 (조건을 고쳐도 판정은 그대로, 사용자 2026-11-09) */
+    public String getCareerRequirement() {
+        return CareerEvalResult.checkedCareerRequirement(careerEval, position.getRequiredExperience());
     }
 
     /** 학력 카드: 최종 학력 vs 공고 학력, 학과 조건이 있으면 전공 줄까지. 조건은 검사 때 저장한 것을 먼저 쓴다 */
     public List<CompareLine> getEducationLines() {
-        boolean saved = careerEval != null && (careerEval.getRequiredEducation() != null || careerEval.getRequiredMajor() != null);
-        return CompareLine.education(careerEval, profile,
-                saved ? careerEval.getRequiredEducation() : position.getRequiredEducation(),
-                saved ? careerEval.getRequiredMajor() : position.getRequiredMajor(), getFit().getEducation());
+        return CompareLine.education(careerEval, profile, getEducationRequirement(), getMajorRequirement(),
+                getFit().getEducation());
+    }
+
+    private boolean educationSaved() {
+        return careerEval != null && (careerEval.getRequiredEducation() != null || careerEval.getRequiredMajor() != null);
+    }
+
+    /** 검사할 때의 학력 조건 (저장 전 검사면 지금 조건) */
+    public String getEducationRequirement() {
+        return educationSaved() ? careerEval.getRequiredEducation() : position.getRequiredEducation();
+    }
+
+    /** 검사할 때의 요구 학과 (저장 전 검사면 지금 조건) */
+    public String getMajorRequirement() {
+        return educationSaved() ? careerEval.getRequiredMajor() : position.getRequiredMajor();
+    }
+
+    /** 검사할 때 학력·학과 조건이 둘 다 없었는지 */
+    public boolean isEducationConditionEmpty() {
+        String e = getEducationRequirement();
+        String m = getMajorRequirement();
+        return (e == null || e.isBlank()) && (m == null || m.isBlank());
     }
 
     public long getDirectCount() {

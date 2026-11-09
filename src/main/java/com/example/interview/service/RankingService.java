@@ -2,20 +2,22 @@ package com.example.interview.service;
 
 import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.EnumSet;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
+import java.util.Set;
 
 import org.springframework.stereotype.Service;
 
 import com.example.interview.ai.dto.CareerEvalResult;
 import com.example.interview.domain.Candidate;
-import com.example.interview.domain.CandidateProfile;
 import com.example.interview.domain.CandidateStatus;
 import com.example.interview.domain.EvalCriterion;
 import com.example.interview.domain.Evidence;
 import com.example.interview.domain.Position;
 import com.example.interview.mapper.CandidateMapper;
 import com.example.interview.mapper.EvidenceMapper;
-import com.example.interview.web.dto.CareerGauge;
 import com.example.interview.web.dto.CriterionEvidenceView;
 import com.example.interview.web.dto.ExtractionSummary;
 import com.example.interview.web.dto.FitScore;
@@ -65,9 +67,7 @@ public class RankingService {
             boolean busy = s.getStatus() == CandidateStatus.QUEUED || s.getStatus() == CandidateStatus.MASKING
                     || s.getStatus() == CandidateStatus.ANALYZING;
             if (!busy && views.stream().anyMatch(CriterionEvidenceView::isChecked)) {
-                CandidateProfile profile = ReportService.parseProfile(c.getProfileJson());
-                CareerGauge gauge = CareerGauge.of(profile, position.getRequiredExperience(), eval);
-                score = FitScore.of(position, eval, gauge, views);
+                score = FitScore.of(eval, views);
                 relevant = eval == null ? null : eval.getRelevantMonths();
             }
             RankingRow row = new RankingRow(s.getCandidateId(), s.getDisplayName(), s.getStatus(), s.getCreatedAt(),
@@ -110,24 +110,68 @@ public class RankingService {
         return career ? "경력 미충족" : education ? "학력 미충족" : null;
     }
 
-    /** 검사한 때의 평가 기준이 지금과 다른 지원자 (검사 중인 지원자는 뺀다). 「n명 다시 검사」 버튼용 (사용자 2026-10-28) */
+    /** 검사한 뒤 바뀌어 다시 검사할 것 */
+    public enum Change { CRITERIA, CAREER, EDUCATION }
+
+    /** 다시 검사할 지원자 id (올린 순서) */
     public List<Long> changedCandidates(Long positionId) {
+        return new ArrayList<>(changes(positionId).keySet());
+    }
+
+    /**
+     * 검사한 때의 평가 기준이나 경력·학력 조건이 지금과 다른 지원자와 무엇이 바뀌었는지.
+     * 판정은 검사 당시 기준 그대로 두고, 다시 검사는 지원자 비교에서 한다 (평가 기준 2026-10-28, 조건 2026-11-09).
+     */
+    public Map<Long, Set<Change>> changes(Long positionId) {
+        Position position = positionService.get(positionId);
         List<EvalCriterion> all = positionService.allCriteria(positionId);
         List<EvalCriterion> current = all.stream().filter(c -> !"Y".equals(c.getDeletedYn())).toList();
-        List<Long> ids = new ArrayList<>();
+        Map<Long, Set<Change>> out = new LinkedHashMap<>();
         for (ExtractionSummary s : candidateMapper.findByPositionId(positionId)) {
-            // 다시 검사가 실패했어도(서버 재시작 등) 예전 근거가 남아 있으면 대상이다. 검사 중이거나 가리기 전은 뺀다
+            // 다시 검사가 실패했어도(서버 재시작 등) 예전 결과가 남아 있으면 대상이다. 검사 중이거나 가리기 전은 뺀다
             if (s.getStatus() != CandidateStatus.ANALYZED && s.getStatus() != CandidateStatus.DONE
                     && s.getStatus() != CandidateStatus.FAILED) {
                 continue;
             }
             Candidate c = candidateService.get(s.getCandidateId());
+            Set<Change> changes = EnumSet.noneOf(Change.class);
             List<Evidence> evidences = evidenceMapper.findByCandidateId(c.getId());
             if (!evidences.isEmpty()
                     && ReportService.criteriaChanged(ReportService.checkedCriteria(c, all, evidences), current)) {
-                ids.add(c.getId());
+                changes.add(Change.CRITERIA);
+            }
+            changes.addAll(conditionChanges(CareerEvalService.parse(c.getCareerEvalJson()), position));
+            if (!changes.isEmpty()) {
+                out.put(c.getId(), changes);
             }
         }
-        return ids;
+        return out;
+    }
+
+    /** 경력·학력 판단에 쓴 조건이 지금 포지션 조건과 다른지. 판단을 저장하기 전 검사(옛 지원자)는 경력 개월이 있을 때만 경력 대상 */
+    static Set<Change> conditionChanges(CareerEvalResult eval, Position position) {
+        Set<Change> out = EnumSet.noneOf(Change.class);
+        if (eval == null) {
+            return out;
+        }
+        if (eval.getCareerRequirement() != null) {
+            if (!norm(eval.getCareerRequirement()).equals(norm(position.getRequiredExperience()))
+                    || !java.util.Objects.equals(eval.getCareerMinMonths(), position.getCareerMinMonths())
+                    || !java.util.Objects.equals(eval.getCareerMaxMonths(), position.getCareerMaxMonths())) {
+                out.add(Change.CAREER);
+            }
+        } else if (eval.getTotalMonths() != null) {
+            out.add(Change.CAREER);
+        }
+        if ((eval.getRequiredEducation() != null || eval.getRequiredMajor() != null)
+                && (!norm(eval.getRequiredEducation()).equals(norm(position.getRequiredEducation()))
+                        || !norm(eval.getRequiredMajor()).equals(norm(position.getRequiredMajor())))) {
+            out.add(Change.EDUCATION);
+        }
+        return out;
+    }
+
+    private static String norm(String s) {
+        return s == null ? "" : s.strip();
     }
 }

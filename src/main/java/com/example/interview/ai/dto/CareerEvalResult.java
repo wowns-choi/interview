@@ -35,16 +35,26 @@ public class CareerEvalResult {
     @JsonProperty("relevant_reason")
     private String relevantReason;
 
-    /** 경력 조건 충족: MET, NOT_MET, UNKNOWN. 외부 AI가 관련 경력 개월과 공고 경력 조건으로 판단한다 (CAREER_MEETS, user 2026-10-27). 그 전에 검사했으면 null */
+    /**
+     * 경력 조건 충족: MET, NOT_MET, UNKNOWN(조건 없음). 근거 분석이 센 관련 경력 개월과 포지션의 요구 경력 개월을 코드로 비교한다
+     * (사용자 2026-11-09, 그 전에는 CAREER_MEETS로 GPT에 물었다). 경력 개월을 못 셌으면 null
+     */
     @JsonProperty("career_meets")
     private String careerMeets;
 
     @JsonProperty("career_reason")
     private String careerReason;
 
-    /** 판단에 쓴 공고 경력 조건. 포지션 조건이 바뀌었으면 이 판단은 쓰지 않는다 */
+    /** 판단에 쓴 공고 경력 조건 원문 (조건을 고쳐도 판정은 이 조건 그대로) */
     @JsonProperty("career_requirement")
     private String careerRequirement;
+
+    /** 판단에 쓴 요구 경력 하한·상한 개월 */
+    @JsonProperty("career_min_months")
+    private Integer careerMinMonths;
+
+    @JsonProperty("career_max_months")
+    private Integer careerMaxMonths;
 
     /** 예: "4년제 대학교 졸업". 학력 정보가 없으면 빈 문자열 */
     @JsonProperty("final_education")
@@ -88,6 +98,32 @@ public class CareerEvalResult {
         private Boolean infoEngineer;
         /** SQLD(SQL 개발자)가 있는지 */
         private Boolean sqld;
+    }
+
+    /**
+     * 로컬 AI가 개인정보를 찾을 때 이력서에서 옮겨 둔 자격증 목록으로 만든다 (설정 탭 「로컬 AI로 처리」, 사용자 2026-11-09).
+     * 정보처리기사는 이름에 "정보처리기사"가 있을 때만(산업기사·기능사 제외), SQLD는 "SQLD" 또는 "SQL개발자".
+     */
+    public static Certificates certificatesFromProfile(List<com.example.interview.domain.CandidateProfile.Certificate> list) {
+        Certificates c = new Certificates();
+        List<Certificate> items = new java.util.ArrayList<>();
+        boolean info = false;
+        boolean sqld = false;
+        for (com.example.interview.domain.CandidateProfile.Certificate p : list == null
+                ? List.<com.example.interview.domain.CandidateProfile.Certificate>of() : list) {
+            Certificate item = new Certificate();
+            item.setName(p.getName());
+            item.setIssuer(p.getIssuer());
+            item.setDate(p.getDate());
+            items.add(item);
+            String name = p.getName() == null ? "" : p.getName().replaceAll("\\s", "").toUpperCase();
+            info |= name.contains("정보처리기사");
+            sqld |= name.contains("SQLD") || name.contains("SQL개발자");
+        }
+        c.setItems(items);
+        c.setInfoEngineer(info);
+        c.setSqld(sqld);
+        return c;
     }
 
     @Data
@@ -151,15 +187,11 @@ public class CareerEvalResult {
     }
 
     /**
-     * 지금 공고 경력 조건에 대한 외부 AI 판단 (MET, NOT_MET, UNKNOWN).
-     * 판단이 없거나 다른 조건으로 한 판단이면 null (그때는 코드로 비교한다)
+     * 이 지원자를 검사할 때의 공고 경력 조건. 조건을 고쳐도 판정은 검사 당시 조건 그대로 둔다 (사용자 2026-11-09).
+     * 경력 판정을 저장하지 못한 지원자(경력 개월을 못 셈)는 지금 조건을 쓴다
      */
-    public String careerVerdict(String required) {
-        if (careerMeets == null || careerRequirement == null
-                || !careerRequirement.strip().equals(required == null ? "" : required.strip())) {
-            return null;
-        }
-        return careerMeets;
+    public static String checkedCareerRequirement(CareerEvalResult eval, String current) {
+        return eval != null && eval.careerRequirement != null ? eval.careerRequirement : current;
     }
 
     private static String bare(String s) {

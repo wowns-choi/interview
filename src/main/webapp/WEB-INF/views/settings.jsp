@@ -50,6 +50,14 @@
     </li>
   </ol>
 </section>
+
+<%-- GPT 대신 로컬 AI로 처리 (사용자 2026-11-09) --%>
+<section class="stage set-card">
+  <form class="set-head set-toggle" method="post" action="<c:url value='/settings/local-ai'/>">
+    <h2>로컬 AI로 처리</h2>
+    <label class="switch"><input type="checkbox" name="on" value="true" ${localAiOn ? 'checked' : ''} onchange="this.form.requestSubmit()"><span class="switch-track"></span>${localAiOn ? '켜짐' : '꺼짐'}</label>
+  </form>
+</section>
 </div>
 
 <script>

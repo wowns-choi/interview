@@ -53,7 +53,8 @@ public class CompareLine {
     }
 
     /** 경력: 포지션 관련 경력(없으면 총 경력) vs 공고 경력 */
-    public static CompareLine career(CareerGauge gauge, String fallback, String required, Boolean met) {
+    public static CompareLine career(CareerGauge gauge, String fallback, String required, Integer min, Integer max,
+            Boolean met) {
         Integer months = gauge == null ? null
                 : gauge.getRelevantMonths() != null ? gauge.getRelevantMonths() : gauge.getActualMonths();
         String value = months != null ? CareerGauge.format(months) : blank(fallback) ? "-" : fallback;
@@ -63,10 +64,8 @@ public class CompareLine {
         }
         String sign = null;
         String note = null;
-        Integer min = CareerGauge.minMonths(required);
-        Integer max = CareerGauge.maxMonths(required);
         if (met != null) {
-            boolean capOnly = min == null && max != null;
+            boolean capOnly = (min == null || min == 0) && max != null;
             sign = capOnly ? (met ? "≤" : ">") : (met ? "≥" : "<");
             if (!met && months != null) {
                 if (min != null && months < min) {

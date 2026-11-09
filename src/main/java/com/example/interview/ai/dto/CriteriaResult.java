@@ -24,6 +24,14 @@ public class CriteriaResult {
     @JsonProperty("required_experience")
     private String requiredExperience;
 
+    /** 요구 경력 하한 개월 (예: "3년 이상" → 36, "신입" 포함 → 0). 하한이 없으면 null */
+    @JsonProperty("experience_min_months")
+    private Integer experienceMinMonths;
+
+    /** 요구 경력 상한 개월 (예: "3년 ↓" → 36). 상한이 없으면 null. 둘 다 null이면 경력무관 */
+    @JsonProperty("experience_max_months")
+    private Integer experienceMaxMonths;
+
     /** 공고의 학력 조건 표기 그대로 (예: "학력무관", "대졸(4년) 이상"). 공고에 없으면 빈 문자열 */
     @JsonProperty("required_education")
     private String requiredEducation;
@@ -47,6 +55,16 @@ public class CriteriaResult {
         List<String> errors = new ArrayList<>();
         if (requiredExperience == null) {
             errors.add("required_experience 누락 (공고에 없으면 빈 문자열)");
+        }
+        if (experienceMinMonths != null && experienceMinMonths < 0
+                || experienceMaxMonths != null && experienceMaxMonths < 0) {
+            errors.add("experience_min_months, experience_max_months는 0 이상의 정수 또는 null");
+        } else if (experienceMinMonths != null && experienceMaxMonths != null && experienceMinMonths > experienceMaxMonths) {
+            errors.add("experience_min_months가 experience_max_months보다 큼");
+        }
+        if ((requiredExperience == null || requiredExperience.isBlank())
+                && (experienceMinMonths != null || experienceMaxMonths != null)) {
+            errors.add("required_experience가 비어 있으면 experience_min_months, experience_max_months도 null");
         }
         if (requiredEducation == null) {
             errors.add("required_education 누락 (공고에 없으면 빈 문자열)");

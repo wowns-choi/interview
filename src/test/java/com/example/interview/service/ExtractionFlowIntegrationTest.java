@@ -28,7 +28,6 @@ import com.example.interview.ai.dto.ArrangeResult;
 import com.example.interview.ai.dto.InterviewRecordResult;
 import com.example.interview.ai.dto.ReportInfoResult;
 import com.example.interview.ai.dto.CareerEvalResult;
-import com.example.interview.ai.dto.CareerMeetsResult;
 import com.example.interview.ai.dto.CriteriaResult;
 import com.example.interview.ai.dto.EvidenceResult;
 import com.example.interview.domain.ChatMessage;
@@ -80,6 +79,8 @@ public class ExtractionFlowIntegrationTest {
 
     @Autowired
     ExtractionService extractionService;
+    @Autowired
+    com.example.interview.ai.LocalAiSwitch localAiSwitch;
     @Autowired
     ReportService reportService;
     @Autowired
@@ -664,6 +665,74 @@ public class ExtractionFlowIntegrationTest {
     }
 
     @Test
+    void localSwitchTakesCertificatesFromTheLocalProfileInsteadOfEvidence() throws Exception {
+        stubAi(aiClient, templateMapper, sectionMapper);
+        CandidateProfile profile = new CandidateProfile();
+        CandidateProfile.Career career = new CandidateProfile.Career();
+        career.setCompany("가나커머스");
+        career.setPeriod("2021.03 ~ 2024.02");
+        profile.setCareers(List.of(career));
+        CandidateProfile.Certificate sqld = new CandidateProfile.Certificate();
+        sqld.setName("SQLD");
+        profile.setCertificates(List.of(sqld));
+        stubPii(aiClient, profile, pii(PiiResult.Type.APPLICANT_NAME, "홍길동"));
+        when(pdfTextExtractor.extract(any())).thenReturn(RESUME + "\n자격증: SQLD");
+        Long positionId = startPosition(positionService, "백엔드 개발자 채용");
+        localAiSwitch.set(true);
+        try {
+            Long id = batchCheckService.start(positionId, List.of(List.of(pdf()))).get(0);
+            batchCheckService.awaitIdle();
+            CareerEvalResult.Certificates certs = reportService.report(id).getCareerEval().getCertificates();
+            assertThat(certs.getItems()).extracting("name").containsExactly("SQLD");
+            assertThat(certs.getSqld()).isTrue();
+            assertThat(certs.getInfoEngineer()).as("근거 분석이 정보처리기사라고 해도 로컬 목록을 따른다").isFalse();
+        } finally {
+            localAiSwitch.set(false);
+        }
+    }
+
+    @Test
+    void conditionChangeKeepsCheckedVerdictUntilRecheckAsksOnlyThatJudgment() throws Exception {
+        stubAi(aiClient, templateMapper, sectionMapper);
+        when(pdfTextExtractor.extract(any())).thenReturn(RESUME + "\n학력: 지어낸대학교 졸업");
+        when(aiClient.call(eq(AiPurpose.EDUCATION_EVAL), anyLong(), anyString(), anyString(),
+                eq(com.example.interview.ai.dto.EducationResult.class), any())).thenAnswer(inv -> {
+                    String content = inv.getArgument(3);
+                    com.example.interview.ai.dto.EducationResult e = new com.example.interview.ai.dto.EducationResult();
+                    e.setFinalEducation("4년제 대학교 졸업");
+                    e.setEducationReason("");
+                    e.setEducationMeets(content.contains("석사") ? "NOT_MET" : "MET");
+                    return e;
+                });
+        Long positionId = startPosition(positionService, "백엔드 개발자 채용");
+        positionService.updateConditions(positionId, "경력 3년 이상", "대졸(4년제) 이상", null);
+        positionService.updateCareerRange(positionId, "MIN", "3");
+        Long id = batchCheckService.start(positionId, List.of(List.of(pdf()))).get(0);
+        batchCheckService.awaitIdle();
+        assertThat(reportService.report(id).getFit()).extracting("career", "education").containsExactly(false, true);
+        assertThat(rankingService.changes(positionId)).isEmpty();
+
+        // 조건을 고쳐도 판정·비교 줄은 검사 당시 조건 그대로이고, GPT를 다시 부르지 않는다 (사용자 2026-11-09)
+        positionService.updateConditions(positionId, "경력 2년 이상", "석사 이상", null);
+        positionService.updateCareerRange(positionId, "MIN", "2");
+        ResultReport kept = reportService.report(id);
+        assertThat(kept.getFit()).extracting("career", "education").containsExactly(false, true);
+        assertThat(kept.getCareerLine().getRequired()).isEqualTo("경력 3년 이상");
+        assertThat(kept.getEducationRequirement()).isEqualTo("대졸(4년제) 이상");
+        assertThat(rankingService.changes(positionId)).containsEntry(id,
+                Set.of(RankingService.Change.CAREER, RankingService.Change.EDUCATION));
+        // 다시 검사: 조건만 바뀌었으면 근거 분석 없이 경력은 코드로, 학력은 그 판단만 다시 묻고 상태는 그대로
+        assertThat(batchCheckService.recheckChanged(positionId)).isEqualTo(1);
+        batchCheckService.awaitIdle();
+        ResultReport rechecked = reportService.report(id);
+        assertThat(rechecked.getFit()).extracting("career", "education").containsExactly(true, false);
+        assertThat(rechecked.getCareerLine().getRequired()).isEqualTo("경력 2년 이상");
+        assertThat(candidateService.get(id).getStatus()).isEqualTo(CandidateStatus.ANALYZED);
+        assertThat(rankingService.changes(positionId)).isEmpty();
+        verify(aiClient, org.mockito.Mockito.times(1)).call(eq(AiPurpose.EVIDENCE), anyLong(), anyString(), anyString(), any(), any());
+    }
+
+    @Test
     void batchApplicantWhoseMaskingFailsStopsWithoutReachingGpt() throws Exception {
         stubAi(aiClient, templateMapper, sectionMapper);
         when(aiClient.callLocal(eq(AiPurpose.PII_DETECT), anyLong(), anyString(), anyString(), any(),
@@ -779,6 +848,7 @@ public class ExtractionFlowIntegrationTest {
         CriteriaResult criteria = new CriteriaResult();
         criteria.setPositionTitle("백엔드 개발자 (Java)");
         criteria.setRequiredExperience("경력 3년 이상");
+        criteria.setExperienceMinMonths(36);
         criteria.setCriteria(List.of(
                 criterion("대용량 트래픽 처리 경험", "TECH", true),
                 criterion("Kafka 사용 경험", "TECH", true),
@@ -796,20 +866,6 @@ public class ExtractionFlowIntegrationTest {
                     tr.setTimeline(List.of(period("A사", "2021-03", "2024-02"), period("교육1", "2020-01", "2020-06"),
                             period("없는항목", "2019-01", "2019-02")));
                     return tr;
-                });
-
-        when(aiClient.call(eq(AiPurpose.CAREER_MEETS), anyLong(), anyString(), anyString(),
-                eq(CareerMeetsResult.class), any())).thenAnswer(inv -> {
-                    String content = inv.getArgument(3);
-                    if (content.contains("가나커머스") || content.contains("<resume>")
-                            || !content.contains("<experience_requirement>경력 3년 이상</experience_requirement>")
-                            || !content.contains("relevant_months: 30")) {
-                        throw new IllegalStateException("경력 판단 호출에는 공고 경력 조건과 경력 개월만 보낸다: " + content);
-                    }
-                    CareerMeetsResult m = new CareerMeetsResult();
-                    m.setCareerMeets("NOT_MET");
-                    m.setCareerReason("3년 이상 조건에 관련 경력 30개월로 6개월 모자람");
-                    return m;
                 });
 
         when(aiClient.call(eq(AiPurpose.EVIDENCE), anyLong(), anyString(), anyString(),

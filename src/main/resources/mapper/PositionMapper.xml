@@ -30,6 +30,7 @@
 
     <update id="updateHiring">
         UPDATE position SET required_experience = #{requiredExperience},
+            career_min_months = #{careerMinMonths}, career_max_months = #{careerMaxMonths},
             required_education = #{requiredEducation}, required_major = #{requiredMajor}
         WHERE id = #{id} AND conditions_edited = FALSE
     </update>
@@ -39,6 +40,11 @@
         UPDATE position SET required_experience = #{requiredExperience},
             required_education = #{requiredEducation}, required_major = #{requiredMajor}, conditions_edited = TRUE
         WHERE id = #{id}
+    </update>
+
+    <!-- 사용자가 경력 칸을 고르면 개월도 함께 -->
+    <update id="updateCareerRange">
+        UPDATE position SET career_min_months = #{min}, career_max_months = #{max} WHERE id = #{id}
     </update>
 
     <update id="updateExclusions">

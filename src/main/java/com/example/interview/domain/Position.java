@@ -13,6 +13,10 @@ public class Position {
     private String imageText;
     /** 공고의 요구 경력 (표기 그대로, 없으면 null) */
     private String requiredExperience;
+    /** 요구 경력 하한 개월 (없으면 null). 원문이 있는데 하한·상한이 다 null이면 경력무관 */
+    private Integer careerMinMonths;
+    /** 요구 경력 상한 개월 (없으면 null) */
+    private Integer careerMaxMonths;
     /** 공고의 학력 조건 (표기 그대로 또는 사용자가 입력, 없으면 null) */
     private String requiredEducation;
     /** 요구 학과 (공고에 있으면 표기 그대로, 없어도 사용자가 적을 수 있다. 없으면 null) */

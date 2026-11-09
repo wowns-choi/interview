@@ -10,6 +10,7 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
  *               추론 모드가 없는 모델이면 비워 둔다 (null이면 보내지 않음)
  * @param keepAlive 마지막 호출 뒤 모델을 메모리에 두는 시간 (Ollama keep_alive, 예: 1h, -1은 계속).
  *               Ollama 기본 5분이 지나면 다음 호출에 모델을 다시 올리느라 4~5초가 더 든다 (사용자 2026-11-06)
+ * @param taskNumCtx 설정 탭 「로컬 AI로 처리」로 GPT 대신 보내는 작업의 입력+출력 토큰 한도. 녹취·이력서가 길어 개인정보 찾기보다 크게 둔다
  */
 @ConfigurationProperties("local-ai")
 public record LocalAiProperties(
@@ -18,7 +19,8 @@ public record LocalAiProperties(
         Integer numCtx,
         Integer timeoutSeconds,
         Boolean think,
-        String keepAlive) {
+        String keepAlive,
+        Integer taskNumCtx) {
 
     public LocalAiProperties {
         if (baseUrl == null || baseUrl.isBlank()) {
@@ -36,6 +38,9 @@ public record LocalAiProperties(
         }
         if (keepAlive == null || keepAlive.isBlank()) {
             keepAlive = "1h";
+        }
+        if (taskNumCtx == null) {
+            taskNumCtx = 32768;
         }
     }
 }

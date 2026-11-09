@@ -748,6 +748,11 @@
       var body = texts();
       body[e.key] = value;
       var state = e.state();
+      // 경력 칸이면 고른 값도 보내 서버가 개월(하한·상한)로 저장한다
+      if (e.key === 'requiredExperience') {
+        body.expKind = state.expKind;
+        body.expYears = state.expYears;
+      }
       api('PATCH', positionBase + '/conditions', body).then(function () {
         Object.keys(state).forEach(function (k) { dl.dataset[k] = state[k]; });
         e.saving = false;

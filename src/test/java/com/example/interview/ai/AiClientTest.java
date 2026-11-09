@@ -52,7 +52,7 @@ class AiClientTest {
         RestClient.Builder localBuilder = RestClient.builder().baseUrl("http://local.test");
         localServer = MockRestServiceServer.bindTo(localBuilder).build();
         client = new AiClient(builder.build(), props, localBuilder.build(),
-                new LocalAiProperties("http://local.test", "local-model", 100, 5, true, null), callLogger);
+                new LocalAiProperties("http://local.test", "local-model", 100, 5, true, null, 300), callLogger);
     }
 
     @Test
@@ -242,7 +242,7 @@ class AiClientTest {
     @Test
     void missingApiKeyFailsWithoutCalling() {
         AiProperties noKey = new AiProperties("", "http://ai.test/v1", "m", null, 10, null, null, null, null, null, null, null, null);
-        AiClient c = new AiClient(RestClient.create(), noKey, RestClient.create(), new LocalAiProperties(null, null, null, null, null, null),
+        AiClient c = new AiClient(RestClient.create(), noKey, RestClient.create(), new LocalAiProperties(null, null, null, null, null, null, null),
                 callLogger);
         assertThatThrownBy(() -> c.call(AiPurpose.EVIDENCE, 1L, "s", "u", CriteriaResult.class, r -> {
         })).isInstanceOf(AiCallException.class).hasMessageContaining("API 키");
@@ -309,6 +309,137 @@ class AiClientTest {
                 .andRespond(withSuccess(ollama("{}", 10, 5), MediaType.APPLICATION_JSON));
 
         assertThat(callLocal().getNames()).isEmpty();
+        localServer.verify();
+    }
+
+    @Test
+    void switchSendsLocalTasksToOllamaAsPlainJsonWithTheLargerContext() {
+        LocalAiSwitch on = org.mockito.Mockito.mock(LocalAiSwitch.class);
+        org.mockito.Mockito.when(on.routesLocal(org.mockito.ArgumentMatchers.any())).thenAnswer(
+                inv -> LocalAiSwitch.TASKS.contains(inv.<AiPurpose>getArgument(0)));
+        AiProperties noKey = new AiProperties("", "http://ai.test/v1", "test-model", "test-reasoning-model", 1000, 2000,
+                "max_completion_tokens", true, 5, null, null, "low", "low");
+        RestClient.Builder gpt = RestClient.builder().baseUrl("http://ai.test/v1");
+        MockRestServiceServer gptServer = MockRestServiceServer.bindTo(gpt).build();
+        RestClient.Builder local = RestClient.builder().baseUrl("http://local.test");
+        MockRestServiceServer ollamaServer = MockRestServiceServer.bindTo(local).build();
+        AiClient c = new AiClient(gpt.build(), noKey, local.build(),
+                new LocalAiProperties("http://local.test", "local-model", 100, 5, true, null, 300), callLogger,
+                new ApiKeyStore(noKey), on);
+
+        ollamaServer.expect(requestTo("http://local.test/api/chat"))
+                .andExpect(jsonPath("$.format").value("json"))
+                .andExpect(jsonPath("$.options.num_ctx").value(300))
+                .andExpect(jsonPath("$.messages[0].content").value("타임라인 프롬프트"))
+                .andExpect(jsonPath("$.messages[1].content").value("A사 | 2021.03 ~ 2024.02"))
+                .andRespond(withSuccess(ollama("{\"timeline\":[]}", 30, 10), MediaType.APPLICATION_JSON));
+
+        // API 키가 없어도 로컬 작업은 간다
+        assertThat(c.call(AiPurpose.TIMELINE, 3L, "타임라인 프롬프트", "A사 | 2021.03 ~ 2024.02",
+                com.example.interview.ai.dto.TimelineResult.class, r -> { }).getTimeline()).isEmpty();
+        assertThat(capturedLogs(1).get(0)).extracting("purpose", "model").containsExactly(AiPurpose.TIMELINE, "local-model");
+        ollamaServer.verify();
+
+        // 스위치를 켜도 근거 분석은 GPT로 간다 (키가 없으니 보내기 전에 막힌다)
+        assertThatThrownBy(() -> c.call(AiPurpose.EVIDENCE, 3L, "s", "u", CriteriaResult.class, r -> { }))
+                .isInstanceOf(AiCallException.class).hasMessageContaining("API 키");
+        gptServer.verify();
+    }
+
+    @Test
+    void everyLocalTaskGoesToOllamaWhenTheSwitchIsOn() {
+        LocalAiSwitch on = org.mockito.Mockito.mock(LocalAiSwitch.class);
+        org.mockito.Mockito.when(on.routesLocal(org.mockito.ArgumentMatchers.any())).thenAnswer(
+                inv -> LocalAiSwitch.TASKS.contains(inv.<AiPurpose>getArgument(0)));
+        RestClient.Builder local = RestClient.builder().baseUrl("http://local.test");
+        MockRestServiceServer ollamaServer = MockRestServiceServer.bindTo(local).build();
+        AiProperties props = new AiProperties("test-key", "http://ai.test/v1", "test-model", "test-reasoning-model", 1000, 2000,
+                "max_completion_tokens", true, 5, null, null, "low", "low");
+        AiClient c = new AiClient(RestClient.create(), props, local.build(),
+                new LocalAiProperties("http://local.test", "local-model", 100, 5, true, null, 300), callLogger,
+                new ApiKeyStore(props), on);
+        List<AiPurpose> tasks = List.of(AiPurpose.ARRANGE, AiPurpose.QUESTION_PLACE, AiPurpose.QUESTION,
+                AiPurpose.REPORT_INFO, AiPurpose.INTERVIEW_RECORD);
+        for (int i = 0; i < tasks.size(); i++) {
+            ollamaServer.expect(requestTo("http://local.test/api/chat"))
+                    .andExpect(jsonPath("$.format").value("json"))
+                    .andRespond(withSuccess(ollama("{}", 10, 5), MediaType.APPLICATION_JSON));
+        }
+        tasks.forEach(p -> c.call(p, 1L, "s", "u", java.util.Map.class, r -> { }));
+        ollamaServer.verify();
+    }
+
+    @Test
+    void localStreamPassesOnlyAnswerPiecesNotThinking() {
+        LocalAiSwitch on = org.mockito.Mockito.mock(LocalAiSwitch.class);
+        org.mockito.Mockito.when(on.routesLocal(AiPurpose.INTERVIEW_RECORD)).thenReturn(true);
+        RestClient.Builder local = RestClient.builder().baseUrl("http://local.test");
+        MockRestServiceServer ollamaServer = MockRestServiceServer.bindTo(local).build();
+        AiProperties noKey = new AiProperties("", "http://ai.test/v1", "test-model", "test-reasoning-model", 1000, 2000,
+                "max_completion_tokens", true, 5, null, null, "low", "low");
+        AiClient c = new AiClient(RestClient.create(), noKey, local.build(),
+                new LocalAiProperties("http://local.test", "local-model", 100, 5, true, null, 300), callLogger,
+                new ApiKeyStore(noKey), on);
+        String ndjson = """
+                {"message":{"role":"assistant","content":"","thinking":"먼저 질문을"},"done":false}
+                {"message":{"role":"assistant","content":"{\\"required_experience\\":\\"\\","},"done":false}
+                {"message":{"role":"assistant","content":"\\"required_education\\":\\"\\",\\"criteria\\":[]}"},"done":false}
+                {"message":{"role":"assistant","content":""},"done":true,"done_reason":"stop","prompt_eval_count":40,"eval_count":20}
+                """;
+        ollamaServer.expect(requestTo("http://local.test/api/chat"))
+                .andExpect(jsonPath("$.stream").value(true))
+                .andExpect(jsonPath("$.format").value("json"))
+                .andExpect(jsonPath("$.options.num_ctx").value(300))
+                .andRespond(withSuccess(ndjson, MediaType.APPLICATION_NDJSON));
+
+        List<String> deltas = new java.util.ArrayList<>();
+        CriteriaResult r = c.streamJson(AiPurpose.INTERVIEW_RECORD, 5L, "s", "u", CriteriaResult.class, x -> { }, deltas::add);
+
+        assertThat(r.getCriteria()).isEmpty();
+        assertThat(deltas).hasSize(2).noneMatch(d -> d.contains("먼저"));
+        assertThat(capturedLogs(1).get(0)).extracting("model", "inputTokens", "outputTokens", "successYn")
+                .containsExactly("local-model", 40, 20, "Y");
+        ollamaServer.verify();
+    }
+
+    @Test
+    void localChatStreamsPlainText() {
+        LocalAiSwitch on = org.mockito.Mockito.mock(LocalAiSwitch.class);
+        org.mockito.Mockito.when(on.routesLocal(AiPurpose.CHAT)).thenReturn(true);
+        RestClient.Builder local = RestClient.builder().baseUrl("http://local.test");
+        MockRestServiceServer ollamaServer = MockRestServiceServer.bindTo(local).build();
+        AiProperties noKey = new AiProperties("", "http://ai.test/v1", "test-model", "test-reasoning-model", 1000, 2000,
+                "max_completion_tokens", true, 5, null, null, "low", "low");
+        AiClient c = new AiClient(RestClient.create(), noKey, local.build(),
+                new LocalAiProperties("http://local.test", "local-model", 100, 5, true, null, 300), callLogger,
+                new ApiKeyStore(noKey), on);
+        String ndjson = """
+                {"message":{"role":"assistant","content":"근거는 ","thinking":""},"done":false}
+                {"message":{"role":"assistant","content":"두 가지입니다."},"done":false}
+                {"message":{"role":"assistant","content":""},"done":true,"done_reason":"stop","prompt_eval_count":12,"eval_count":6}
+                """;
+        ollamaServer.expect(requestTo("http://local.test/api/chat"))
+                .andExpect(jsonPath("$.stream").value(true))
+                .andExpect(jsonPath("$.format").doesNotExist())
+                .andExpect(jsonPath("$.messages[1].role").value("user"))
+                .andExpect(jsonPath("$.messages[2].role").value("assistant"))
+                .andRespond(withSuccess(ndjson, MediaType.APPLICATION_NDJSON));
+
+        List<String> deltas = new java.util.ArrayList<>();
+        String reply = c.chatStream(AiPurpose.CHAT, 9L, "s",
+                List.of(java.util.Map.of("role", "user", "content", "근거는?"), java.util.Map.of("role", "assistant", "content", "네")),
+                deltas::add);
+        assertThat(reply).isEqualTo("근거는 두 가지입니다.");
+        assertThat(deltas).containsExactly("근거는 ", "두 가지입니다.");
+        ollamaServer.verify();
+    }
+
+    @Test
+    void switchOffKeepsTimelineOnGpt() {
+        server.expect(requestTo("http://ai.test/v1/chat/completions"))
+                .andRespond(withSuccess(completion("{\"timeline\":[]}", 10, 5), MediaType.APPLICATION_JSON));
+        client.call(AiPurpose.TIMELINE, 3L, "s", "u", com.example.interview.ai.dto.TimelineResult.class, r -> { });
+        server.verify();
         localServer.verify();
     }
 

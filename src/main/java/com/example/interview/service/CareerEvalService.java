@@ -2,26 +2,23 @@ package com.example.interview.service;
 
 import java.time.YearMonth;
 import java.util.List;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
 
 import org.springframework.stereotype.Service;
 
 import com.example.interview.ai.AiClient;
+import com.example.interview.ai.LocalAiSwitch;
 import com.example.interview.ai.PromptLoader;
 import com.example.interview.ai.dto.CareerEvalResult;
-import com.example.interview.ai.dto.CareerMeetsResult;
 import com.example.interview.ai.dto.EducationResult;
 import com.example.interview.ai.dto.EvidenceResult;
 import com.example.interview.ai.dto.TimelineResult;
 import com.example.interview.domain.AiPurpose;
 import com.example.interview.domain.Candidate;
+import com.example.interview.domain.CareerRange;
 import com.example.interview.domain.CandidateProfile;
-import com.example.interview.domain.CandidateStatus;
 import com.example.interview.domain.Position;
 import com.example.interview.mapper.CandidateMapper;
 
-import jakarta.annotation.PreDestroy;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import tools.jackson.databind.ObjectMapper;
@@ -47,17 +44,7 @@ public class CareerEvalService {
     private final PromptLoader promptLoader;
     private final PositionService positionService;
     private final CandidateMapper candidateMapper;
-    /** 공고 경력 조건을 고친 뒤 경력 판단을 다시 묻는 스레드 (한 명씩) */
-    private final ExecutorService rejudger = Executors.newSingleThreadExecutor(r -> {
-        Thread t = new Thread(r, "career-rejudge");
-        t.setDaemon(true);
-        return t;
-    });
-
-    @PreDestroy
-    void stop() {
-        rejudger.shutdownNow();
-    }
+    private final LocalAiSwitch localAi;
 
     /** 최종 학력과 학력 조건 충족 여부. 학교가 없으면 묻지 않는다. 실패하면 null */
     public CareerEvalResult education(Candidate candidate) {
@@ -89,10 +76,11 @@ public class CareerEvalService {
     }
 
     /**
-     * 경력 조건 충족 여부. 근거 분석 호출이 센 관련 경력 개월과 공고 경력 조건만 보낸다 (이력서·회사 이름은 보내지 않는다).
-     * 조건이 없으면 묻지 않고 UNKNOWN. 경력 개월이 없거나 호출이 실패하면 null
+     * 경력 조건 충족 여부를 코드로 정한다 (사용자 2026-11-09, GPT를 부르지 않는다): 포지션의 요구 경력 개월(하한·상한)과
+     * 근거 분석이 센 관련 경력 개월(없으면 총 경력)을 비교한다. 판단에 쓴 조건도 함께 남겨, 조건을 고쳐도 판정은 그대로 둔다.
+     * 조건이 없으면 UNKNOWN. 경력 개월을 못 셌으면 null
      */
-    public CareerEvalResult careerMeets(Candidate candidate, Integer relevantMonths, Integer totalMonths, String relevantReason) {
+    public CareerEvalResult judgeCareer(Candidate candidate, Integer relevantMonths, Integer totalMonths) {
         Position position = positionService.get(candidate.getPositionId());
         String required = position.getRequiredExperience() == null ? "" : position.getRequiredExperience().strip();
         CareerEvalResult r = new CareerEvalResult();
@@ -102,49 +90,19 @@ public class CareerEvalService {
             r.setCareerReason("");
             return r;
         }
-        if (relevantMonths == null && totalMonths == null) {
+        Integer min = position.getCareerMinMonths();
+        Integer max = position.getCareerMaxMonths();
+        r.setCareerMinMonths(min);
+        r.setCareerMaxMonths(max);
+        Integer months = relevantMonths != null ? relevantMonths : totalMonths;
+        Boolean met = CareerRange.meets(min, max, months);
+        if (met == null) {
             return null;
         }
-        try {
-            CareerMeetsResult m = aiClient.call(AiPurpose.CAREER_MEETS, candidate.getId(), promptLoader.load("career_meets"),
-                    careerContent(required, relevantMonths, totalMonths, relevantReason), CareerMeetsResult.class,
-                    CareerMeetsResult::validate);
-            r.setCareerMeets(m.getCareerMeets());
-            r.setCareerReason(m.getCareerReason());
-            return r;
-        } catch (RuntimeException e) {
-            log.warn("경력 판단 실패 candidateId={}: {}", candidate.getId(), e.getMessage());
-            return null;
-        }
-    }
-
-    /** 공고 경력 조건이 바뀌면 그 포지션에서 검사를 마친 지원자의 경력 판단만 다시 묻는다 (뒤에서 한 명씩) */
-    public void rejudgeCareer(Long positionId) {
-        List<Long> ids = candidateMapper.findByPositionId(positionId).stream()
-                .filter(s -> s.getStatus() == CandidateStatus.ANALYZED || s.getStatus() == CandidateStatus.DONE)
-                .map(s -> s.getCandidateId())
-                .toList();
-        for (Long id : ids) {
-            rejudger.submit(() -> {
-                try {
-                    Candidate c = candidateMapper.findById(id);
-                    CareerEvalResult eval = c == null ? null : parse(c.getCareerEvalJson());
-                    if (eval == null) {
-                        return;
-                    }
-                    CareerEvalResult m = careerMeets(c, eval.getRelevantMonths(), eval.getTotalMonths(), eval.getRelevantReason());
-                    if (m != null) {
-                        // 판단하는 동안 다시 검사했을 수 있으니 저장 직전에 다시 읽는다
-                        Candidate latest = candidateMapper.findById(id);
-                        if (latest != null) {
-                            save(latest, null, null, null, m);
-                        }
-                    }
-                } catch (RuntimeException e) {
-                    log.warn("경력 다시 판단 실패 candidateId={}: {}", id, e.getMessage());
-                }
-            });
-        }
+        r.setCareerMeets(met ? "MET" : "NOT_MET");
+        r.setCareerReason(min == null && max == null ? "경력무관"
+                : (relevantMonths != null ? "포지션 관련 경력 " : "총 경력 ") + months + "개월, 공고 " + CareerRange.describe(min, max));
+        return r;
     }
 
     /** 타임라인 기간. 기간이 하나도 없으면 묻지 않는다. 실패하면 null */
@@ -169,7 +127,7 @@ public class CareerEvalService {
      * @param education 학력 호출 결과 (학력 필드만 씀)
      * @param timeline  타임라인 호출 결과
      * @param career    근거 분석 호출의 경력 계산
-     * @param careerMeets 경력 판단 호출 결과 (경력 필드만 씀)
+     * @param careerMeets 경력 판정 (경력 필드만 씀)
      */
     public void save(Candidate candidate, CareerEvalResult education, List<CareerEvalResult.Period> timeline,
             EvidenceResult.Career career, CareerEvalResult careerMeets) {
@@ -190,21 +148,21 @@ public class CareerEvalService {
         }
         if (career != null) {
             r.applyCareer(career);
+            if (localAi.isOn()) {
+                // 「로컬 AI로 처리」: 자격증은 근거 분석 답 대신, 로컬 AI가 개인정보를 찾을 때 옮겨 둔 목록으로 코드가 정한다
+                CandidateProfile profile = ReportService.parseProfile(candidate.getProfileJson());
+                r.setCertificates(CareerEvalResult.certificatesFromProfile(
+                        profile == null ? List.of() : profile.getCertificates()));
+            }
         }
         if (careerMeets != null) {
             r.setCareerMeets(careerMeets.getCareerMeets());
             r.setCareerReason(careerMeets.getCareerReason());
             r.setCareerRequirement(careerMeets.getCareerRequirement());
+            r.setCareerMinMonths(careerMeets.getCareerMinMonths());
+            r.setCareerMaxMonths(careerMeets.getCareerMaxMonths());
         }
         candidateMapper.updateCareerEval(candidate.getId(), JSON.writeValueAsString(r));
-    }
-
-    /** 공고 경력 조건과 근거 분석이 센 경력 개월만 */
-    static String careerContent(String required, Integer relevantMonths, Integer totalMonths, String relevantReason) {
-        return "<experience_requirement>" + required + "</experience_requirement>\n\n<career>\n"
-                + "relevant_months: " + (relevantMonths == null ? "없음" : relevantMonths) + "\n"
-                + "relevant_reason: " + (relevantReason == null ? "" : relevantReason) + "\n"
-                + "total_months: " + (totalMonths == null ? "없음" : totalMonths) + "\n</career>";
     }
 
     /** "학교명 | 상태 | 기간". 요구 학과가 있을 때만 전공도 보낸다: "학교명 | 전공 | 상태 | 기간" */
