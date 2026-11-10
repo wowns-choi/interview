@@ -220,7 +220,7 @@
     var view = document.getElementById('mask-view');
     if (!src || !view) return;
     var undoBtn = document.getElementById('mask-undo');
-    var LABEL = /\[(?:이름|전화번호|이메일|주민번호|링크|생년월일|주소|개인정보|학교|회사\d*|[A-Z]사|연봉|경력|학력|교육|자격증)\]/g;
+    var LABEL = /\[(?:이름|전화번호|이메일|주민번호|링크|생년월일|주소|개인정보|학교\d*|회사\d*|[A-Z]사|연봉|경력|학력|교육\d*|활동\d+|자격증)\]/g;
     var NEW_LABEL = '[개인정보]';
     var history = [];
     var maskBtn = document.createElement('button');

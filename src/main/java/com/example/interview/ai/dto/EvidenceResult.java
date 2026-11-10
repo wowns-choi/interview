@@ -23,6 +23,9 @@ public class EvidenceResult {
     /** 이력서의 자격증과 정보처리기사·SQLD 보유 여부 */
     private CareerEvalResult.Certificates certificates;
 
+    /** 이름표(A사, 학교1, 교육1, 활동1)마다 이력서에 적힌 기간 (사용자 2026-11-10: 타임라인 호출을 따로 하지 않는다) */
+    private List<CareerEvalResult.Period> timeline;
+
     @Data
     public static class CriterionResult {
         @JsonProperty("criterion_id")
@@ -55,6 +58,9 @@ public class EvidenceResult {
         /** 같은 응답의 certificates를 경력 계산과 함께 저장하려고 옮겨 둔다 (응답 JSON의 career에는 없다) */
         @JsonIgnore
         private CareerEvalResult.Certificates certificates;
+        /** 같은 응답의 timeline (읽지 못한 항목은 뺀 것). 응답 JSON의 career에는 없다 */
+        @JsonIgnore
+        private List<CareerEvalResult.Period> timeline;
     }
 
     /** 입력한 모든 criterion_id에 결과가 있어야 하고, 경력 계산이 있어야 한다. */
@@ -103,6 +109,9 @@ public class EvidenceResult {
             certificates.setItems(List.of());
         }
         career.certificates = certificates;
+        // 타임라인은 잘못된 항목만 뺀다. 비어도 근거 분석을 실패로 보지 않는다
+        timeline = TimelineResult.clean(timeline);
+        career.timeline = timeline;
     }
 
     private void validateCertificates(List<String> errors) {

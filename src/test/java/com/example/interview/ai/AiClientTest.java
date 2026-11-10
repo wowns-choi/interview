@@ -330,14 +330,14 @@ class AiClientTest {
         ollamaServer.expect(requestTo("http://local.test/api/chat"))
                 .andExpect(jsonPath("$.format").value("json"))
                 .andExpect(jsonPath("$.options.num_ctx").value(300))
-                .andExpect(jsonPath("$.messages[0].content").value("타임라인 프롬프트"))
-                .andExpect(jsonPath("$.messages[1].content").value("A사 | 2021.03 ~ 2024.02"))
+                .andExpect(jsonPath("$.messages[0].content").value("질문 자리 프롬프트"))
+                .andExpect(jsonPath("$.messages[1].content").value("질문지"))
                 .andRespond(withSuccess(ollama("{\"timeline\":[]}", 30, 10), MediaType.APPLICATION_JSON));
 
         // API 키가 없어도 로컬 작업은 간다
-        assertThat(c.call(AiPurpose.TIMELINE, 3L, "타임라인 프롬프트", "A사 | 2021.03 ~ 2024.02",
+        assertThat(c.call(AiPurpose.QUESTION_PLACE, 3L, "질문 자리 프롬프트", "질문지",
                 com.example.interview.ai.dto.TimelineResult.class, r -> { }).getTimeline()).isEmpty();
-        assertThat(capturedLogs(1).get(0)).extracting("purpose", "model").containsExactly(AiPurpose.TIMELINE, "local-model");
+        assertThat(capturedLogs(1).get(0)).extracting("purpose", "model").containsExactly(AiPurpose.QUESTION_PLACE, "local-model");
         ollamaServer.verify();
 
         // 스위치를 켜도 근거 분석은 GPT로 간다 (키가 없으니 보내기 전에 막힌다)
@@ -435,10 +435,10 @@ class AiClientTest {
     }
 
     @Test
-    void switchOffKeepsTimelineOnGpt() {
+    void switchOffKeepsTasksOnGpt() {
         server.expect(requestTo("http://ai.test/v1/chat/completions"))
                 .andRespond(withSuccess(completion("{\"timeline\":[]}", 10, 5), MediaType.APPLICATION_JSON));
-        client.call(AiPurpose.TIMELINE, 3L, "s", "u", com.example.interview.ai.dto.TimelineResult.class, r -> { });
+        client.call(AiPurpose.QUESTION_PLACE, 3L, "s", "u", com.example.interview.ai.dto.TimelineResult.class, r -> { });
         server.verify();
         localServer.verify();
     }

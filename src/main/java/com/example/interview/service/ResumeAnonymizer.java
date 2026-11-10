@@ -6,6 +6,7 @@ import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.function.Function;
 import java.util.function.Predicate;
 import java.util.function.UnaryOperator;
@@ -64,6 +65,8 @@ public class ResumeAnonymizer {
             Map.entry(Pattern.compile("학점\\s*[:：]?\\s*(\\d(?:\\.\\d+)?\\s*/\\s*\\d(?:\\.\\d+)?)"), Type.EDUCATION),
             Map.entry(Pattern.compile("대학(?:교|원)?\\s*(\\(\\s*\\d(?:\\s*·\\s*\\d)?\\s*년제?\\s*\\))"), Type.EDUCATION),
             Map.entry(Pattern.compile("(\\(\\s*\\d(?:\\s*·\\s*\\d)?\\s*년제\\s*\\))"), Type.EDUCATION),
+            // 학교 이름을 [학교1]로 가린 뒤 남은 "(4년)" (사용자 2026-11-10 평가: "[학교1](4년)"이 학교 종류를 드러냈다)
+            Map.entry(Pattern.compile("\\[학교\\d*\\]\\s*(\\(\\s*\\d(?:\\s*·\\s*\\d)?\\s*년제?\\s*\\))"), Type.EDUCATION),
             Map.entry(Pattern.compile("인정학력\\s*[:：]?\\s*([^\\n]+)"), Type.EDUCATION),
             Map.entry(Pattern.compile("(학점\\s*은행제|검정\\s*고시|독학사)"), Type.EDUCATION),
             Map.entry(Pattern.compile("(?m)(?:장애|보훈|병역)(?:\\s*[:：]|\\s*(?:여부|사항|대상|구분)\\s*[:：]?)\\s*([^\\n:：]{1,20}?)(?=\\s*(?:장애|보훈|병역)|\\s*$)"), Type.SENSITIVE),
@@ -111,9 +114,11 @@ public class ResumeAnonymizer {
         Map<String, String> companyLabels = aliasCompanies(profile.getCareers(),
                 found.stream().flatMap(f -> f.companyNames().stream()).toList());
         aliasOthers(profile);
+        profile.setEducationNotes(educationNotes(text));
 
-        // 3. 가릴 목록: 찾은 값 전부. 회사는 별칭으로 가린다
-        List<PiiResult.Item> items = maskList(text, found, companyLabels);
+        // 3. 가릴 목록: 찾은 값 전부. 회사·학교·교육은 별칭으로 가리고, 활동은 이름 앞에 별칭을 붙인다
+        List<PiiResult.Item> items = maskList(text, found, companyLabels, otherLabels(profile));
+        items.addAll(activityLabels(found, profile));
 
         // 4. 가리기
         PiiMasker.Masked masked = piiMasker.mask(text, items);
@@ -156,9 +161,18 @@ public class ResumeAnonymizer {
      * (학력 표기와 장애·보훈·병역 값은 업무 내용에도 나올 수 있어 maskLabeled가 찾은 자리에서만 가린다).
      */
     static List<PiiResult.Item> maskList(String text, List<PiiExtract> found, Map<String, String> companyLabels) {
+        return maskList(text, found, companyLabels, Map.of());
+    }
+
+    /** @param otherLabels 학교 이름·교육 과정·기관 이름(공백 뺀 소문자) → "[학교1]", "[교육1]" */
+    static List<PiiResult.Item> maskList(String text, List<PiiExtract> found, Map<String, String> companyLabels,
+            Map<String, String> otherLabels) {
         List<PiiResult.Item> items = new ArrayList<>();
         for (PiiExtract f : found) {
             for (PiiResult.Item item : f.toItems()) {
+                if (item.getType() == Type.SCHOOL || item.getType() == Type.TRAINING) {
+                    item.setLabel(otherLabels.get(key(item.getText())));
+                }
                 if (item.getType() != Type.COMPANY) {
                     items.add(item);
                     continue;
@@ -379,6 +393,81 @@ public class ResumeAnonymizer {
         for (int i = 0; i < profile.getActivities().size(); i++) {
             profile.getActivities().get(i).setAlias(CareerEvalService.ACTIVITY + (i + 1));
         }
+    }
+
+    /**
+     * 학교는 "[학교1]", 교육은 과정·기관 이름 모두 "[교육1]"로 가린다 (사용자 2026-11-10: 근거 분석이 이름표 옆 기간으로 타임라인을 읽는다).
+     * "대학교"처럼 학교 종류만 적힌 줄은 여러 학교에 같은 낱말이 나오므로 별칭 없이 "[학교]"로 둔다.
+     */
+    static Map<String, String> otherLabels(CandidateProfile profile) {
+        Map<String, String> labels = new LinkedHashMap<>();
+        for (CandidateProfile.Education e : profile.getEducation()) {
+            if (!e.isLevelOnly() && !key(e.getSchool()).isEmpty()) {
+                labels.putIfAbsent(key(e.getSchool()), "[" + e.getAlias() + "]");
+            }
+        }
+        for (CandidateProfile.Training t : profile.getTrainings()) {
+            for (String name : List.of(t.getName(), t.getInstitution())) {
+                if (!key(name).isEmpty()) {
+                    labels.putIfAbsent(key(name), "[" + t.getAlias() + "]");
+                }
+            }
+        }
+        return labels;
+    }
+
+    /**
+     * 활동(인턴, 연수, 회사 밖 프로젝트)은 업무 근거라 이름을 가리지 않고 앞에 "[활동1] "을 붙인다. 병역은 가리므로 붙이지 않는다.
+     * 로컬 AI가 찾았지만 원문에서 확인되지 않아 프로필에 없는 활동은 건너뛴다.
+     */
+    static List<PiiResult.Item> activityLabels(List<PiiExtract> found, CandidateProfile profile) {
+        Map<String, String> aliases = new LinkedHashMap<>();
+        for (CandidateProfile.Activity a : profile.getActivities()) {
+            if (!a.isMilitary() && key(a.getName()).length() >= 4) {
+                aliases.putIfAbsent(key(a.getName()), a.getAlias());
+            }
+        }
+        List<PiiResult.Item> items = new ArrayList<>();
+        java.util.Set<String> done = new java.util.HashSet<>();
+        for (PiiExtract f : found) {
+            for (PiiExtract.Activity a : f.getActivities()) {
+                String alias = aliases.get(key(a.getName()));
+                if (alias != null && done.add(key(a.getName()))) {
+                    PiiResult.Item item = new PiiResult.Item(Type.TRAINING, a.getName().strip());
+                    item.setLabel("[" + alias + "] " + a.getName().strip());
+                    items.add(item);
+                }
+            }
+        }
+        return items;
+    }
+
+    private static String key(String value) {
+        return value == null ? "" : compact(value).toLowerCase();
+    }
+
+    private static final Pattern SCHOOL_TYPE = Pattern.compile(
+            "([^\\s\\[\\]]*(?:대학교|대학원|대학))\\s*(\\(\\s*\\d(?:\\s*·\\s*\\d)?\\s*년제?\\s*\\))[ \\t]*(졸업\\s*예정|졸업|중퇴|수료|재학중?|휴학중?)?");
+    private static final Pattern RECOGNIZED = Pattern.compile("(?m)인정학력\\s*[:：]?\\s*([^\\n]*?)\\s*(?:지역|$)");
+
+    /**
+     * 학력 요약 표기를 원문에서 옮긴다 (가리기 전 글). "대학교(4년) 졸업", "서일대학(2·3년제)", "인정학력 4년제"처럼 학교 종류와 상태만, 지역은 뺀다.
+     * 학력 판단에만 보낸다 (그 호출은 학교 이름을 이미 받는다).
+     */
+    static List<String> educationNotes(String text) {
+        Set<String> notes = new LinkedHashSet<>();
+        Matcher m = SCHOOL_TYPE.matcher(text);
+        while (m.find()) {
+            String status = m.group(3) == null ? "" : " " + m.group(3).replaceAll("\\s+", " ");
+            notes.add((m.group(1) + m.group(2).replaceAll("\\s+", "") + status).strip());
+        }
+        Matcher r = RECOGNIZED.matcher(text);
+        while (r.find()) {
+            if (!r.group(1).isBlank()) {
+                notes.add("인정학력 " + r.group(1).strip());
+            }
+        }
+        return new ArrayList<>(notes);
     }
 
     /** 법인 표기와 띄어쓰기를 뺀 소문자 이름. 같은 회사인지 비교할 때 쓴다 */

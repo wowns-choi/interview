@@ -100,32 +100,6 @@ public class CareerEvalResult {
         private Boolean sqld;
     }
 
-    /**
-     * 로컬 AI가 개인정보를 찾을 때 이력서에서 옮겨 둔 자격증 목록으로 만든다 (설정 탭 「로컬 AI로 처리」, 사용자 2026-11-09).
-     * 정보처리기사는 이름에 "정보처리기사"가 있을 때만(산업기사·기능사 제외), SQLD는 "SQLD" 또는 "SQL개발자".
-     */
-    public static Certificates certificatesFromProfile(List<com.example.interview.domain.CandidateProfile.Certificate> list) {
-        Certificates c = new Certificates();
-        List<Certificate> items = new java.util.ArrayList<>();
-        boolean info = false;
-        boolean sqld = false;
-        for (com.example.interview.domain.CandidateProfile.Certificate p : list == null
-                ? List.<com.example.interview.domain.CandidateProfile.Certificate>of() : list) {
-            Certificate item = new Certificate();
-            item.setName(p.getName());
-            item.setIssuer(p.getIssuer());
-            item.setDate(p.getDate());
-            items.add(item);
-            String name = p.getName() == null ? "" : p.getName().replaceAll("\\s", "").toUpperCase();
-            info |= name.contains("정보처리기사");
-            sqld |= name.contains("SQLD") || name.contains("SQL개발자");
-        }
-        c.setItems(items);
-        c.setInfoEngineer(info);
-        c.setSqld(sqld);
-        return c;
-    }
-
     @Data
     @JsonIgnoreProperties(ignoreUnknown = true)
     public static class Certificate {

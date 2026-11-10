@@ -122,8 +122,8 @@ public class ExtractionFlowIntegrationTest {
         assertThat(profile.getCareers()).extracting("company", "period").containsExactly(tuple("가나커머스", "2021.03 ~ 2024.02"));
         assertThat(profile.getEducation()).as("원문에 없는 학교는 버린다").isEmpty();
         assertThat(profile.getDesiredSalary()).isEmpty();
-        assertThat(candidateService.get(id).getMaskedText()).contains("[A사] 백엔드팀", "희망 연봉 [연봉]")
-                .doesNotContain("가나커머스", "5,000만원");
+        assertThat(candidateService.get(id).getMaskedText()).contains("[A사] 백엔드팀", "희망 연봉 [연봉]", "2024.01 ~ 2024.06 [교육1] [교육1]")
+                .doesNotContain("가나커머스", "5,000만원", "가나정보교육원");
         // 회사 이름표는 업로드 때 정해 프로필에 적고, 외부 AI는 검사 때까지 부르지 않는다
         assertThat(profile.getCareers()).extracting("alias").containsExactly("A사");
         assertThat(reportService.report(id).getCareerEval()).isNull();
@@ -145,7 +145,10 @@ public class ExtractionFlowIntegrationTest {
                 .containsExactly(35, 30, "UNKNOWN");
         assertThat(checked.getCareerEval().getCertificates()).as("자격증은 근거 분석 호출에서")
                 .extracting("infoEngineer", "sqld").containsExactly(true, false);
-        assertThat(checked.getTimeline()).isNotNull();
+        assertThat(checked.getCareerEval().getTimeline()).as("타임라인은 근거 분석에서")
+                .extracting("ref", "start", "end").containsExactly(tuple("A사", "2021-03", "2024-02"), tuple("교육1", "2020-01", "2020-06"));
+        verify(aiClient, never()).call(eq(AiPurpose.TIMELINE), anyLong(), anyString(), anyString(),
+                eq(TimelineResult.class), any());
 
         // 질문 추출은 "추출한 질문"에 쌓이기만 하고, 합치기를 눌러야 질문지가 된다
         assertThat(extractionService.extractQuestions(id, QuestionType.SELECTABLE).count()).isEqualTo(1);
@@ -665,7 +668,7 @@ public class ExtractionFlowIntegrationTest {
     }
 
     @Test
-    void localSwitchTakesCertificatesFromTheLocalProfileInsteadOfEvidence() throws Exception {
+    void localSwitchDoesNotChangeTheFitCheck() throws Exception {
         stubAi(aiClient, templateMapper, sectionMapper);
         CandidateProfile profile = new CandidateProfile();
         CandidateProfile.Career career = new CandidateProfile.Career();
@@ -683,9 +686,10 @@ public class ExtractionFlowIntegrationTest {
             Long id = batchCheckService.start(positionId, List.of(List.of(pdf()))).get(0);
             batchCheckService.awaitIdle();
             CareerEvalResult.Certificates certs = reportService.report(id).getCareerEval().getCertificates();
-            assertThat(certs.getItems()).extracting("name").containsExactly("SQLD");
-            assertThat(certs.getSqld()).isTrue();
-            assertThat(certs.getInfoEngineer()).as("근거 분석이 정보처리기사라고 해도 로컬 목록을 따른다").isFalse();
+            // 스위치를 켜도 적합도 검사(근거 분석·학력 판단)는 그대로 GPT 답을 쓴다 (사용자 2026-11-10)
+            assertThat(certs).extracting("infoEngineer", "sqld").containsExactly(true, false);
+            verify(aiClient, never()).call(eq(AiPurpose.TIMELINE), anyLong(), anyString(), anyString(),
+                    eq(TimelineResult.class), any());
         } finally {
             localAiSwitch.set(false);
         }
@@ -856,22 +860,10 @@ public class ExtractionFlowIntegrationTest {
         when(aiClient.call(eq(AiPurpose.CRITERIA_EXTRACT), anyLong(), anyString(), anyString(), anyList(),
                 eq(CriteriaResult.class), any())).thenReturn(criteria);
 
-        when(aiClient.call(eq(AiPurpose.TIMELINE), anyLong(), anyString(), anyString(),
-                eq(TimelineResult.class), any())).thenAnswer(inv -> {
-                    String content = inv.getArgument(3);
-                    if (content.contains("가나커머스") || content.contains("<resume>") || !content.contains("A사 | 2021.03 ~ 2024.02")) {
-                        throw new IllegalStateException("타임라인 호출에는 이름표와 기간만 보낸다: " + content);
-                    }
-                    TimelineResult tr = new TimelineResult();
-                    tr.setTimeline(List.of(period("A사", "2021-03", "2024-02"), period("교육1", "2020-01", "2020-06"),
-                            period("없는항목", "2019-01", "2019-02")));
-                    return tr;
-                });
-
         when(aiClient.call(eq(AiPurpose.EVIDENCE), anyLong(), anyString(), anyString(),
                 eq(EvidenceResult.class), any())).thenAnswer(inv -> {
                     String content = inv.getArgument(3);
-                    // 회사 이름은 가리고 재직 기간은 이력서에 그대로 둔다. 회사 목록은 따로 보내지 않는다
+                    // 회사·교육 이름은 이름표로 가리고 기간은 이력서에 그대로 둔다. 회사 목록은 따로 보내지 않는다
                     if (content.contains("가나커머스") || content.contains("<careers>")
                             || !content.contains("[A사] 백엔드팀 2021.03 ~ 2024.02")) {
                         throw new IllegalStateException("근거 분석 입력이 다름: " + content);
@@ -900,6 +892,10 @@ public class ExtractionFlowIntegrationTest {
                     certs.setInfoEngineer(true);
                     certs.setSqld(false);
                     er.setCertificates(certs);
+                    // 타임라인도 근거 분석이 읽는다. 모르는 이름표와 잘못된 연월은 버린다 (로컬 기간으로 채우는 것은 CareerEvalServiceTest)
+                    er.setTimeline(new java.util.ArrayList<>(List.of(period("A사", "2021-03", "2024-02"),
+                            period("교육1", "2020-01", "2020-06"), period("없는항목", "2019-01", "2019-02"),
+                            period("학교1", "2019-13", "2020-02"))));
                     er.validate(Set.copyOf(ids));
                     return er;
                 });

@@ -171,7 +171,7 @@ class WebPagesSmokeTest {
         // 가린 본문은 화면에 펼치지 않고 「가린 이력서」 창에만 둔다. 인적사항·경력·학력·타임라인은 적합도 검사 뒤에
         assertThat(review).doesNotContain("class=\"att-count\"");
         assertThat(review).contains("data-dialog=\"dlg-masked\"", "id=\"dlg-masked\"", "[A사] 백엔드팀").doesNotContain("010-1111-2222");
-        assertThat(candidateService.get(id).getMaskedText()).contains("[전화번호]", "[A사] 백엔드팀", "[교육]").doesNotContain("010-1111-2222");
+        assertThat(candidateService.get(id).getMaskedText()).contains("[전화번호]", "[A사] 백엔드팀", "[교육1]").doesNotContain("010-1111-2222");
         assertThat(review).contains(">검사</button>")
                 .doesNotContain("id=\"mask-view\"", "name=\"maskedText\"", "class=\"profile\"", "가나커머스", "가나정보교육원", "<h3>타임라인</h3>",
                         "<script>alert(1)</script>", "010-1111-2222", "부분 충족");

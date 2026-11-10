@@ -158,7 +158,7 @@
   });
 
   // 가린 이력서: [이름]·[A사] 같은 가린 자리를 꼬리표로 (처음 열 때 한 번)
-  var MASK_LABEL = /\[(?:이름|전화번호|이메일|주민번호|링크|생년월일|주소|개인정보|회사|[A-Z]사|연봉|경력|학교|학력|교육|자격증)\]/g;
+  var MASK_LABEL = /\[(?:이름|전화번호|이메일|주민번호|링크|생년월일|주소|개인정보|회사|[A-Z]사|연봉|경력|학교\d*|학력|교육\d*|활동\d+|자격증)\]/g;
   function markMasked(box) {
     if (!box || box.hasAttribute('data-marked')) return;
     box.setAttribute('data-marked', '');

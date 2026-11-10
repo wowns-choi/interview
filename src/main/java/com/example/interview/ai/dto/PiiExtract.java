@@ -193,7 +193,8 @@ public class PiiExtract {
         links.forEach(v -> add(out, Type.URL, v));
         for (School s : education) {
             add(out, Type.SCHOOL, s.getSchool());
-            add(out, Type.EDUCATION, s.getMajor(), s.getStatus(), s.getPeriod(), s.getGpa());
+            // 재학 기간은 가리지 않는다: 근거 분석이 [학교1] 옆의 기간으로 타임라인을 읽는다 (사용자 2026-11-10). 학교 이름·전공·상태·학점은 가린다
+            add(out, Type.EDUCATION, s.getMajor(), s.getStatus(), s.getGpa());
         }
         for (Job j : careers) {
             j.getCompany().forEach(v -> add(out, Type.COMPANY, v));
@@ -202,7 +203,8 @@ public class PiiExtract {
         }
         salaries.forEach(v -> add(out, Type.SALARY, v));
         for (Course c : trainings) {
-            add(out, Type.TRAINING, c.getName(), c.getInstitution(), c.getPeriod());
+            // 교육 기간도 가리지 않는다 (타임라인, 사용자 2026-11-10). 과정·기관 이름은 [교육1]로 가린다
+            add(out, Type.TRAINING, c.getName(), c.getInstitution());
         }
         // 자격증은 가리지 않는다: 근거 분석(GPT)이 자격증과 정보처리기사·SQLD 보유 여부를 읽는다 (사용자, 2026-10-22)
         for (Activity a : activities) {

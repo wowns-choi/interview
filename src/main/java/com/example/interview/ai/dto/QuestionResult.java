@@ -38,9 +38,11 @@ public class QuestionResult {
     }
 
     /**
-     * 내용이 없거나 고르지 않은 유형인 질문만 버린다. 하나도 남지 않을 때만 실패(재시도).
-     * 근거·평가항목 연결은 있으면 쓰고 없어도 질문은 남긴다 (사용자 2026-11-09: 로컬 AI가 근거 번호를 비워 질문 대부분이 버려졌다):
-     * 근거 번호가 보낸 직접·간접 근거를 가리키면 평가항목은 그 근거의 것, 아니면 AI가 적은 평가항목(이 포지션의 것일 때만), 둘 다 아니면 연결 없음.
+     * 쓸 수 없는 질문은 버리고 남은 것만 쓴다. 하나도 남지 않을 때만 실패(재시도).
+     * 근거 번호는 없어도 된다 (사용자 2026-11-09: 로컬 AI가 근거 번호를 비웠다). 대신 질문이 붙은 평가항목의 판정을 본다 (사용자 2026-11-10:
+     * GPT가 미확인 평가항목에 "적용하셨다고 하셨는데"라는 근거 질문을 지어냈다):
+     * 근거 질문은 직접·간접 근거가 있는 평가항목(근거 번호가 맞으면 그 근거의 평가항목)에만, "해본 적 있어?"는 직접 근거가 없는 평가항목에만 남긴다.
+     * 직접 적은 유형은 연결이 맞는 것만 남기고 질문은 버리지 않는다.
      *
      * @param types              고른 유형 이름
      * @param claimRefs          근거 참조값(1부터) → 그 근거의 평가항목 id. 직접·간접 근거만
@@ -71,6 +73,23 @@ public class QuestionResult {
                 errors.add("questions[" + i + "].content 누락");
             } else if (!types.contains(q.questionType)) {
                 errors.add("questions[" + i + "].question_type은 " + String.join(", ", types) + " 중 하나여야 함");
+            } else if (claimTypes.contains(q.questionType)) {
+                if (q.evidenceId != null && claimRefs.containsKey(q.evidenceId)) {
+                    q.criterionId = claimRefs.get(q.evidenceId);
+                    kept.add(q);
+                } else if (q.criterionId != null && claimRefs.containsValue(q.criterionId)) {
+                    q.evidenceId = null;
+                    kept.add(q);
+                } else {
+                    errors.add("questions[" + i + "]는 <evidence>에 DIRECT/INDIRECT 근거가 있는 평가항목의 질문이어야 함");
+                }
+            } else if (!customTypes.contains(q.questionType)) {
+                if (q.criterionId == null || !experienceCriteria.contains(q.criterionId)) {
+                    errors.add("questions[" + i + "].criterion_id는 <experience_criteria>의 평가항목이어야 함");
+                } else {
+                    q.evidenceId = null;
+                    kept.add(q);
+                }
             } else {
                 if (q.evidenceId != null && claimRefs.containsKey(q.evidenceId)) {
                     q.criterionId = claimRefs.get(q.evidenceId);

@@ -125,9 +125,10 @@ public class ExtractionService {
     }
 
     /**
-     * 외부 AI를 세 번 동시에 부른다: 가린 글로 근거와 총 경력·관련 경력(EVIDENCE),
-     * 학교 목록으로 학력(EDUCATION_EVAL), 이름표·기간 목록으로 타임라인(TIMELINE). 근거 분석이 끝나면 그 경력 개월과
-     * 포지션의 요구 경력 개월로 경력 조건 충족을 코드가 정한다. 한쪽이 실패해도 나머지는 저장한다.
+     * 외부 AI를 두 번 동시에 부른다: 가린 글로 근거·총 경력·관련 경력·자격증·타임라인 기간(EVIDENCE),
+     * 학교 목록으로 학력(EDUCATION_EVAL). 근거 분석이 끝나면 그 경력 개월과 포지션의 요구 경력 개월로 경력 조건 충족을 코드가 정한다.
+     * 타임라인은 근거 분석이 읽은 기간에, 그 답에 없는 항목만 로컬 AI가 옮겨 둔 기간을 코드로 읽어 채운다 (사용자 2026-11-10).
+     * 한쪽이 실패해도 나머지는 저장한다.
      */
     public void checkFit(Long candidateId) {
         runAi(candidateId, () -> {
@@ -135,8 +136,6 @@ public class ExtractionService {
             long start = System.currentTimeMillis();
             CompletableFuture<CareerEvalResult> education =
                     async(() -> timed("학력 판단", candidateId, () -> careerEvalService.education(candidate)));
-            CompletableFuture<List<CareerEvalResult.Period>> timeline =
-                    async(() -> timed("타임라인", candidateId, () -> careerEvalService.timeline(candidate)));
             EvidenceResult.Career career = null;
             CareerEvalResult careerMeets = null;
             try {
@@ -146,7 +145,8 @@ public class ExtractionService {
             } finally {
                 long waitStart = System.currentTimeMillis();
                 CareerEvalResult edu = education.join();
-                List<CareerEvalResult.Period> periods = timeline.join();
+                List<CareerEvalResult.Period> periods = career == null ? null : CareerEvalService.timeline(
+                        ReportService.parseProfile(candidate.getProfileJson()), career.getTimeline(), java.time.YearMonth.now());
                 long saveStart = System.currentTimeMillis();
                 careerEvalService.save(candidate, edu, periods, career, careerMeets);
                 // 근거를 저장했으면 경력·학력·자격증까지 저장한 지금 끝낸다 (화면은 이 상태 변화를 보고 다시 불러온다)
@@ -154,7 +154,7 @@ public class ExtractionService {
                     analysisService.finishCheck(candidateId);
                 }
                 long end = System.currentTimeMillis();
-                log.info("[시간] 적합도 검사 candidateId={} 전체 {}ms (학력·타임라인 더 기다림 {}ms, 저장 {}ms)", candidateId,
+                log.info("[시간] 적합도 검사 candidateId={} 전체 {}ms (학력 더 기다림 {}ms, 저장 {}ms)", candidateId,
                         end - start, saveStart - waitStart, end - saveStart);
             }
         });

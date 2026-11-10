@@ -103,17 +103,28 @@ class ResumeAnonymizerTest {
     }
 
     @Test
-    void hidesCompanyRankEducationAndTrainingButKeepsCareerPeriodsWorkContentAndCertificates() {
+    void labelsCompaniesSchoolsTrainingsAndActivitiesAndKeepsTheirPeriods() {
         String text = """
                 2024.08 ~ 2026.06  다온테크 연구개발팀 · 사원 · 백엔드
                 ∙ 정산 배치 처리 시간 4시간 → 40분 단축
                 연봉 3,000만원
                 총 2년 3개월 / 직전 연봉 : 3,400 만원
-                2014.03 ~ 2020.02 한결대학교 컴퓨터공학 졸업 학점 3.19/4.5
+                2014.03 ~ 2020.02 한결대학교(4년) 컴퓨터공학 졸업 학점 3.19/4.5
                 2024.01 ~ 2024.06 KH 정보교육원 6개월 국비 교육과정 수료
+                2023.01 ~ 2023.06 오픈소스 결제 SDK 기여
+                2015.03 ~ 2016.12 육군 병장 만기제대
                 정보처리기사 2023.11 한국산업인력공단
                 """;
         CandidateProfile p = new CandidateProfile();
+        CandidateProfile.Activity project = new CandidateProfile.Activity();
+        project.setKind("회사 밖 프로젝트");
+        project.setName("오픈소스 결제 SDK 기여");
+        project.setPeriod("2023.01 ~ 2023.06");
+        CandidateProfile.Activity army = new CandidateProfile.Activity();
+        army.setKind("병역");
+        army.setName("육군 병장 만기제대");
+        army.setPeriod("2015.03 ~ 2016.12");
+        p.setActivities(List.of(project, army));
         CandidateProfile.Career c = new CandidateProfile.Career();
         c.setCompany("다온테크");
         c.setDepartment("연구개발팀");
@@ -145,14 +156,33 @@ class ResumeAnonymizerTest {
                 ∙ 정산 배치 처리 시간 4시간 → 40분 단축
                 연봉 [연봉]
                 총 2년 3개월 / 직전 연봉 : [연봉]
-                [학력] [학교] [학력] [학력] 학점 [학력]
-                [교육] [교육] [교육]
+                2014.03 ~ 2020.02 [학교1][학력] [학력] [학력] 학점 [학력]
+                2024.01 ~ 2024.06 [교육1] [교육1]
+                2023.01 ~ 2023.06 [활동1] 오픈소스 결제 SDK 기여
+                [개인정보] [개인정보]
                 정보처리기사 2023.11 한국산업인력공단
                 """);
+        // 학교·교육 기간은 근거 분석이 타임라인으로 읽도록 남기고, 병역은 기간까지 가린다 (사용자 2026-11-10)
+        assertThat(r.profile().getActivities()).extracting("alias").containsExactly("활동1", "활동2");
         assertThat(r.profile().getTrainings()).singleElement().extracting("institution", "alias")
                 .containsExactly("KH 정보교육원", "교육1");
         assertThat(r.profile().getEducation()).extracting("alias").containsExactly("학교1");
         assertThat(r.profile().getCareers()).extracting("alias").containsExactly("A사");
+    }
+
+    @Test
+    void copiesEducationSummaryForTheEducationCallOnly() {
+        // 사람인 양식: 학점은행제 졸업의 학위가 요약 표기에만 있다 (사용자 2026-11-10: 4년제가 전문학사로 판단됐다)
+        String text = """
+                총 2년 3개월 대학교(4년) 졸업 직전 연봉 : 3,400 만원
+                학력 대학교(4년) 졸업
+                2024.06 ~ 2026.08 학점은행제 컴퓨터공학
+                인정학력 4년제 지역 서울
+                2013.03 ~ 2014.06 서일대학(2·3년제) 시각디자인학과
+                """;
+        assertThat(ResumeAnonymizer.educationNotes(text))
+                .containsExactly("대학교(4년) 졸업", "서일대학(2·3년제)", "인정학력 4년제");
+        assertThat(ResumeAnonymizer.educationNotes("운영 기간 (4년), 대학 동아리")).isEmpty();
     }
 
     @Test

@@ -16,7 +16,12 @@ public class TimelineResult {
 
     /** 기간을 읽지 못한 항목은 뺄 뿐 실패로 보지 않는다 */
     public void validate() {
-        timeline = timeline == null ? new ArrayList<>() : new ArrayList<>(timeline.stream()
+        timeline = clean(timeline);
+    }
+
+    /** 이름표가 없거나 연월이 잘못된 항목을 뺀다. 근거 분석(EVIDENCE)의 timeline에도 쓴다 */
+    public static List<CareerEvalResult.Period> clean(List<CareerEvalResult.Period> periods) {
+        return periods == null ? new ArrayList<>() : new ArrayList<>(periods.stream()
                 .filter(p -> p != null && p.getRef() != null && valid(p.getStart()) && valid(p.getEnd())
                         && p.getStart().compareTo(p.getEnd()) <= 0)
                 .toList());

@@ -1,12 +1,18 @@
 package com.example.interview.service;
 
 import java.time.YearMonth;
+import java.util.ArrayList;
+import java.util.HashSet;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
+import java.util.Set;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 import org.springframework.stereotype.Service;
 
 import com.example.interview.ai.AiClient;
-import com.example.interview.ai.LocalAiSwitch;
 import com.example.interview.ai.PromptLoader;
 import com.example.interview.ai.dto.CareerEvalResult;
 import com.example.interview.ai.dto.EducationResult;
@@ -44,7 +50,6 @@ public class CareerEvalService {
     private final PromptLoader promptLoader;
     private final PositionService positionService;
     private final CandidateMapper candidateMapper;
-    private final LocalAiSwitch localAi;
 
     /** 최종 학력과 학력 조건 충족 여부. 학교가 없으면 묻지 않는다. 실패하면 null */
     public CareerEvalResult education(Candidate candidate) {
@@ -92,6 +97,11 @@ public class CareerEvalService {
         }
         Integer min = position.getCareerMinMonths();
         Integer max = position.getCareerMaxMonths();
+        if (min == null && max == null && required.chars().anyMatch(Character::isDigit)) {
+            // 개월이 없는데 문구에 숫자가 있다 = 개월을 저장하기 전 포지션 (사용자 2026-11-10: "경력 10년 이상"이 경력무관으로 충족됐다)
+            log.warn("요구 경력 개월이 없어 경력을 판단하지 않음 positionId={} required={}", position.getId(), required);
+            return null;
+        }
         r.setCareerMinMonths(min);
         r.setCareerMaxMonths(max);
         Integer months = relevantMonths != null ? relevantMonths : totalMonths;
@@ -105,20 +115,82 @@ public class CareerEvalService {
         return r;
     }
 
-    /** 타임라인 기간. 기간이 하나도 없으면 묻지 않는다. 실패하면 null */
-    public List<CareerEvalResult.Period> timeline(Candidate candidate) {
-        CandidateProfile profile = ReportService.parseProfile(candidate.getProfileJson());
-        String periods = profile == null ? "" : periodLines(profile);
-        if (periods.isEmpty()) {
-            return List.of();
-        }
-        try {
-            return aiClient.call(AiPurpose.TIMELINE, candidate.getId(), promptLoader.load("timeline"),
-                    timelineContent(periods, YearMonth.now()), TimelineResult.class, TimelineResult::validate).getTimeline();
-        } catch (RuntimeException e) {
-            log.warn("타임라인 계산 실패 candidateId={}: {}", candidate.getId(), e.getMessage());
+    /**
+     * 타임라인 기간 (사용자 2026-11-10): 근거 분석(GPT)이 가린 이력서의 이름표 옆에서 읽은 기간을 쓰고, 그 답에 없는 항목만
+     * 업로드 때 로컬 AI가 옮겨 둔 기간 글을 코드로 읽는다 (병역처럼 가려서 GPT가 볼 수 없는 기간, 근거 분석이 빠뜨린 항목).
+     * 이 프로필에 없는 이름표는 버린다. 따로 AI를 부르지 않는다.
+     *
+     * @param fromEvidence 근거 분석의 timeline. null이면 근거 분석이 실패한 것이라 null을 돌려 이전 값을 둔다
+     */
+    public static List<CareerEvalResult.Period> timeline(CandidateProfile profile, List<CareerEvalResult.Period> fromEvidence,
+            YearMonth now) {
+        if (fromEvidence == null) {
             return null;
         }
+        Map<String, String> localPeriods = new LinkedHashMap<>();
+        if (profile != null) {
+            profile.getCareers().forEach(c -> localPeriods.put(c.getAlias(), c.getPeriod()));
+            profile.getEducation().forEach(e -> localPeriods.put(e.getAlias(), e.getPeriod()));
+            profile.getTrainings().forEach(t -> localPeriods.put(t.getAlias(), t.getPeriod()));
+            profile.getActivities().forEach(a -> localPeriods.put(a.getAlias(), a.getPeriod()));
+        }
+        List<CareerEvalResult.Period> out = new ArrayList<>();
+        Set<String> seen = new HashSet<>();
+        for (CareerEvalResult.Period p : fromEvidence) {
+            String ref = p.getRef().replace("[", "").replace("]", "").strip();
+            if (localPeriods.containsKey(ref) && seen.add(ref)) {
+                p.setRef(ref);
+                out.add(p);
+            }
+        }
+        localPeriods.forEach((ref, period) -> {
+            if (!seen.contains(ref)) {
+                CareerEvalResult.Period p = parsePeriod(ref, period, now);
+                if (p != null) {
+                    out.add(p);
+                }
+            }
+        });
+        return out;
+    }
+
+    private static final Pattern YEAR_MONTH = Pattern.compile("((?:19|20)\\d{2})\\s*(?:[./-]|년)\\s*(\\d{1,2})(?!\\d)");
+    private static final Pattern YEAR = Pattern.compile("(?<!\\d)((?:19|20)\\d{2})(?!\\d)");
+    private static final Pattern ONGOING = Pattern.compile("재직|재학|현재|진행|중$|~\\s*$");
+
+    /** "2024.08 ~ 2026.06", "2026.06 ~ 재직중", "2015년 3월 ~ 2016년 12월", "2019 ~ 2020"을 연월로. 읽지 못하면 null */
+    static CareerEvalResult.Period parsePeriod(String ref, String text, YearMonth now) {
+        if (ref == null || ref.isBlank() || text == null || text.isBlank()) {
+            return null;
+        }
+        List<String> months = new ArrayList<>();
+        Matcher m = YEAR_MONTH.matcher(text);
+        while (m.find()) {
+            int month = Integer.parseInt(m.group(2));
+            if (month >= 1 && month <= 12) {
+                months.add(m.group(1) + "-" + String.format("%02d", month));
+            }
+        }
+        String start;
+        String end;
+        if (!months.isEmpty()) {
+            start = months.get(0);
+            end = months.size() > 1 ? months.get(1) : ONGOING.matcher(text.strip()).find() ? now.toString() : start;
+        } else {
+            List<String> years = YEAR.matcher(text).results().map(r -> r.group(1)).toList();
+            if (years.isEmpty()) {
+                return null;
+            }
+            start = years.get(0) + "-01";
+            end = years.size() > 1 ? years.get(1) + "-12"
+                    : ONGOING.matcher(text.strip()).find() ? now.toString() : years.get(0) + "-12";
+        }
+        CareerEvalResult.Period p = new CareerEvalResult.Period();
+        p.setRef(ref);
+        p.setStart(start);
+        p.setEnd(end);
+        List<CareerEvalResult.Period> valid = TimelineResult.clean(List.of(p));
+        return valid.isEmpty() ? null : valid.get(0);
     }
 
     /**
@@ -147,13 +219,8 @@ public class CareerEvalService {
             r.setTimeline(timeline);
         }
         if (career != null) {
+            // 자격증도 근거 분석 답을 쓴다. 「로컬 AI로 처리」와 상관없이 검사 결과는 같다 (사용자 2026-11-10)
             r.applyCareer(career);
-            if (localAi.isOn()) {
-                // 「로컬 AI로 처리」: 자격증은 근거 분석 답 대신, 로컬 AI가 개인정보를 찾을 때 옮겨 둔 목록으로 코드가 정한다
-                CandidateProfile profile = ReportService.parseProfile(candidate.getProfileJson());
-                r.setCertificates(CareerEvalResult.certificatesFromProfile(
-                        profile == null ? List.of() : profile.getCertificates()));
-            }
         }
         if (careerMeets != null) {
             r.setCareerMeets(careerMeets.getCareerMeets());
@@ -182,27 +249,13 @@ public class CareerEvalService {
             }
             sb.append(e.getStatus()).append(" | ").append(e.getPeriod()).append("\n");
         }
-        return sb.append("</schools>").toString();
-    }
-
-    static String timelineContent(String periods, YearMonth now) {
-        return "기준 월: " + now + "\n\n<periods>\n" + periods + "</periods>";
-    }
-
-    /** 업로드 때 저장한 별칭과 기간만: "A사 | 기간", "학교1 | 기간", "교육1 | 기간", "활동1 | 기간". 기간이 빈 항목은 뺀다 */
-    static String periodLines(CandidateProfile p) {
-        StringBuilder sb = new StringBuilder();
-        p.getCareers().forEach(c -> line(sb, c.getAlias(), c.getPeriod()));
-        p.getEducation().forEach(e -> line(sb, e.getAlias(), e.getPeriod()));
-        p.getTrainings().forEach(t -> line(sb, t.getAlias(), t.getPeriod()));
-        p.getActivities().forEach(a -> line(sb, a.getAlias(), a.getPeriod()));
-        return sb.toString();
-    }
-
-    private static void line(StringBuilder sb, String ref, String period) {
-        if (period != null && !period.isBlank()) {
-            sb.append(ref).append(" | ").append(period.strip()).append("\n");
+        sb.append("</schools>");
+        if (!profile.getEducationNotes().isEmpty()) {
+            sb.append("\n\n<education_summary>\n");
+            profile.getEducationNotes().forEach(n -> sb.append(n).append("\n"));
+            sb.append("</education_summary>");
         }
+        return sb.toString();
     }
 
     /** 0 → "A사", 25 → "Z사", 26 → "회사27" */

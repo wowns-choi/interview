@@ -18,8 +18,8 @@ public class LocalAiSwitch {
 
     private static final String KEY = "local_ai_tasks";
 
-    /** 스위치를 켜면 로컬로 가는 작업 */
-    public static final Set<AiPurpose> TASKS = EnumSet.of(AiPurpose.TIMELINE, AiPurpose.ARRANGE, AiPurpose.QUESTION_PLACE,
+    /** 스위치를 켜면 로컬로 가는 작업. 타임라인은 2026-11-10부터 근거 분석에 합쳐 따로 부르지 않는다 */
+    public static final Set<AiPurpose> TASKS = EnumSet.of(AiPurpose.ARRANGE, AiPurpose.QUESTION_PLACE,
             AiPurpose.QUESTION, AiPurpose.REPORT_INFO, AiPurpose.INTERVIEW_RECORD,
             AiPurpose.CHAT);
 

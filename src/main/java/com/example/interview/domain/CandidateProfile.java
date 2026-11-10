@@ -24,6 +24,12 @@ public class CandidateProfile {
     private String address = "";
     private String link = "";
     private List<Education> education = new ArrayList<>();
+    /**
+     * 이력서의 학력 요약 표기 ("대학교(4년) 졸업", "서일대학(2·3년제)", "인정학력 4년제"). 가린 글에서는 [학력]이 되지만 학력 판단(EDUCATION_EVAL)에는
+     * 보낸다: 학점은행제처럼 학교 목록만으로 학위를 알 수 없을 때 필요하다 (사용자 2026-11-10). 화면에는 쓰지 않는다
+     */
+    @JsonProperty("education_notes")
+    private List<String> educationNotes = new ArrayList<>();
     private List<Career> careers = new ArrayList<>();
     private List<Training> trainings = new ArrayList<>();
     private List<Certificate> certificates = new ArrayList<>();
